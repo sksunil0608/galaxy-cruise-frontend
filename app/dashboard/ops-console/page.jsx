@@ -252,7 +252,7 @@ const DURATION_OPTIONS = [
 // range (their list endpoints have no ship param) but narrow the much more
 // expensive per-cruise deck/detail pass to just this ship.
 const SHIP_SEARCH_VENDORS = new Set([
-  "gohal", "completecruisesolutionA", "msc", "goccl", "seawebagents",
+  "gohal", "completecruisesolutionA", "completecruisesolutionB", "msc", "goccl", "seawebagents",
   "celestyal", "azamara", "firstmates", "cruisingpower",
 ])
 
