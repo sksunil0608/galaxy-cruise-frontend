@@ -307,37 +307,50 @@ export default function ItineraryManagerPage() {
   }
 
   return (
-    <>
-      <div style={{ padding: "0 32px 32px", fontFamily: "'DM Sans', sans-serif" }}>
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 2, color: T.textMuted, textTransform: "uppercase" }}>Reference Data</div>
-          <h1 style={{ margin: "4px 0 0", fontSize: 24, fontWeight: 800, color: T.textPrimary }}>Itinerary Manager</h1>
-          <div style={{ marginTop: 6, fontSize: 13, color: T.textSlate, maxWidth: 720 }}>
-            Manage the static ship-route-stops reference data (originally imported from Book1.xlsx) that new cruises are
-            automatically matched against at ingestion time, plus the port-name aliases used to reconcile vendor codes
-            (e.g. &quot;MIA&quot;) with plain port names (e.g. &quot;Miami&quot;).
+    <div className="w-full min-h-screen bg-slate-50/50 px-3 sm:px-4 py-4 space-y-4">
+      {/* ── Top Header Banner ────────────────────────────────────────────── */}
+      <div className="relative overflow-hidden rounded-3xl border border-teal-200/60 bg-gradient-to-br from-teal-50/70 via-sky-50/50 to-emerald-50/60 p-6 sm:p-8 shadow-xs">
+        <div className="pointer-events-none absolute -right-12 -top-12 h-48 w-48 rounded-full bg-teal-500/10 blur-3xl" />
+        <div className="pointer-events-none absolute -left-12 -bottom-12 h-48 w-48 rounded-full bg-sky-500/10 blur-3xl" />
+
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+          <div className="space-y-2 max-w-3xl">
+            <div className="inline-flex items-center gap-2 rounded-full border border-teal-200/80 bg-white/80 backdrop-blur-xs px-3.5 py-1 text-[11px] font-bold text-teal-800 shadow-2xs">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-teal-600"></span>
+              </span>
+              <span>Reference Data · Ship Route Blueprints</span>
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
+              Itinerary Manager & Port Aliases
+            </h1>
+            <p className="text-xs sm:text-sm font-medium text-slate-600 leading-relaxed max-w-2xl">
+              Manage static ship-route-stops reference data matched at ingestion time, and configure port-name aliases to reconcile vendor codes with standard port names.
+            </p>
+          </div>
+
+          {/* Tab Selector Pills */}
+          <div className="flex items-center gap-2 rounded-2xl border border-slate-200/90 bg-white/90 backdrop-blur-xs p-1.5 shadow-2xs">
+            {[
+              { key: "itineraries", label: `Itineraries (${itinTotal})` },
+              { key: "aliases", label: `Port Aliases (${aliases.length})` }
+            ].map((t) => (
+              <button
+                key={t.key}
+                onClick={() => setTab(t.key)}
+                className={`rounded-xl px-4 py-2 text-xs font-bold transition-all cursor-pointer ${
+                  tab === t.key
+                    ? "bg-slate-900 text-white shadow-xs"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
           </div>
         </div>
-
-        <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-          {[
-            { key: "itineraries", label: `Itineraries (${itinTotal})` },
-            { key: "aliases", label: `Port Aliases (${aliases.length})` }
-          ].map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              style={{
-                padding: "9px 18px", borderRadius: 999, fontSize: 13, fontWeight: 700, cursor: "pointer",
-                border: `1px solid ${tab === t.key ? T.blue : T.border}`,
-                background: tab === t.key ? T.blueBg : "#fff",
-                color: tab === t.key ? T.blue : T.textSlate,
-              }}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
+      </div>
 
         {tab === "itineraries" ? (
           <div style={{ background: "#fff", borderRadius: 16, border: `1px solid ${T.border}`, boxShadow: T.shadowCard, overflow: "hidden" }}>
@@ -452,7 +465,6 @@ export default function ItineraryManagerPage() {
             </div>
           </div>
         )}
-      </div>
 
       {itinEditing !== null && (
         <ItineraryFormModal
@@ -484,6 +496,6 @@ export default function ItineraryManagerPage() {
           </div>
         </Modal>
       )}
-    </>
+    </div>
   )
 }

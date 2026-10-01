@@ -1,123 +1,111 @@
 "use client"
 
-import React from "react"
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "@/components/ui/avatar"
+import React, { useState, useEffect } from "react"
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuGroup,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import {
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  useSidebar,
-} from "@/components/ui/sidebar"
-import { EllipsisVerticalIcon, LogOutIcon } from "lucide-react"
+import { LogOutIcon } from "lucide-react"
 import { useRouter } from "next/navigation"
 
 export function NavUser({ user }) {
-  const { isMobile } = useSidebar()
   const router = useRouter()
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   // Safe defaults
-  const name = user?.name || "Guest"
-  const email = user?.email || ""
-  const avatar = user?.avatar || "/avatars/default.jpg"
+  const name = user?.name || "Admin User"
+  const email = user?.email || "admin@cruisesaga.com"
 
   // Dynamic initials
-  const getInitials = (name) => {
-    if (!name || name === "Guest") return "GU"
-    const parts = name.trim().split(" ")
+  const getInitials = (userName) => {
+    if (!userName || userName === "Guest") return "AU"
+    const parts = userName.trim().split(" ")
     return parts.length === 1
-      ? parts[0][0].toUpperCase()
+      ? parts[0].slice(0, 2).toUpperCase()
       : (parts[0][0] + parts[1][0]).toUpperCase()
   }
 
   const handleLogout = () => {
-    // Clear client state
     localStorage.removeItem("user")
-
-    // If you use tokens → remove here too
     localStorage.removeItem("token")
-
-    // Redirect
     router.push("/login")
   }
 
-  return (
-    <SidebarMenu>
-      <SidebarMenuItem>
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <SidebarMenuButton size="lg" className="aria-expanded:bg-muted" />
-            }
-          >
-            <Avatar className="size-8 rounded-lg">
-              <AvatarImage src={avatar} alt={name} />
-              <AvatarFallback className="rounded-lg">
-                {getInitials(name)}
-              </AvatarFallback>
-            </Avatar>
+  const triggerContent = (
+    <>
+      <div className="flex flex-col text-right leading-tight max-w-[170px]">
+        <span className="truncate text-xs font-bold text-slate-800">{name}</span>
+        <span className="truncate text-[11px] text-slate-500 font-medium">
+          {email}
+        </span>
+      </div>
 
-            <div className="grid flex-1 text-left text-sm leading-tight">
-              <span className="truncate font-medium">{name}</span>
-              <span className="truncate text-xs text-foreground/70">
-                {email}
-              </span>
-             
+      <div className="flex h-7.5 w-7.5 shrink-0 items-center justify-center rounded-md bg-teal-700 text-white font-bold text-xs shadow-xs">
+        {getInitials(name)}
+      </div>
+    </>
+  )
+
+  if (!mounted) {
+    return (
+      <div className="relative" suppressHydrationWarning>
+        <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg border border-slate-200/90 bg-white shadow-2xs">
+          {triggerContent}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="relative">
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          id="nav-user-dropdown-trigger"
+          className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg border border-slate-200/90 bg-white hover:bg-slate-50 hover:border-slate-300 transition-all cursor-pointer outline-none focus:outline-none focus:ring-0 shadow-2xs"
+        >
+          {triggerContent}
+        </DropdownMenuTrigger>
+
+        <DropdownMenuContent
+          className="w-64 rounded-xl p-2 shadow-xl border border-slate-200/90 bg-white mt-1"
+          side="bottom"
+          align="end"
+          sideOffset={6}
+        >
+          <div className="flex items-center gap-3 p-2.5 bg-slate-50/90 rounded-lg border border-slate-100">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-teal-700 text-white font-bold text-xs shadow-xs">
+              {getInitials(name)}
             </div>
 
-            <EllipsisVerticalIcon className="ml-auto size-4" />
-          </DropdownMenuTrigger>
-
-          <DropdownMenuContent
-            className="min-w-56"
-            side={isMobile ? "bottom" : "right"}
-            align="end"
-            sideOffset={4}
-          >
-            <DropdownMenuGroup>
-              <DropdownMenuLabel className="p-0 font-normal">
-                <div className="flex items-center gap-2 px-2 py-2">
-                  <Avatar className="size-8">
-                    <AvatarImage src={avatar} alt={name} />
-                    <AvatarFallback className="rounded-lg">
-                      {getInitials(name)}
-                    </AvatarFallback>
-                  </Avatar>
-
-                  <div className="grid flex-1 text-left text-sm leading-tight">
-                    <span className="truncate font-medium">{name}</span>
-                    <span className="truncate text-xs text-muted-foreground">
-                      {email}
-                    </span>
-                     <span className="truncate text-xs text-foreground/70">
+            <div className="grid flex-1 text-left text-xs leading-tight">
+              <span className="truncate font-bold text-slate-900">{name}</span>
+              <span className="truncate text-[11px] text-slate-500 font-medium mt-0.5">
+                {email}
+              </span>
+              <span className="truncate text-[10px] text-teal-700 font-bold mt-1">
                 Version : 0.0.3
               </span>
-                  </div>
-                </div>
-              </DropdownMenuLabel>
-            </DropdownMenuGroup>
+            </div>
+          </div>
 
-            <DropdownMenuSeparator />
+          <DropdownMenuSeparator className="my-1.5 bg-slate-100" />
 
-            <DropdownMenuItem onClick={handleLogout}>
-              <LogOutIcon className="mr-2 size-4" />
-              Logout
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </SidebarMenuItem>
-    </SidebarMenu>
+          <DropdownMenuItem
+            onClick={handleLogout}
+            className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-lg cursor-pointer transition"
+          >
+            <LogOutIcon size={14} />
+            <span>Logout</span>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   )
 }

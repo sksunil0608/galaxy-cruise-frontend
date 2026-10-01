@@ -1,8 +1,8 @@
 "use client";
 
-import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronRight, ChevronUp, Pin, Minus, Tag, TrendingDown, TrendingUp, X, ImageIcon } from "lucide-react";
+import Image from "next/image";
+import { ChevronDown, ChevronRight, ChevronUp, ChevronLeft, ChevronsLeft, ChevronsRight, Pin, Minus, Tag, TrendingDown, TrendingUp, X, ImageIcon, Search, RotateCcw, RefreshCw, Compass, Sparkles, AlertCircle, Ship, MapPin, CalendarDays, Layers } from "lucide-react";
 
 import {
   createCruiseTag,
@@ -33,6 +33,78 @@ const CRUISE_LINE_LABELS = {
   PRINCESS: "Princess Cruises",
 };
 
+const VENDOR_COLOR_STYLES = {
+  "MSC Cruises": {
+    badge: "bg-blue-50 text-blue-800 border-blue-200/80",
+    pillActive: "bg-gradient-to-r from-blue-700 via-indigo-700 to-blue-800 text-white shadow-md shadow-blue-700/25 border-blue-700",
+    pillHover: "hover:bg-blue-50 hover:text-blue-900 hover:border-blue-300",
+    dot: "bg-blue-600"
+  },
+  "Holland America (gohal)": {
+    badge: "bg-amber-50 text-amber-900 border-amber-200/80",
+    pillActive: "bg-gradient-to-r from-amber-600 via-orange-600 to-amber-700 text-white shadow-md shadow-amber-600/25 border-amber-600",
+    pillHover: "hover:bg-amber-50 hover:text-amber-900 hover:border-amber-300",
+    dot: "bg-amber-600"
+  },
+  "Celestyal": {
+    badge: "bg-cyan-50 text-cyan-900 border-cyan-200/80",
+    pillActive: "bg-gradient-to-r from-cyan-600 via-teal-600 to-cyan-700 text-white shadow-md shadow-cyan-600/25 border-cyan-600",
+    pillHover: "hover:bg-cyan-50 hover:text-cyan-900 hover:border-cyan-300",
+    dot: "bg-cyan-600"
+  },
+  "Complete Cruise Solution B": {
+    badge: "bg-emerald-50 text-emerald-900 border-emerald-200/80",
+    pillActive: "bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white shadow-md shadow-emerald-600/25 border-emerald-600",
+    pillHover: "hover:bg-emerald-50 hover:text-emerald-900 hover:border-emerald-300",
+    dot: "bg-emerald-600"
+  },
+  "Complete Cruise Solution A": {
+    badge: "bg-teal-50 text-teal-900 border-teal-200/80",
+    pillActive: "bg-gradient-to-r from-teal-600 via-cyan-600 to-teal-700 text-white shadow-md shadow-teal-600/25 border-teal-600",
+    pillHover: "hover:bg-teal-50 hover:text-teal-900 hover:border-teal-300",
+    dot: "bg-teal-600"
+  },
+  "FirstMates": {
+    badge: "bg-purple-50 text-purple-900 border-purple-200/80",
+    pillActive: "bg-gradient-to-r from-purple-600 via-violet-600 to-purple-700 text-white shadow-md shadow-purple-600/25 border-purple-600",
+    pillHover: "hover:bg-purple-50 hover:text-purple-900 hover:border-purple-300",
+    dot: "bg-purple-600"
+  },
+  "Azamara": {
+    badge: "bg-rose-50 text-rose-900 border-rose-200/80",
+    pillActive: "bg-gradient-to-r from-rose-600 via-pink-600 to-rose-700 text-white shadow-md shadow-rose-600/25 border-rose-600",
+    pillHover: "hover:bg-rose-50 hover:text-rose-900 hover:border-rose-300",
+    dot: "bg-rose-600"
+  },
+  "CruisingPower": {
+    badge: "bg-sky-50 text-sky-900 border-sky-200/80",
+    pillActive: "bg-gradient-to-r from-sky-600 via-blue-600 to-sky-700 text-white shadow-md shadow-sky-600/25 border-sky-600",
+    pillHover: "hover:bg-sky-50 hover:text-sky-900 hover:border-sky-300",
+    dot: "bg-sky-600"
+  },
+  "GOCCL": {
+    badge: "bg-indigo-50 text-indigo-900 border-indigo-200/80",
+    pillActive: "bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 text-white shadow-md shadow-indigo-600/25 border-indigo-600",
+    pillHover: "hover:bg-indigo-50 hover:text-indigo-900 hover:border-indigo-300",
+    dot: "bg-indigo-600"
+  },
+  "Seawebagents": {
+    badge: "bg-teal-50 text-teal-900 border-teal-200/80",
+    pillActive: "bg-gradient-to-r from-teal-700 via-emerald-700 to-teal-800 text-white shadow-md shadow-teal-700/25 border-teal-700",
+    pillHover: "hover:bg-teal-50 hover:text-teal-900 hover:border-teal-300",
+    dot: "bg-teal-600"
+  }
+};
+
+const getVendorStyle = (vendorName) => {
+  return VENDOR_COLOR_STYLES[vendorName] || {
+    badge: "bg-slate-100 text-slate-800 border-slate-200/80",
+    pillActive: "bg-gradient-to-r from-teal-600 via-emerald-600 to-cyan-600 text-white shadow-md shadow-teal-600/25 border-teal-600",
+    pillHover: "hover:bg-teal-50/70 hover:text-teal-900 hover:border-teal-300",
+    dot: "bg-teal-600"
+  };
+};
+
 const T = {
   bg: "#f8fafc",
   surface: "#ffffff",
@@ -49,8 +121,8 @@ const T = {
   red: "#ef4444",
   shadowCard: "0 2px 8px rgba(0,0,0,0.04)",
   shadowModal: "0 32px 80px rgba(0,0,0,0.22)",
-  fontBase: "'DM Sans', sans-serif",
-  fontMono: "'JetBrains Mono', monospace",
+  fontBase: "'Inter', var(--font-inter), sans-serif",
+  fontMono: "ui-monospace, SFMono-Regular, Menlo, monospace",
 };
 
 const fmtDate = (value) =>
@@ -79,49 +151,57 @@ function SearchableSelect({ placeholder, value, onChange, options }) {
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, []);
 
+  const uniqueOptions = useMemo(() => [...new Set(options || [])].filter(Boolean), [options]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return options;
-    return options.filter((opt) => opt.toLowerCase().includes(q));
-  }, [options, query]);
+    if (!q) return uniqueOptions;
+    return uniqueOptions.filter((opt) => opt.toLowerCase().includes(q));
+  }, [uniqueOptions, query]);
 
   return (
-    <div ref={boxRef} style={{ position: "relative" }}>
-      <input
-        style={{ width: "100%", height: 38, borderRadius: 8, border: `1px solid ${T.border}`, padding: "8px 12px" }}
-        placeholder={placeholder}
-        value={open ? query : value || ""}
-        onFocus={() => { setOpen(true); setQuery(""); }}
-        onChange={(event) => setQuery(event.target.value)}
-      />
+    <div ref={boxRef} className="relative">
+      <div className="relative">
+        <input
+          className="w-full h-9.5 rounded-lg border border-slate-200 bg-white px-3 pr-8 text-sm font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition shadow-2xs"
+          placeholder={placeholder}
+          value={open ? query : value || ""}
+          onFocus={() => { setOpen(true); setQuery(""); }}
+          onChange={(event) => setQuery(event.target.value)}
+        />
+        {value && !open ? (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onChange(""); }}
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer p-0.5"
+            title="Clear selection"
+          >
+            <X size={14} />
+          </button>
+        ) : (
+          <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+        )}
+      </div>
       {open && (
-        <div
-          style={{
-            position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 30,
-            maxHeight: 260, overflowY: "auto", background: "#fff", borderRadius: 10,
-            border: `1px solid ${T.border}`, boxShadow: "0 12px 32px rgba(15,23,42,0.14)",
-          }}
-        >
+        <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-40 max-h-64 overflow-y-auto bg-white rounded-lg border border-slate-200 shadow-lg py-1">
           <div
             onMouseDown={(event) => { event.preventDefault(); onChange(""); setOpen(false); setQuery(""); }}
-            style={{ padding: "9px 12px", fontSize: 13, fontWeight: 600, color: T.textSlate, cursor: "pointer", borderBottom: `1px solid ${T.border}` }}
+            className="px-3.5 py-2.5 text-xs font-bold text-slate-500 hover:bg-slate-50 cursor-pointer border-b border-slate-100"
           >
-            {placeholder} (all)
+            {placeholder} (All)
           </div>
           {filtered.length === 0 && (
-            <div style={{ padding: "9px 12px", fontSize: 13, color: T.textMuted }}>No matches</div>
+            <div className="px-3.5 py-3 text-xs text-slate-400">No matches found</div>
           )}
-          {filtered.map((opt) => (
+          {filtered.map((opt, idx) => (
             <div
-              key={opt}
+              key={`${opt}-${idx}`}
               onMouseDown={(event) => { event.preventDefault(); onChange(opt); setOpen(false); setQuery(""); }}
-              style={{
-                padding: "9px 12px", fontSize: 13, cursor: "pointer",
-                background: opt === value ? T.blueBg : "transparent",
-                color: opt === value ? T.blue : T.textPrimary,
-              }}
-              onMouseEnter={(event) => { if (opt !== value) event.currentTarget.style.background = T.muted; }}
-              onMouseLeave={(event) => { if (opt !== value) event.currentTarget.style.background = "transparent"; }}
+              className={`px-3.5 py-2 text-xs cursor-pointer transition ${
+                opt === value
+                  ? "bg-emerald-50 text-emerald-700 font-bold"
+                  : "text-slate-800 hover:bg-slate-50 font-medium"
+              }`}
             >
               {opt}
             </div>
@@ -177,7 +257,7 @@ function Modal({ children, onClose, width = "min(96vw, 920px)" }) {
       onClick={onClose}
     >
       <div
-        style={{ width, maxHeight: "94vh", overflowY: "auto", background: T.surface, borderRadius: 20, boxShadow: T.shadowModal }}
+        style={{ width, maxHeight: "94vh", overflowY: "auto", background: T.surface, borderRadius: 12, boxShadow: T.shadowModal }}
         onClick={(event) => event.stopPropagation()}
       >
         {children}
@@ -261,12 +341,12 @@ function ShipModal({ row, onClose }) {
           <h2 style={{ margin: "6px 0 0", fontSize: 24 }}>{ship.name || row.ship}</h2>
           <div style={{ marginTop: 6, fontSize: 12, color: T.textMuted, fontFamily: T.fontMono }}>{shipCode || "--"}</div>
         </div>
-        <button onClick={onClose} style={{ border: "none", background: T.muted, borderRadius: "50%", width: 36, height: 36, cursor: "pointer" }}>
-          <X size={16} />
+        <button onClick={onClose} style={{ border: "none", background: T.muted, borderRadius: 6, width: 32, height: 32, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <X size={15} />
         </button>
       </div>
 
-      <div style={{ padding: "18px 24px 0", display: "flex", gap: 10, flexWrap: "wrap" }}>
+      <div style={{ padding: "18px 24px 0", display: "flex", gap: 8, flexWrap: "wrap" }}>
         {[
           { key: "overview", label: "Overview" },
           { key: "decks", label: `Deck Plans (${decks.length})` }
@@ -278,10 +358,10 @@ function ShipModal({ row, onClose }) {
               border: `1px solid ${activeTab === tab.key ? T.blue : T.border}`,
               background: activeTab === tab.key ? T.blueBg : "#fff",
               color: activeTab === tab.key ? T.blue : T.textSlate,
-              borderRadius: 999,
-              padding: "8px 14px",
+              borderRadius: 6,
+              padding: "7px 12px",
               fontSize: 12,
-              fontWeight: 700,
+              fontWeight: 600,
               cursor: "pointer"
             }}
           >
@@ -572,7 +652,7 @@ function ItineraryModal({ row, onClose }) {
             {row.nights && <span style={{ color: T.textMuted }}> &middot; {row.nights} nights</span>}
           </div>
         </div>
-        <button onClick={onClose} style={{ border: "none", background: T.muted, borderRadius: "50%", width: 34, height: 34, cursor: "pointer", flexShrink: 0 }}>
+        <button onClick={onClose} style={{ border: "none", background: T.muted, borderRadius: 6, width: 32, height: 32, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
           <X size={15} />
         </button>
       </div>
@@ -580,10 +660,12 @@ function ItineraryModal({ row, onClose }) {
       {/* Table */}
       <div style={{ overflowY: "auto", maxHeight: "65vh" }}>
         {stops.length === 0 ? (
-          <div style={{ padding: 48, textAlign: "center", color: T.textMuted }}>
-            <div style={{ fontSize: 32, marginBottom: 10 }}>🗺️</div>
-            <div style={{ fontWeight: 600 }}>Detailed itinerary not yet loaded</div>
-            <div style={{ fontSize: 13, marginTop: 6, color: T.textMuted }}>Port-by-port data will appear here once fetched from the carrier.</div>
+          <div className="py-12 px-6 text-center text-slate-500">
+            <div className="w-10 h-10 mx-auto mb-3 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-500">
+              <Compass size={20} />
+            </div>
+            <div className="font-bold text-slate-800 text-sm">Detailed itinerary not yet loaded</div>
+            <div className="text-xs mt-1.5 text-slate-400">Port-by-port data will appear here once fetched from the carrier.</div>
           </div>
         ) : (
           <>
@@ -627,49 +709,44 @@ function LeadInDetailsPanel({ job, minPrice, currency, onGetDetails }) {
   const remainingSec = isRunning ? Math.ceil((job.remaining ?? 0) / 1000) : isCooldown ? (job.retryAfter ?? 0) : 0;
 
   return (
-    <div style={{ padding: "48px 32px", display: "flex", flexDirection: "column", alignItems: "center", gap: 20, textAlign: "center" }}>
-      <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#eff6ff", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <span style={{ fontSize: 26 }}>🔍</span>
+    <div className="py-12 px-8 flex flex-col items-center gap-5 text-center">
+      <div className="w-12 h-12 rounded-xl bg-sky-50 border border-sky-100 flex items-center justify-center text-sky-600 shadow-2xs">
+        <Search size={22} strokeWidth={2.2} />
       </div>
       <div>
-        <div style={{ fontWeight: 700, fontSize: 16, color: T.textPrimary }}>Live cabin data not yet fetched</div>
+        <div className="font-bold text-base text-slate-900">Live cabin data not yet fetched</div>
         {minPrice != null && Number.isFinite(minPrice) && (
-          <div style={{ marginTop: 8, fontSize: 14, color: T.textSlate }}>
+          <div className="mt-2 text-sm text-slate-600">
             Estimated lead-in price from&nbsp;
-            <span style={{ fontWeight: 700, fontFamily: T.fontMono }}>{safeCurrency(minPrice, currency)}</span>
+            <span className="font-bold font-mono text-slate-900">{safeCurrency(minPrice, currency)}</span>
           </div>
         )}
-        <div style={{ marginTop: 6, fontSize: 13, color: T.textMuted }}>
+        <div className="mt-1.5 text-xs text-slate-500 max-w-sm">
           Fetch real-time cabin categories, availability, and deck data from the vendor.
         </div>
       </div>
 
       {isError && (
-        <div style={{ fontSize: 12, color: T.red, background: "#fef2f2", borderRadius: 8, padding: "8px 16px" }}>
-          {job.error ?? "Request failed."}{job.retryAfter ? ` Retry in ${fmtSeconds(job.retryAfter)}.` : ""}
+        <div className="flex items-center gap-2 text-xs font-semibold text-rose-700 bg-rose-50 border border-rose-200/80 rounded-lg px-3.5 py-2 max-w-md">
+          <AlertCircle size={14} className="shrink-0 text-rose-600" />
+          <span>{job?.error ?? "Request failed."}{job?.retryAfter ? ` Retry in ${fmtSeconds(job.retryAfter)}.` : ""}</span>
         </div>
       )}
 
       {isRunning ? (
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
-          <div style={{ fontSize: 13, color: T.textSlate }}>Fetching live data… ~{fmtSeconds(remainingSec)} remaining</div>
-          <div style={{ fontSize: 11, color: T.textMuted }}>Est. {fmtSeconds(Math.ceil((job.estimatedMs ?? 180000) / 1000))} total</div>
+        <div className="flex flex-col items-center gap-1.5">
+          <div className="text-xs font-medium text-slate-600">Fetching live data… ~{fmtSeconds(remainingSec)} remaining</div>
+          <div className="text-[11px] text-slate-400 font-mono">Est. {fmtSeconds(Math.ceil((job.estimatedMs ?? 180000) / 1000))} total</div>
         </div>
       ) : isCooldown ? (
-        <div style={{ fontSize: 13, color: T.textSlate }}>Data fetched — reloading…</div>
+        <div className="text-xs font-medium text-slate-600">Data fetched — reloading…</div>
       ) : (
         <button
           onClick={onGetDetails}
-          style={{
-            display: "flex", alignItems: "center", gap: 8,
-            padding: "12px 32px",
-            border: "none", borderRadius: 12,
-            background: "linear-gradient(135deg, #1d4ed8 0%, #4f46e5 100%)",
-            color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer",
-            boxShadow: "0 4px 14px rgba(79,70,229,0.3)"
-          }}
+          className="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white font-bold text-sm shadow-xs transition-all cursor-pointer active:scale-[0.98]"
         >
-          Get Full Details
+          <Sparkles size={15} />
+          <span>Get Full Details</span>
         </button>
       )}
     </div>
@@ -763,26 +840,32 @@ function PricingModal({ row, onClose, onRefreshComplete }) {
       try {
         const s = await getCruiseRefreshStatus(cruiseCode);
         setRefreshJob(s);
-        if (s.status === "cooldown" || s.status === "idle") {
+        if (s.status === "cooldown" || s.status === "idle" || s.status === "offline" || s.status === "error") {
           stopPolling();
           if (s.success) {
             if (catCode) reloadCategoryDecks(catCode);
             if (onComplete) onComplete();
           }
         }
-      } catch { /* network hiccup — keep polling */ }
+      } catch {
+        stopPolling();
+      }
     }, 3000);
   }
 
-  // Check status on modal mount in case a job is already running
+  // Check status on modal mount only if lead-in or checking active job
   useEffect(() => {
-    getCruiseRefreshStatus(cruiseCode).then(s => {
-      setRefreshJob(s);
-      if (s.status === "in_progress") startPolling(null);
-    }).catch(() => {});
+    if (isLeadInOnly) {
+      getCruiseRefreshStatus(cruiseCode).then(s => {
+        if (s && s.status !== "offline") {
+          setRefreshJob(s);
+          if (s.status === "in_progress") startPolling(null);
+        }
+      }).catch(() => {});
+    }
     return stopPolling;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cruiseCode]);
+  }, [cruiseCode, isLeadInOnly]);
 
   async function handleRefresh(catCode) {
     const vendorKey = row.vendor?.slug ?? row.vendorKey ?? row.source;
@@ -834,7 +917,7 @@ function PricingModal({ row, onClose, onRefreshComplete }) {
               {row.cruiseLine && <span style={{ color: T.textMuted }}>· {CRUISE_LINE_LABELS[row.cruiseLine] ?? row.cruiseLine}</span>}
             </div>
           </div>
-          <button onClick={onClose} style={{ border: "none", background: T.muted, borderRadius: "50%", width: 34, height: 34, cursor: "pointer", flexShrink: 0 }}>
+          <button onClick={onClose} style={{ border: "none", background: T.muted, borderRadius: 6, width: 32, height: 32, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
             <X size={15} />
           </button>
         </div>
@@ -949,6 +1032,15 @@ function PricingModal({ row, onClose, onRefreshComplete }) {
             ? (realCabinCount > 0 ? "Available" : "Sold Out")
             : cat.status;
 
+          const categoryPrice = [
+            cat.cabinPrice,
+            cat.price,
+            cat.perPersonPrice,
+            cat.totalPrice,
+            cat.minPrice,
+            activeData?.minPrice
+          ].find(p => p != null && Number.isFinite(Number(p)) && Number(p) > 0);
+
           return (
             <div key={cat.code} style={{ borderBottom: `1px solid ${T.border}` }}>
               {/* Category row */}
@@ -969,9 +1061,9 @@ function PricingModal({ row, onClose, onRefreshComplete }) {
                   </span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-                  {cat.perPersonPrice != null && (
+                  {categoryPrice != null && Number(categoryPrice) > 0 && (
                     <span style={{ fontFamily: T.fontMono, fontWeight: 700, fontSize: 13, color: T.textPrimary }}>
-                      {safeCurrency(cat.perPersonPrice, row.currency)}
+                      {safeCurrency(categoryPrice, row.currency)}
                     </span>
                   )}
                   <span style={{ fontSize: 12, color: T.textMuted }}>{avail} avail</span>
@@ -1302,20 +1394,6 @@ export default function CruiseSearchPage() {
   });
   const [datePreset, setDatePreset] = useState("All");
 
-  const applyDatePreset = (preset) => {
-    setDatePreset(preset.label);
-    if (preset.days == null) {
-      setF("startDate", "");
-      setF("endDate", "");
-      return;
-    }
-    const today = new Date();
-    const end = new Date(today.getTime() + preset.days * 86400000);
-    const toInputDate = (d) => d.toISOString().slice(0, 10);
-    setF("startDate", toInputDate(today));
-    setF("endDate", toInputDate(end));
-  };
-
   useEffect(() => {
     let active = true;
 
@@ -1434,8 +1512,9 @@ export default function CruiseSearchPage() {
   }, [filters.vendor, lookupOptions.vendors]);
 
   const opts = useMemo(() => {
-    const vendorNames = lookupOptions.vendors.map((v) => v.name);
-    const ships = vendorShips ?? lookupOptions.allShips.map((s) => s.name);
+    const vendorNames = [...new Set(lookupOptions.vendors.map((v) => v.name).filter(Boolean))];
+    const rawShips = vendorShips ?? lookupOptions.allShips.map((s) => s.name);
+    const ships = [...new Set(rawShips.filter(Boolean))];
     return {
       vendors: vendorNames,
       ships,
@@ -1451,7 +1530,44 @@ export default function CruiseSearchPage() {
     [data],
   );
 
-  const setF = (key, value) => setFilters((current) => ({ ...current, [key]: value }));
+  const setF = (key, value) => {
+    setFilters((current) => {
+      const next = { ...current, [key]: value };
+      if (key !== "code") {
+        setAppliedFilters(next);
+        setPage(1);
+      }
+      return next;
+    });
+  };
+
+  const selectVendor = (vendorName) => {
+    setFilters((current) => {
+      const next = { ...current, vendor: vendorName, ship: "" };
+      setAppliedFilters(next);
+      setPage(1);
+      return next;
+    });
+  };
+
+  const applyDatePreset = (preset) => {
+    setDatePreset(preset.label);
+    let startDate = "";
+    let endDate = "";
+    if (preset.days != null) {
+      const today = new Date();
+      const end = new Date(today.getTime() + preset.days * 86400000);
+      const toInputDate = (d) => d.toISOString().slice(0, 10);
+      startDate = toInputDate(today);
+      endDate = toInputDate(end);
+    }
+    setFilters((current) => {
+      const next = { ...current, startDate, endDate };
+      setAppliedFilters(next);
+      setPage(1);
+      return next;
+    });
+  };
 
   const reset = () => {
     const empty = { code: "", vendor: "", ship: "", cruiseLine: "", startDate: "", endDate: "", nights: "", route: "", portFrom: "", portTo: "" };
@@ -1465,6 +1581,17 @@ export default function CruiseSearchPage() {
     setAppliedFilters(filters);
     setPage(1);
   };
+
+  // Debounce keyword search input so typing naturally filters after short delay
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (filters.code !== appliedFilters.code) {
+        setAppliedFilters((current) => ({ ...current, code: filters.code }));
+        setPage(1);
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [filters.code, appliedFilters.code]);
 
   const replaceCruiseInState = (updatedCruise) => {
     if (!updatedCruise) {
@@ -1559,117 +1686,190 @@ export default function CruiseSearchPage() {
   }, [pagination, rows]);
 
   return (
-    <>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap');
-        * { box-sizing: border-box; }
-      `}</style>
+    <div className="w-full min-h-screen bg-slate-50/50 px-3 sm:px-4 py-4 space-y-4">
+      {/* ── Top Header Banner ────────────────────────────────────────────── */}
+      <div className="relative overflow-hidden rounded-3xl border border-teal-200/60 bg-gradient-to-br from-teal-50/70 via-sky-50/50 to-emerald-50/60 p-6 sm:p-8 shadow-xs">
+        <div className="pointer-events-none absolute -right-12 -top-12 h-48 w-48 rounded-full bg-teal-500/10 blur-3xl" />
+        <div className="pointer-events-none absolute -left-12 -bottom-12 h-48 w-48 rounded-full bg-sky-500/10 blur-3xl" />
 
-      <div style={{ minHeight: "100vh", background: `linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%)`, padding: "28px 32px", fontFamily: T.fontBase }}>
-        <div style={{ marginBottom: 24 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 2, color: T.textMuted, textTransform: "uppercase" }}>
-            Inventory Manager
-          </div>
-          <h1 style={{ margin: "4px 0 0", fontSize: 26, fontWeight: 800, color: T.textPrimary }}>Cruise Search</h1>
-          <div style={{ marginTop: 8, fontSize: 14, color: T.textSlate, maxWidth: 760 }}>
-            Paginated cruise inventory from the database with ship drilldown and cabin pricing breakdown.
-          </div>
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 18 }}>
-          {[
-            ["Cruises", overview.cruises, T.textPrimary],
-            ["Ships", overview.ships, T.blue],
-          ].map(([label, value, color]) => (
-            <div key={label} style={{ background: "rgba(255,255,255,0.82)", border: `1px solid ${T.border}`, borderRadius: 18, padding: "16px 18px", boxShadow: T.shadowCard, backdropFilter: "blur(6px)" }}>
-              <div style={{ fontSize: 11, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1.2 }}>{label}</div>
-              <div style={{ marginTop: 6, fontSize: 24, fontWeight: 800, color, fontFamily: T.fontMono }}>{value}</div>
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+          <div className="space-y-2 max-w-3xl">
+            <div className="inline-flex items-center gap-2 rounded-full border border-teal-200/80 bg-white/80 backdrop-blur-xs px-3.5 py-1 text-[11px] font-bold text-teal-800 shadow-2xs">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-teal-600"></span>
+              </span>
+              <span>Inventory Manager · Live Database</span>
             </div>
-          ))}
-        </div>
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
+              Cruise Search & Inventory Explorer
+            </h1>
+            <p className="text-xs sm:text-sm font-medium text-slate-600 leading-relaxed max-w-2xl">
+              Paginated cruise inventory from the database with ship drilldown, real-time cabin category pricing, and booking tags.
+            </p>
+          </div>
 
-        <div style={{ background: "rgba(255,255,255,0.9)", borderRadius: 20, border: `1px solid ${T.border}`, padding: 20, boxShadow: T.shadowCard, backdropFilter: "blur(8px)" }}>
-          <div style={{ marginBottom: 14 }}>
-            <div style={{ fontSize: 11, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1.2, marginBottom: 8 }}>Cruise Code</div>
-            <input
-              type="text"
-              placeholder="Search by cruise code, ship, package or route (e.g. CJ07260801)"
-              value={filters.code}
-              onChange={(event) => setF("code", event.target.value)}
-              onKeyDown={(event) => { if (event.key === "Enter") applyFilters(); }}
-              style={{ width: "100%", height: 38, borderRadius: 8, border: `1px solid ${T.border}`, padding: "8px 12px" }}
-            />
-          </div>
-          <div style={{ marginBottom: 14 }}>
-            <div style={{ fontSize: 11, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1.2, marginBottom: 8 }}>Vendor</div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              <button
-                type="button"
-                onClick={() => { setF("vendor", ""); setF("ship", ""); }}
-                style={{
-                  height: 34, padding: "0 14px", borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: "pointer",
-                  border: `1px solid ${filters.vendor === "" ? T.blue : T.border}`,
-                  background: filters.vendor === "" ? T.blueBg : "#fff",
-                  color: filters.vendor === "" ? T.blue : T.textSlate,
-                }}
-              >
-                All
-              </button>
-              {opts.vendors.map((value) => (
-                <button
-                  type="button"
-                  key={value}
-                  onClick={() => { setF("vendor", value); setF("ship", ""); }}
-                  style={{
-                    height: 34, padding: "0 14px", borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: "pointer",
-                    border: `1px solid ${filters.vendor === value ? T.blue : T.border}`,
-                    background: filters.vendor === value ? T.blueBg : "#fff",
-                    color: filters.vendor === value ? T.blue : T.textSlate,
-                  }}
-                >
-                  {value}
-                </button>
-              ))}
+          {/* Stat Counter Chips */}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-3 rounded-xl border border-slate-200/90 bg-white px-4 py-2.5 shadow-2xs min-w-[120px] transition-all hover:border-slate-300">
+              <div className="p-1.5 rounded-lg bg-teal-50 text-teal-700">
+                <Ship size={16} />
+              </div>
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Cruises</span>
+                <span className="text-xl font-black text-slate-900 font-mono tracking-tight">{overview.cruises?.toLocaleString() ?? 0}</span>
+              </div>
             </div>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 10 }}>
-            {[
-              { key: "ship", ph: "Ship", mode: "input", values: opts.ships },
-              { key: "cruiseLine", ph: "Cruise Line", mode: "select", values: opts.cruiseLines },
-              { key: "portFrom", ph: "From", mode: "select", values: opts.ports },
-              { key: "portTo", ph: "To", mode: "select", values: opts.ports },
-            ].map((field) =>
-              field.mode === "input" ? (
-                <SearchableSelect
-                  key={field.key}
-                  placeholder={field.ph}
-                  value={filters[field.key]}
-                  onChange={(value) => setF(field.key, value)}
-                  options={field.values}
-                />
-              ) : (
-                <select
-                  key={field.key}
-                  style={{ width: "100%", height: 38, borderRadius: 8, border: `1px solid ${T.border}`, padding: "8px 12px" }}
-                  value={filters[field.key]}
-                  onChange={(event) => setF(field.key, event.target.value)}
-                >
-                  <option value="">{field.ph}</option>
-                  {field.values.map((value) => (
-                    <option key={value} value={value}>
-                      {field.key === "cruiseLine" ? (CRUISE_LINE_LABELS[value] ?? value) : value}
-                    </option>
-                  ))}
-                </select>
-              ),
+            <div className="flex items-center gap-3 rounded-xl border border-slate-200/90 bg-white px-4 py-2.5 shadow-2xs min-w-[120px] transition-all hover:border-slate-300">
+              <div className="p-1.5 rounded-lg bg-sky-50 text-sky-700">
+                <Compass size={16} />
+              </div>
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Ships</span>
+                <span className="text-xl font-black text-slate-900 font-mono tracking-tight">{overview.ships?.toLocaleString() ?? 0}</span>
+              </div>
+            </div>
+            {opts.ports?.length > 0 && (
+              <div className="hidden sm:flex items-center gap-3 rounded-xl border border-slate-200/90 bg-white px-4 py-2.5 shadow-2xs min-w-[120px] transition-all hover:border-slate-300">
+                <div className="p-1.5 rounded-lg bg-emerald-50 text-emerald-700">
+                  <MapPin size={16} />
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Ports</span>
+                  <span className="text-xl font-black text-slate-900 font-mono tracking-tight">{opts.ports.length}</span>
+                </div>
+              </div>
             )}
           </div>
+        </div>
+      </div>
 
-          <div style={{ marginTop: 14 }}>
-            <div style={{ fontSize: 11, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1.2, marginBottom: 8 }}>Departure window</div>
-            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+        {/* ── Filter Form Card ───────────────────────────────────────────── */}
+        <div className="rounded-2xl border border-slate-200/90 bg-white p-5 sm:p-6 shadow-xs space-y-5">
+          {/* Cruise Code Input */}
+          <div>
+            <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+              <Search size={13} className="text-teal-600" />
+              <span>Cruise Code or Keyword</span>
+            </label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
+              <input
+                type="text"
+                placeholder="Search by cruise code, ship name, package title or route (e.g. CJ07260801)"
+                value={filters.code}
+                onChange={(event) => setF("code", event.target.value)}
+                onKeyDown={(event) => { if (event.key === "Enter") applyFilters(); }}
+                className="w-full h-10 pl-9 pr-4 rounded-lg border border-slate-200 bg-white text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition shadow-2xs"
+              />
+              {filters.code && (
+                <button
+                  type="button"
+                  onClick={() => setF("code", "")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 hover:text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md transition cursor-pointer"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Vendor Filter Buttons */}
+          <div>
+            <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+              <Layers size={13} className="text-teal-600" />
+              <span>Cruise Line Provider</span>
+            </label>
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                onClick={() => selectVendor("")}
+                className={`h-8 px-3 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  filters.vendor === ""
+                    ? "bg-teal-700 text-white shadow-xs border border-teal-700"
+                    : "bg-slate-50 text-slate-700 hover:bg-slate-100 hover:text-slate-900 border border-slate-200/80 shadow-2xs"
+                }`}
+              >
+                All Providers
+              </button>
+              {opts.vendors.map((value) => {
+                const isSelected = filters.vendor === value;
+                const vStyle = getVendorStyle(value);
+                return (
+                  <button
+                    type="button"
+                    key={value}
+                    onClick={() => selectVendor(value)}
+                    className={`h-8 px-3 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                      isSelected
+                        ? "bg-teal-700 text-white font-bold shadow-xs border border-teal-700"
+                        : "bg-white text-slate-700 hover:bg-slate-50 hover:text-slate-900 border border-slate-200/80 shadow-2xs"
+                    }`}
+                  >
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className={`w-1.5 h-1.5 rounded-full ${isSelected ? "bg-white" : vStyle.dot}`} />
+                      <span>{value}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 4 Multi-Select Options Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {[
+              { key: "ship", ph: "Select Ship", mode: "input", values: opts.ships, icon: Ship, iconColor: "text-sky-600" },
+              { key: "cruiseLine", ph: "Select Cruise Line", mode: "select", values: opts.cruiseLines, icon: Compass, iconColor: "text-teal-600" },
+              { key: "portFrom", ph: "Departure Port (From)", mode: "select", values: opts.ports, icon: MapPin, iconColor: "text-emerald-600" },
+              { key: "portTo", ph: "Destination Port (To)", mode: "select", values: opts.ports, icon: MapPin, iconColor: "text-indigo-600" },
+            ].map((field) => {
+              const Icon = field.icon;
+              return field.mode === "input" ? (
+                <div key={field.key}>
+                  <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                    <Icon size={12} className={field.iconColor} />
+                    <span>{field.ph}</span>
+                  </label>
+                  <SearchableSelect
+                    placeholder={field.ph}
+                    value={filters[field.key]}
+                    onChange={(value) => setF(field.key, value)}
+                    options={field.values}
+                  />
+                </div>
+              ) : (
+                <div key={field.key}>
+                  <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                    <Icon size={12} className={field.iconColor} />
+                    <span>{field.ph}</span>
+                  </label>
+                  <select
+                    className="w-full h-9.5 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition shadow-2xs"
+                    value={filters[field.key]}
+                    onChange={(event) => setF(field.key, event.target.value)}
+                  >
+                    <option value="">{field.ph} (All)</option>
+                    {field.values.map((value) => (
+                      <option key={value} value={value}>
+                        {field.key === "cruiseLine" ? (CRUISE_LINE_LABELS[value] ?? value) : value}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Departure Window */}
+          <div>
+            <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+              <CalendarDays size={13} className="text-teal-600" />
+              <span>Departure Window</span>
+            </label>
+            <div className="flex flex-wrap items-center gap-1.5">
               {[
-                { label: "All", days: null },
+                { label: "All Dates", days: null },
                 { label: "Next 7 Days", days: 7 },
                 { label: "Next 30 Days", days: 30 },
                 { label: "Next 3 Months", days: 90 },
@@ -1677,34 +1877,33 @@ export default function CruiseSearchPage() {
                 { label: "Next 1 Year", days: 365 },
                 { label: "Next 2 Years", days: 730 },
               ].map((preset) => {
-                const isActive = datePreset === preset.label;
+                const isActive = datePreset === preset.label || (preset.label === "All Dates" && !datePreset && !filters.startDate && !filters.endDate);
                 return (
                   <button
                     type="button"
                     key={preset.label}
                     onClick={() => applyDatePreset(preset)}
-                    style={{
-                      height: 34, padding: "0 14px", borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: "pointer",
-                      border: `1px solid ${isActive ? T.blue : T.border}`,
-                      background: isActive ? T.blueBg : "#fff",
-                      color: isActive ? T.blue : T.textSlate,
-                    }}
+                    className={`h-8 px-3 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                      isActive
+                        ? "bg-teal-700 text-white font-bold shadow-xs border border-teal-700"
+                        : "bg-slate-50 text-slate-700 hover:bg-slate-100 hover:text-slate-900 border border-slate-200/80 shadow-2xs"
+                    }`}
                   >
                     {preset.label}
                   </button>
                 );
               })}
-              <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: 4 }}>
+              <div className="flex items-center gap-1.5 ml-1">
                 <input
                   type="date"
-                  style={{ height: 34, borderRadius: 8, border: `1px solid ${T.border}`, padding: "0 10px" }}
+                  className="h-8 rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 font-semibold shadow-2xs focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-500/20"
                   value={filters.startDate}
                   onChange={(event) => { setF("startDate", event.target.value); setDatePreset(null); }}
                 />
-                <span style={{ color: T.textMuted, fontSize: 12 }}>to</span>
+                <span className="text-xs font-medium text-slate-400">to</span>
                 <input
                   type="date"
-                  style={{ height: 34, borderRadius: 8, border: `1px solid ${T.border}`, padding: "0 10px" }}
+                  className="h-8 rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 font-semibold shadow-2xs focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-500/20"
                   value={filters.endDate}
                   onChange={(event) => { setF("endDate", event.target.value); setDatePreset(null); }}
                 />
@@ -1712,194 +1911,353 @@ export default function CruiseSearchPage() {
             </div>
           </div>
 
-          <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-            <button onClick={applyFilters} style={{ height: 38, padding: "0 24px", border: "none", borderRadius: 8, background: T.textPrimary, color: "#fff", cursor: "pointer", fontWeight: 600 }}>
-              Search
+          {/* Action Buttons Row */}
+          <div className="flex items-center gap-2.5 pt-3 border-t border-slate-100">
+            <button
+              onClick={applyFilters}
+              className="inline-flex items-center gap-2 h-9.5 px-5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white text-xs sm:text-sm font-bold shadow-xs active:scale-95 transition cursor-pointer"
+            >
+              <Search size={15} />
+              <span>Search Inventory</span>
             </button>
-            <button onClick={reset} style={{ height: 38, padding: "0 24px", border: "none", borderRadius: 8, background: T.muted, cursor: "pointer", fontWeight: 600 }}>
-              Reset
+            <button
+              onClick={reset}
+              className="inline-flex items-center gap-1.5 h-9.5 px-4 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs sm:text-sm font-semibold shadow-2xs active:scale-95 transition cursor-pointer"
+            >
+              <RotateCcw size={13} className="text-slate-500" />
+              <span>Reset Filters</span>
             </button>
           </div>
         </div>
 
-        <div style={{ display: "flex", justifyContent: "space-between", margin: "12px 0", color: T.textMuted, fontSize: 12 }}>
-          <div>{loading ? "Loading sailings..." : `${pagination?.total ?? rows.length} results`}</div>
-          <div>Page {pagination?.page ?? 1} of {pagination?.totalPages ?? 1}</div>
+        {/* ── Results Status Toolbar ──────────────────────────────────────── */}
+        <div className="rounded-xl border border-slate-200/90 bg-slate-50/80 px-4 py-2.5 flex items-center justify-between shadow-2xs">
+          <div className="inline-flex items-center gap-2">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-teal-600"></span>
+            </span>
+            <span className="text-xs font-bold text-slate-900">
+              {loading ? "Searching inventory…" : `${(pagination?.total ?? rows.length).toLocaleString()} sailings found`}
+            </span>
+          </div>
+          <div className="bg-white px-3 py-0.5 rounded-md border border-slate-200 text-xs font-semibold text-slate-700 font-mono shadow-2xs">
+            Page {pagination?.page ?? 1} of {pagination?.totalPages ?? 1}
+          </div>
         </div>
 
-        <div style={{ background: "rgba(255,255,255,0.92)", borderRadius: 20, border: `1px solid ${T.border}`, boxShadow: T.shadowCard, overflow: "hidden", backdropFilter: "blur(8px)" }}>
+        {/* ── Table & Mobile List Card ────────────────────────────────────── */}
+        <div className="rounded-2xl border border-slate-200/90 bg-white shadow-xs overflow-hidden">
           {loading ? (
-            <div style={{ padding: 60, textAlign: "center", color: T.textMuted }}>Loading cruises from database...</div>
-          ) : error ? (
-            <div style={{ padding: 60, textAlign: "center", color: T.red }}>{error}</div>
-          ) : rows.length === 0 ? (
-            <div style={{ padding: 60, textAlign: "center", color: T.textMuted }}>No cruises found.</div>
-          ) : (
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1100 }}>
-                <thead style={{ background: "linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%)" }}>
-                  <tr>
-                    {["", "Vendor", "Ship", "Cruise", "Nights", "Route", "Departure", "Arrival", "Avail.", "Refreshed", "Price"].map((header) => (
-                      <th key={header} style={{ padding: "10px 14px", textAlign: "left", fontSize: 11, color: T.textSlate }}>
-                        {header}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row, index) => {
-                    const lowestPrice = Math.min(...(row.cabinCategories || []).filter((cabin) => cabin.avlResult === "OK").map((cabin) => Number(cabin.cabinPrice ?? 0)));
-                    const hasFullDetails = (row.cabinCategories || []).some(
-                      c => c.confidence === "Medium" || c.confidence === "High"
-                    );
-                    const isTagged = (row.tags?.length || 0) > 0;
-                    const canTag = hasFullDetails || isTagged;
-
-                    return (
-                      <tr key={row.id} style={{ background: isTagged ? "#fffbeb" : index % 2 === 0 ? "#fff" : T.muted }}>
-                        <td style={{ padding: "12px 14px", borderBottom: `1px solid ${T.border}` }}>
-                          <button
-                            onClick={() => canTag ? togglePin(row.id) : null}
-                            style={{
-                              border: "none", background: "none",
-                              cursor: canTag ? "pointer" : "not-allowed",
-                              color: isTagged ? "#d97706" : canTag ? T.textSlate : T.textMuted,
-                              opacity: canTag ? 1 : 0.35,
-                              fontSize: 0
-                            }}
-                            title={
-                              isTagged ? "Manage tags"
-                              : canTag ? "Add tag"
-                              : "Get Full Details first before tagging"
-                            }
-                          >
-                            <Pin size={16} />
-                            📌
-                          </button>
-                        </td>
-                        <td style={{ padding: "12px 14px", borderBottom: `1px solid ${T.border}` }}>
-                          <div>{row.vendor?.name}</div>
-                          {row.cruiseLine && (
-                            <div style={{ marginTop: 3, fontSize: 11, color: T.textMuted, fontFamily: T.fontMono }}>
-                              {CRUISE_LINE_LABELS[row.cruiseLine] ?? row.cruiseLine}
-                            </div>
-                          )}
-                        </td>
-                        <td style={{ padding: "12px 14px", borderBottom: `1px solid ${T.border}` }}>
-                          <button onClick={() => setShipRow(row)} style={{ border: "none", background: T.blueBg, color: T.blue, borderRadius: 8, padding: "4px 12px", cursor: "pointer" }}>
-                            {row.ship}
-                          </button>
-                          <div style={{ marginTop: 6, fontSize: 11, color: T.textMuted, fontFamily: T.fontMono }}>
-                            {getCruiseDisplayId(row)}
-                          </div>
-                        </td>
-                        <td style={{ padding: "12px 14px", borderBottom: `1px solid ${T.border}` }}>{row.package}</td>
-                        <td style={{ padding: "12px 14px", borderBottom: `1px solid ${T.border}` }}>{row.nights}N</td>
-                        <td style={{ padding: "12px 14px", borderBottom: `1px solid ${T.border}` }}>
-                          <button
-                            onClick={() => setItineraryRow(row)}
-                            style={{ border: "none", background: "none", cursor: "pointer", color: T.blue, fontWeight: 600, fontSize: 13, padding: 0, textAlign: "left", textDecoration: "underline", textDecorationStyle: "dotted", textUnderlineOffset: 3 }}
-                          >
-                            {getCruiseRouteLabel(row)}
-                          </button>
-                        </td>
-                        <td style={{ padding: "12px 14px", borderBottom: `1px solid ${T.border}` }}>{fmtDate(row.startDate)}</td>
-                        <td style={{ padding: "12px 14px", borderBottom: `1px solid ${T.border}` }}>{fmtDate(row.endDate)}</td>
-                        <td style={{ padding: "12px 14px", borderBottom: `1px solid ${T.border}` }}>
-                          {row.cabinCategories?.filter(c => c.avlResult === "OK").length ?? 0} avail. cat.
-                        </td>
-                        <td style={{ padding: "12px 14px", borderBottom: `1px solid ${T.border}`, fontSize: 11, color: T.textMuted, whiteSpace: "nowrap" }}>
-                          {(() => {
-                            // Prefer cabin-freshness; fall back to the row's own
-                            // last-write so list-only cruises aren't stuck on "—".
-                            const ts = row.cabinsUpdatedAt ?? row.updatedAt ?? row.createdAt;
-                            return ts ? fmtFetchedAt(new Date(ts).getTime()) : "—";
-                          })()}
-                        </td>
-                        <td style={{ padding: "12px 14px", borderBottom: `1px solid ${T.border}` }}>
-                          <button
-                            onClick={() => setPricingRow(row)}
-                            style={{
-                              border: "none",
-                              background: Number.isFinite(lowestPrice) ? "linear-gradient(135deg, #6d28d9 0%, #4f46e5 100%)" : T.amberBg,
-                              color: Number.isFinite(lowestPrice) ? "#fff" : T.amberDk,
-                              borderRadius: 12,
-                              padding: "6px 12px",
-                              cursor: "pointer",
-                            }}
-                          >
-                            {Number.isFinite(lowestPrice) ? safeCurrency(lowestPrice, row.currency) : "WTL"}
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+            <div className="py-20 text-center text-sm font-semibold text-slate-600 flex flex-col items-center justify-center gap-2.5">
+              <RefreshCw className="animate-spin text-teal-600" size={20} />
+              <span>Loading cruises from database...</span>
             </div>
+          ) : error ? (
+            <div className="py-20 text-center text-sm font-bold text-rose-600">{error}</div>
+          ) : rows.length === 0 ? (
+            <div className="py-20 text-center text-sm font-medium text-slate-400">No cruises found.</div>
+          ) : (
+            <>
+              {/* ── Mobile List View (md:hidden) ─────────────────────────── */}
+              <div className="block md:hidden divide-y divide-slate-100">
+                {rows.map((row) => {
+                  const lowestPrice = Math.min(...(row.cabinCategories || []).filter((cabin) => cabin.avlResult === "OK").map((cabin) => Number(cabin.cabinPrice ?? 0)));
+                  const hasFullDetails = (row.cabinCategories || []).some(
+                    c => c.confidence === "Medium" || c.confidence === "High"
+                  );
+                  const isTagged = (row.tags?.length || 0) > 0;
+                  const canTag = hasFullDetails || isTagged;
+                  const availableCabins = row.cabinCategories?.filter(c => c.avlResult === "OK").length ?? 0;
+                  const vStyle = getVendorStyle(row.vendor?.name);
+
+                  return (
+                    <div key={row.id} className={`p-4 transition-colors ${isTagged ? "bg-amber-50/50" : "bg-white"}`}>
+                      {/* Top bar: Vendor, Ship badge, Pin */}
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-md border ${vStyle.badge}`}>
+                            {row.vendor?.name}
+                          </span>
+                          {row.cruiseLine && (
+                            <span className="text-[10px] font-semibold text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md">
+                              {CRUISE_LINE_LABELS[row.cruiseLine] ?? row.cruiseLine}
+                            </span>
+                          )}
+                          <button
+                            onClick={() => setShipRow(row)}
+                            className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-sky-50 border border-sky-200 text-sky-800 hover:bg-sky-100 text-[11px] font-bold transition cursor-pointer"
+                          >
+                            <Ship size={11} className="text-sky-600" />
+                            <span>{row.ship}</span>
+                          </button>
+                        </div>
+                        <button
+                          onClick={() => canTag ? togglePin(row.id) : null}
+                          className={`p-1.5 rounded-lg transition shrink-0 ${
+                            canTag ? "cursor-pointer hover:bg-slate-100" : "cursor-not-allowed opacity-30"
+                          } ${isTagged ? "text-amber-600 bg-amber-100/60" : "text-slate-400"}`}
+                          title={
+                            isTagged ? "Manage tags"
+                            : canTag ? "Add tag"
+                            : "Get Full Details first before tagging"
+                          }
+                        >
+                          <Pin size={15} className={isTagged ? "fill-amber-500 text-amber-600" : ""} />
+                        </button>
+                      </div>
+
+                      {/* Package Title */}
+                      <h4 className="text-sm font-bold text-slate-900 leading-snug mb-2">
+                        {row.package}
+                      </h4>
+
+                      {/* Route & Nights */}
+                      <div className="flex items-center gap-2 text-xs mb-3 flex-wrap">
+                        <button
+                          onClick={() => setItineraryRow(row)}
+                          className="inline-flex items-center gap-1 font-semibold text-teal-700 hover:text-teal-900 text-xs cursor-pointer hover:underline underline-offset-2"
+                        >
+                          <MapPin size={12} className="shrink-0 text-teal-600" />
+                          <span>{getCruiseRouteLabel(row)}</span>
+                        </button>
+                        <span className="text-slate-300">•</span>
+                        <span className="font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md text-[11px]">
+                          {row.nights} Nights
+                        </span>
+                      </div>
+
+                      {/* Sailing Dates */}
+                      <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 p-2.5 rounded-lg border border-slate-200/70 mb-3">
+                        <div>
+                          <div className="text-[10px] uppercase font-bold text-slate-400">Departure</div>
+                          <div className="font-semibold text-slate-900 mt-0.5">{fmtDate(row.startDate)}</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] uppercase font-bold text-slate-400">Arrival</div>
+                          <div className="font-semibold text-slate-900 mt-0.5">{fmtDate(row.endDate)}</div>
+                        </div>
+                      </div>
+
+                      {/* Bottom Bar: Availability & Price Button */}
+                      <div className="flex items-center justify-between gap-2 pt-1">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-semibold bg-emerald-50 border border-emerald-200 text-emerald-800">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                          {availableCabins} cabins available
+                        </span>
+
+                        <button
+                          onClick={() => setPricingRow(row)}
+                          className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                            Number.isFinite(lowestPrice)
+                              ? "bg-teal-700 hover:bg-teal-800 text-white shadow-2xs"
+                              : "bg-amber-50 border border-amber-200 text-amber-900 hover:bg-amber-100"
+                          }`}
+                        >
+                          {Number.isFinite(lowestPrice) ? safeCurrency(lowestPrice, row.currency) : "View Cabins / WTL"}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* ── Desktop Table View (hidden md:block) ─────────────────── */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-left border-collapse min-w-[1000px]">
+                  <thead className="bg-slate-50 border-b border-slate-200">
+                    <tr>
+                      {["", "Vendor", "Ship", "Cruise", "Nights", "Route", "Departure", "Arrival", "Avail.", "Refreshed", "Price"].map((header) => (
+                        <th key={header} className="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-600">
+                          {header}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-sm">
+                    {rows.map((row, index) => {
+                      const lowestPrice = Math.min(...(row.cabinCategories || []).filter((cabin) => cabin.avlResult === "OK").map((cabin) => Number(cabin.cabinPrice ?? 0)));
+                      const hasFullDetails = (row.cabinCategories || []).some(
+                        c => c.confidence === "Medium" || c.confidence === "High"
+                      );
+                      const isTagged = (row.tags?.length || 0) > 0;
+                      const canTag = hasFullDetails || isTagged;
+                      const vStyle = getVendorStyle(row.vendor?.name);
+
+                      return (
+                        <tr key={row.id} className={`transition-all hover:bg-slate-50/70 ${isTagged ? "bg-amber-50/50" : index % 2 === 0 ? "bg-white" : "bg-slate-50/30"}`}>
+                          <td className="px-4 py-3">
+                            <button
+                              onClick={() => canTag ? togglePin(row.id) : null}
+                              className={`p-1 rounded-md transition ${
+                                canTag ? "cursor-pointer hover:bg-slate-100" : "cursor-not-allowed opacity-30"
+                              } ${isTagged ? "text-amber-600" : "text-slate-400"}`}
+                              title={
+                                isTagged ? "Manage tags"
+                                : canTag ? "Add tag"
+                                : "Get Full Details first before tagging"
+                              }
+                            >
+                              <Pin size={15} className={isTagged ? "fill-amber-500 text-amber-600" : ""} />
+                            </button>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`inline-block px-2.5 py-0.5 rounded-md text-[11px] font-semibold border ${vStyle.badge}`}>
+                              {row.vendor?.name}
+                            </span>
+                            {row.cruiseLine && (
+                              <div className="mt-0.5 text-[10px] font-semibold text-slate-500">
+                                {CRUISE_LINE_LABELS[row.cruiseLine] ?? row.cruiseLine}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            <button
+                              onClick={() => setShipRow(row)}
+                              className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-sky-50 border border-sky-200 text-sky-800 hover:bg-sky-100 text-xs font-bold transition cursor-pointer"
+                            >
+                              <Ship size={11} className="text-sky-600" />
+                              <span>{row.ship}</span>
+                            </button>
+                            <div className="mt-0.5 text-[11px] font-mono text-slate-400">
+                              {getCruiseDisplayId(row)}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 font-semibold text-slate-900 max-w-[240px] truncate" title={row.package}>
+                            {row.package}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold bg-indigo-50 border border-indigo-200 text-indigo-700">
+                              {row.nights}N
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <button
+                              onClick={() => setItineraryRow(row)}
+                              className="text-left font-semibold text-teal-700 hover:text-teal-900 hover:underline text-xs decoration-dotted underline-offset-4 cursor-pointer"
+                            >
+                              {getCruiseRouteLabel(row)}
+                            </button>
+                          </td>
+                          <td className="px-4 py-3 text-xs font-medium text-slate-700 whitespace-nowrap">
+                            {fmtDate(row.startDate)}
+                          </td>
+                          <td className="px-4 py-3 text-xs font-medium text-slate-700 whitespace-nowrap">
+                            {fmtDate(row.endDate)}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-semibold bg-emerald-50 border border-emerald-200 text-emerald-800">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                              {row.cabinCategories?.filter(c => c.avlResult === "OK").length ?? 0} avail
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-xs font-medium text-slate-400 whitespace-nowrap">
+                            {(() => {
+                              const ts = row.cabinsUpdatedAt ?? row.updatedAt ?? row.createdAt;
+                              return ts ? fmtFetchedAt(new Date(ts).getTime()) : "—";
+                            })()}
+                          </td>
+                          <td className="px-4 py-3">
+                            <button
+                              onClick={() => setPricingRow(row)}
+                              className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer shadow-2xs ${
+                                Number.isFinite(lowestPrice)
+                                  ? "bg-teal-700 hover:bg-teal-800 text-white"
+                                  : "bg-amber-50 border border-amber-200 text-amber-800 hover:bg-amber-100"
+                              }`}
+                            >
+                              {Number.isFinite(lowestPrice) ? safeCurrency(lowestPrice, row.currency) : "WTL"}
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
 
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginTop: 16, flexWrap: "wrap" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        {/* ── Modern Pagination Bar ─────────────────────────────────────────── */}
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4 p-4 rounded-xl border border-slate-200/90 bg-white shadow-2xs">
+          <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
+            <span>
+              Showing page <strong className="text-slate-900 font-bold">{pagination?.page ?? 1}</strong> of{" "}
+              <strong className="text-slate-900 font-bold">{pagination?.totalPages ?? 1}</strong>
+            </span>
+            <span className="text-slate-300">•</span>
+            <span>
+              <strong className="text-slate-900 font-bold">{(pagination?.total ?? rows.length).toLocaleString()}</strong> total sailings
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1.5 flex-wrap justify-center">
             <button
               onClick={() => setPage(1)}
               disabled={!pagination?.hasPreviousPage || loading}
-              style={{ border: `1px solid ${T.border}`, borderRadius: 10, padding: "8px 14px", background: "#fff", cursor: pagination?.hasPreviousPage ? "pointer" : "not-allowed", opacity: pagination?.hasPreviousPage ? 1 : 0.5 }}
+              className="inline-flex items-center gap-1 h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 disabled:opacity-35 disabled:cursor-not-allowed transition shadow-2xs"
+              title="First Page"
             >
-              First
+              <ChevronsLeft size={14} />
+              <span className="hidden sm:inline">First</span>
             </button>
-            {getVisiblePages(pagination?.page ?? 1, pagination?.totalPages ?? 1).map((pageNumber, index, pages) => {
-              const previousPage = pages[index - 1];
-              const showGap = previousPage && pageNumber - previousPage > 1;
 
-              return (
-                <div key={pageNumber} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  {showGap ? <span style={{ color: T.textMuted }}>...</span> : null}
-                  <button
-                    onClick={() => setPage(pageNumber)}
-                    disabled={loading}
-                    style={{
-                      border: `1px solid ${pageNumber === (pagination?.page ?? 1) ? T.blue : T.border}`,
-                      borderRadius: 10,
-                      padding: "8px 14px",
-                      background: pageNumber === (pagination?.page ?? 1) ? T.blueBg : "#fff",
-                      color: pageNumber === (pagination?.page ?? 1) ? T.blue : T.textPrimary,
-                      cursor: loading ? "not-allowed" : "pointer",
-                      fontWeight: 700,
-                    }}
-                  >
-                    {pageNumber}
-                  </button>
-                </div>
-              );
-            })}
+            <button
+              onClick={() => setPage((current) => Math.max(1, current - 1))}
+              disabled={!pagination?.hasPreviousPage || loading}
+              className="inline-flex items-center gap-1 h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 disabled:opacity-35 disabled:cursor-not-allowed transition shadow-2xs"
+              title="Previous Page"
+            >
+              <ChevronLeft size={14} />
+              <span>Prev</span>
+            </button>
+
+            <div className="flex items-center gap-1 mx-0.5">
+              {getVisiblePages(pagination?.page ?? 1, pagination?.totalPages ?? 1).map((pageNumber, index, pages) => {
+                const previousPage = pages[index - 1];
+                const showGap = previousPage && pageNumber - previousPage > 1;
+
+                return (
+                  <div key={pageNumber} className="flex items-center gap-1">
+                    {showGap && <span className="text-slate-400 text-xs px-1 font-bold select-none">...</span>}
+                    <button
+                      onClick={() => setPage(pageNumber)}
+                      disabled={loading}
+                      className={`min-w-[32px] h-8 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        pageNumber === (pagination?.page ?? 1)
+                          ? "bg-teal-700 text-white shadow-xs border border-teal-700 ring-2 ring-teal-700/20"
+                          : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 shadow-2xs"
+                      }`}
+                    >
+                      {pageNumber}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+
+            <button
+              onClick={() => setPage((current) => current + 1)}
+              disabled={!pagination?.hasNextPage || loading}
+              className="inline-flex items-center gap-1 h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 disabled:opacity-35 disabled:cursor-not-allowed transition shadow-2xs"
+              title="Next Page"
+            >
+              <span>Next</span>
+              <ChevronRight size={14} />
+            </button>
+
             <button
               onClick={() => setPage(pagination?.totalPages ?? 1)}
               disabled={!pagination?.hasNextPage || loading}
-              style={{ border: `1px solid ${T.border}`, borderRadius: 10, padding: "8px 14px", background: "#fff", cursor: pagination?.hasNextPage ? "pointer" : "not-allowed", opacity: pagination?.hasNextPage ? 1 : 0.5 }}
+              className="inline-flex items-center gap-1 h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 disabled:opacity-35 disabled:cursor-not-allowed transition shadow-2xs"
+              title="Last Page"
             >
-              Last
+              <span className="hidden sm:inline">Last</span>
+              <ChevronsRight size={14} />
             </button>
           </div>
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-          <button
-            onClick={() => setPage((current) => Math.max(1, current - 1))}
-            disabled={!pagination?.hasPreviousPage || loading}
-            style={{ border: `1px solid ${T.border}`, borderRadius: 10, padding: "8px 14px", background: "#fff", cursor: pagination?.hasPreviousPage ? "pointer" : "not-allowed", opacity: pagination?.hasPreviousPage ? 1 : 0.5 }}
-          >
-            Previous
-          </button>
-          <button
-            onClick={() => setPage((current) => current + 1)}
-            disabled={!pagination?.hasNextPage || loading}
-            style={{ border: `1px solid ${T.border}`, borderRadius: 10, padding: "8px 14px", background: "#fff", cursor: pagination?.hasNextPage ? "pointer" : "not-allowed", opacity: pagination?.hasNextPage ? 1 : 0.5 }}
-          >
-            Next
-          </button>
-          </div>
         </div>
-      </div>
 
       {shipRow && <ShipModal row={shipRow} onClose={() => setShipRow(null)} />}
       {itineraryRow && <ItineraryModal row={itineraryRow} onClose={() => setItineraryRow(null)} />}
@@ -1915,6 +2273,6 @@ export default function CruiseSearchPage() {
           onDelete={handleDeleteTag}
         />
       )}
-    </>
+    </div>
   );
 }

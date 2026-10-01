@@ -136,31 +136,46 @@ export default function DashboardPage() {
         title: "Active Vendors",
         value: overview.active_vendors,
         hint: "Vendors with live runs or extracted cruise data",
-        icon: Activity
+        icon: Activity,
+        accent: "border-indigo-200/80 bg-gradient-to-br from-white via-indigo-50/30 to-indigo-100/20",
+        iconBg: "bg-indigo-100 text-indigo-700",
+        textVal: "text-indigo-950"
       },
       {
         title: "Fleet Health",
         value: `${overview.fleet_health_score}%`,
         hint: overview.fleet_health_label,
-        icon: ShieldCheck
+        icon: ShieldCheck,
+        accent: "border-emerald-200/80 bg-gradient-to-br from-white via-emerald-50/30 to-emerald-100/20",
+        iconBg: "bg-emerald-100 text-emerald-700",
+        textVal: "text-emerald-950"
       },
       {
         title: "Total Runs",
         value: overview.total_runs,
         hint: "Historical extraction runs stored in the database",
-        icon: RefreshCcw
+        icon: RefreshCcw,
+        accent: "border-sky-200/80 bg-gradient-to-br from-white via-sky-50/30 to-sky-100/20",
+        iconBg: "bg-sky-100 text-sky-700",
+        textVal: "text-sky-950"
       },
       {
         title: "Average Response Time",
         value: formatResponseTime(overview.average_response_time_ms),
         hint: "Average runtime across recorded vendor runs",
-        icon: Clock3
+        icon: Clock3,
+        accent: "border-amber-200/80 bg-gradient-to-br from-white via-amber-50/30 to-amber-100/20",
+        iconBg: "bg-amber-100 text-amber-700",
+        textVal: "text-amber-950"
       },
       {
         title: "Unread Price Alerts",
         value: priceAlerts.length,
         hint: "Tagged cruises that hit a new lowest fare",
-        icon: BellRing
+        icon: BellRing,
+        accent: "border-rose-200/80 bg-gradient-to-br from-white via-rose-50/30 to-rose-100/20",
+        iconBg: "bg-rose-100 text-rose-700",
+        textVal: "text-rose-950"
       }
     ]
   }, [overview, priceAlerts])
@@ -224,87 +239,85 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6 space-y-8">
-      <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
-        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
-          Fleet Overview
-        </p>
-        <div className="mt-3 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold text-slate-900">
-              Vendor extraction health
-            </h1>
-            <p className="mt-2 max-w-2xl text-sm text-slate-500">
-              Every card below is fed from the backend database: vendor runs,
-              cruise coverage, last updated time, and response time history.
-            </p>
-            <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
-              <span
-                className={`h-2 w-2 rounded-full ${
-                  refreshState === "refreshing"
-                    ? "bg-sky-500"
-                    : refreshState === "success"
-                      ? "bg-emerald-500"
-                      : refreshState === "error"
-                        ? "bg-rose-500"
-                        : "bg-slate-400"
-                }`}
-              />
-              {refreshState === "refreshing"
-                ? "Refreshing dashboard..."
-                : refreshState === "error"
-                  ? "Refresh failed"
-                  : `Last synced ${formatLastUpdated(lastSyncedAt)}`}
+    <div className="w-full min-h-screen bg-slate-50/50 px-3 sm:px-4 py-4 space-y-4">
+      {/* ── Top Header Banner ────────────────────────────────────────────── */}
+      <div className="relative overflow-hidden rounded-3xl border border-teal-200/60 bg-gradient-to-br from-teal-50/70 via-sky-50/50 to-emerald-50/60 p-6 sm:p-8 shadow-xs">
+        <div className="pointer-events-none absolute -right-12 -top-12 h-48 w-48 rounded-full bg-teal-500/10 blur-3xl" />
+        <div className="pointer-events-none absolute -left-12 -bottom-12 h-48 w-48 rounded-full bg-sky-500/10 blur-3xl" />
+
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+          <div className="space-y-2 max-w-3xl">
+            <div className="inline-flex items-center gap-2 rounded-full border border-teal-200/80 bg-white/80 backdrop-blur-xs px-3.5 py-1 text-[11px] font-bold text-teal-800 shadow-2xs">
+              <span className="relative flex h-2 w-2">
+                <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                  refreshState === "refreshing" ? "bg-sky-400" : refreshState === "error" ? "bg-rose-400" : "bg-teal-400"
+                }`}></span>
+                <span className={`relative inline-flex rounded-full h-2 w-2 ${
+                  refreshState === "refreshing" ? "bg-sky-600" : refreshState === "error" ? "bg-rose-600" : "bg-teal-600"
+                }`}></span>
+              </span>
+              <span>
+                {refreshState === "refreshing"
+                  ? "Refreshing live telemetry…"
+                  : refreshState === "error"
+                    ? "Sync issue detected"
+                    : `Live Fleet Telemetry · Synced ${formatLastUpdated(lastSyncedAt)}`}
+              </span>
             </div>
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
+              Vendor Extraction & Fleet Overview
+            </h1>
+            <p className="text-xs sm:text-sm font-medium text-slate-600 leading-relaxed max-w-2xl">
+              Real-time synchronization metrics across all cruise line carriers, database coverage depth, and active price alert monitors.
+            </p>
           </div>
-          <button
-            onClick={fetchOverview}
-            disabled={loading}
-            className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium text-white transition ${
-              loading
-                ? "cursor-wait border-slate-700 bg-slate-700"
-                : refreshState === "success"
-                  ? "border-emerald-600 bg-emerald-600 hover:bg-emerald-500"
-                  : "border-slate-200 bg-slate-900 hover:bg-slate-800"
-            }`}
-          >
-            <RefreshCcw
-              size={16}
-              className={loading ? "animate-spin" : ""}
-            />
-            {loading
-              ? "Refreshing..."
-              : refreshState === "success"
-                ? "Refreshed"
-                : "Refresh"}
-          </button>
+
+          <div className="flex items-center gap-3 shrink-0">
+            <button
+              onClick={fetchOverview}
+              disabled={loading}
+              className={`inline-flex items-center gap-2 rounded-2xl px-5 py-2.5 text-xs font-bold text-white shadow-sm transition active:scale-95 cursor-pointer ${
+                loading
+                  ? "bg-slate-700 cursor-wait opacity-80"
+                  : refreshState === "success"
+                    ? "bg-emerald-700 hover:bg-emerald-600 shadow-emerald-700/20"
+                    : "bg-slate-900 hover:bg-slate-800 shadow-slate-900/20"
+              }`}
+            >
+              <RefreshCcw
+                size={14}
+                className={loading ? "animate-spin" : ""}
+              />
+              <span>{loading ? "Refreshing…" : refreshState === "success" ? "Refreshed" : "Refresh Overview"}</span>
+            </button>
+          </div>
         </div>
       </div>
 
       {overview && (
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-5">
+        <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-5">
           {cards.map(card => {
             const Icon = card.icon
 
             return (
               <div
                 key={card.title}
-                className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+                className={`rounded-xl border p-4 sm:p-5 shadow-xs transition-all hover:shadow-sm ${card.accent}`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-sm font-medium text-slate-500">
+                    <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
                       {card.title}
                     </p>
-                    <p className="mt-3 text-3xl font-semibold text-slate-900">
+                    <p className={`mt-1.5 text-2xl sm:text-3xl font-black font-mono tracking-tight ${card.textVal}`}>
                       {card.value}
                     </p>
                   </div>
-                  <div className="rounded-xl bg-slate-100 p-3 text-slate-700">
+                  <div className={`rounded-lg p-2 shadow-2xs ${card.iconBg}`}>
                     <Icon size={18} />
                   </div>
                 </div>
-                <p className="mt-4 text-sm text-slate-500">
+                <p className="mt-2.5 text-xs font-medium text-slate-500 line-clamp-2">
                   {card.hint}
                 </p>
               </div>
@@ -313,8 +326,8 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <div className="grid gap-8 xl:grid-cols-[1.35fr_0.95fr]">
-        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="grid gap-6 xl:grid-cols-[1.35fr_0.95fr]">
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs">
           <div className="flex items-center justify-between gap-4">
             <div>
               <h2 className="text-xl font-semibold text-slate-900">
@@ -557,12 +570,19 @@ export default function DashboardPage() {
       </div>
 
       {/* ── Capacity Insights (merged from the former standalone page) ──────── */}
-      <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
-        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Capacity Insights</p>
-        <h2 className="mt-3 text-2xl font-semibold text-slate-900">Seat and demand visibility across all vendors</h2>
-        <p className="mt-2 text-sm text-slate-500">
-          Capacity, sailing mix, seats available, demand distribution, and utilization are all calculated from the live cruise data in the database.
-        </p>
+      <div className="rounded-3xl border border-slate-200/80 bg-white p-6 sm:p-8 shadow-xs">
+        <div className="space-y-2">
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700 shadow-2xs">
+            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span>Fleet Utilization · Capacity Insights</span>
+          </div>
+          <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
+            Seat & Demand Visibility Across All Vendors
+          </h2>
+          <p className="text-xs sm:text-sm text-slate-500 leading-relaxed">
+            Capacity, sailing mix, seats available, demand distribution, and utilization are all calculated from the live cruise data in the database.
+          </p>
+        </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-5">

@@ -266,25 +266,35 @@ export default function ShipDecksPage() {
   };
 
   return (
-    <div className="space-y-6 px-6">
-      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
-              Ship Deck Admin
+    <div className="w-full min-h-screen bg-slate-50/50 px-3 sm:px-4 py-4 space-y-4">
+      {/* ── Top Header Banner ────────────────────────────────────────────── */}
+      <div className="relative overflow-hidden rounded-3xl border border-teal-200/60 bg-gradient-to-br from-teal-50/70 via-sky-50/50 to-emerald-50/60 p-6 sm:p-8 shadow-xs">
+        <div className="pointer-events-none absolute -right-12 -top-12 h-48 w-48 rounded-full bg-teal-500/10 blur-3xl" />
+        <div className="pointer-events-none absolute -left-12 -bottom-12 h-48 w-48 rounded-full bg-sky-500/10 blur-3xl" />
+
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+          <div className="space-y-2 max-w-3xl">
+            <div className="inline-flex items-center gap-2 rounded-full border border-teal-200/80 bg-white/80 backdrop-blur-xs px-3.5 py-1 text-[11px] font-bold text-teal-800 shadow-2xs">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-teal-600"></span>
+              </span>
+              <span>Ship Deck Admin · Interactive Mapping</span>
             </div>
-            <h1 className="mt-3 text-3xl font-semibold text-slate-900">Manage Deck Plans</h1>
-            <p className="mt-2 text-sm text-slate-500">
-              Upload deck images to Cloudinary, map sections and cabin codes, and keep ship deck plans organized outside cruise search.
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
+              Manage Deck Plans
+            </h1>
+            <p className="text-xs sm:text-sm font-medium text-slate-600 leading-relaxed max-w-2xl">
+              Upload deck plans to Cloudinary, map sections and cabin codes, and keep ship deck blueprints organized across your fleet.
             </p>
           </div>
 
-          <div className="min-w-[280px]">
-            <label className="mb-2 block text-sm font-medium text-slate-600">Select ship</label>
+          <div className="min-w-[280px] rounded-2xl border border-slate-200/90 bg-white/90 backdrop-blur-xs p-3.5 shadow-2xs">
+            <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-slate-400">Select Ship</label>
             <select
               value={selectedShipCode}
               onChange={event => setSelectedShipCode(event.target.value)}
-              className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3"
+              className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-800 shadow-xs outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 transition"
               disabled={loadingShips}
             >
               {ships.map(ship => (
@@ -297,8 +307,8 @@ export default function ShipDecksPage() {
         </div>
       </div>
 
-      {message ? <div className="rounded-2xl px-4 py-3 text-sm" style={{ background: T.greenBg, color: T.green }}>{message}</div> : null}
-      {error ? <div className="rounded-2xl px-4 py-3 text-sm" style={{ background: T.redBg, color: T.red }}>{error}</div> : null}
+      {message ? <div className="rounded-2xl px-4 py-3 text-sm font-semibold shadow-xs" style={{ background: T.greenBg, color: T.green }}>{message}</div> : null}
+      {error ? <div className="rounded-2xl px-4 py-3 text-sm font-semibold shadow-xs" style={{ background: T.redBg, color: T.red }}>{error}</div> : null}
 
       <div className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
         <div className="space-y-6">

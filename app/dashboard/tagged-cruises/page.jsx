@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { CalendarDays, ChevronDown, ChevronUp, Tag, TrendingDown } from "lucide-react"
+import { CalendarDays, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Filter, RotateCcw, Tag, TrendingDown } from "lucide-react"
 
 import { fetchCruises, fetchCruiseTags, fetchShips, fetchUsers, fetchVendors, refreshCruiseCabins, getCruiseRefreshStatus } from "../api"
 import { buildCabinGroups, getCruiseDisplayId, getCruiseRouteLabel, getLoadFactor } from "../cruise-helpers"
@@ -84,9 +84,9 @@ export default function TaggedCruisesPage() {
         })
 
         setLookupOptions({
-          vendors: vendorResponse.data?.map(vendor => vendor.name).filter(Boolean) || [],
-          ships: shipResponse.data?.map(ship => ship.name).filter(Boolean) || [],
-          users: userResponse.data?.map(user => user.name).filter(Boolean) || []
+          vendors: [...new Set((vendorResponse.data || []).map(vendor => vendor.name).filter(Boolean))],
+          ships: [...new Set((shipResponse.data || []).map(ship => ship.name).filter(Boolean))],
+          users: [...new Set((userResponse.data || []).map(user => user.name).filter(Boolean))]
         })
       } catch (err) {
         if (active) {
@@ -203,6 +203,15 @@ export default function TaggedCruisesPage() {
     [lookupOptions]
   )
 
+  const setF = (key, value) => {
+    setFilters(current => {
+      const next = { ...current, [key]: value }
+      setAppliedFilters(next)
+      setPage(1)
+      return next
+    })
+  }
+
   const applyFilters = () => {
     setAppliedFilters(filters)
     setPage(1)
@@ -236,51 +245,60 @@ export default function TaggedCruisesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 px-6 py-2">
-      <div className="mx-auto max-w-[1240px] space-y-6">
-        <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
-            Employee Booking Queue
-          </p>
-          <h1 className="mt-3 text-3xl font-semibold text-slate-900">
-            Tagged Cruises
-          </h1>
-          <p className="mt-2 text-sm text-slate-500">
-            Saved tags from cruise search, persisted in the database for team follow-up and booking review.
-          </p>
+    <div className="w-full min-h-screen bg-slate-50/50 px-3 sm:px-4 py-4 space-y-4">
+      {/* ── Top Header Banner ────────────────────────────────────────────── */}
+      <div className="relative overflow-hidden rounded-3xl border border-teal-200/60 bg-gradient-to-br from-teal-50/70 via-sky-50/50 to-emerald-50/60 p-6 sm:p-8 shadow-xs">
+        <div className="pointer-events-none absolute -right-12 -top-12 h-48 w-48 rounded-full bg-teal-500/10 blur-3xl" />
+        <div className="pointer-events-none absolute -left-12 -bottom-12 h-48 w-48 rounded-full bg-sky-500/10 blur-3xl" />
 
-          <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <StatCard label="Tagged cruises" value={summary.totalTagged} />
-            <StatCard label="Assigned employees" value={summary.employees} />
-            <StatCard label="Ships covered" value={summary.ships} />
-            <StatCard label="Price drops tracked" value={summary.drops} />
+        <div className="relative z-10 space-y-2">
+          <div className="inline-flex items-center gap-2 rounded-full border border-teal-200/80 bg-white/80 backdrop-blur-xs px-3.5 py-1 text-[11px] font-bold text-teal-800 shadow-2xs">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-teal-600"></span>
+            </span>
+            <span>Employee Booking Queue · Tagged Inventory</span>
           </div>
+          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
+            Tagged Cruises & Price Drop Radar
+          </h1>
+          <p className="text-xs sm:text-sm font-medium text-slate-600 max-w-3xl leading-relaxed">
+            Saved tags from cruise search, persisted in the database for team follow-up, price drop monitoring, and booking review.
+          </p>
         </div>
 
-        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
-            <label className="space-y-2">
-              <span className="text-sm font-medium text-slate-700">Tag</span>
+        <div className="relative z-10 mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard label="Tagged Cruises" value={summary.totalTagged} />
+          <StatCard label="Assigned Employees" value={summary.employees} />
+          <StatCard label="Ships Covered" value={summary.ships} />
+          <StatCard label="Price Drops Tracked" value={summary.drops} />
+        </div>
+      </div>
+
+        <div className="rounded-3xl border border-slate-200/80 bg-white p-6 sm:p-7 shadow-xs space-y-5">
+          <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+            <div>
+              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Tag</label>
               <input
                 list="tagged-tag-options"
                 value={filters.tag}
-                onChange={event => setFilters(current => ({ ...current, tag: event.target.value }))}
-                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none"
-                placeholder="Employee Booking"
+                onChange={event => setF("tag", event.target.value)}
+                className="w-full h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition"
+                placeholder="e.g. Priority"
               />
               <datalist id="tagged-tag-options">
                 {tagDirectory.tags.map(item => (
                   <option key={item.label} value={item.label} />
                 ))}
               </datalist>
-            </label>
+            </div>
 
-            <label className="space-y-2">
-              <span className="text-sm font-medium text-slate-700">Assigned to</span>
+            <div>
+              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Assigned to</label>
               <select
                 value={filters.assignedTo}
-                onChange={event => setFilters(current => ({ ...current, assignedTo: event.target.value }))}
-                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none"
+                onChange={event => setF("assignedTo", event.target.value)}
+                className="w-full h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition"
               >
                 <option value="">All assignees</option>
                 {lookupOptions.users.map(item => (
@@ -289,14 +307,14 @@ export default function TaggedCruisesPage() {
                   </option>
                 ))}
               </select>
-            </label>
+            </div>
 
-            <label className="space-y-2">
-              <span className="text-sm font-medium text-slate-700">Vendor</span>
+            <div>
+              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Vendor</label>
               <select
                 value={filters.vendorName}
-                onChange={event => setFilters(current => ({ ...current, vendorName: event.target.value }))}
-                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none"
+                onChange={event => setF("vendorName", event.target.value)}
+                className="w-full h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition"
               >
                 <option value="">All vendors</option>
                 {vendorOptions.map(item => (
@@ -305,14 +323,14 @@ export default function TaggedCruisesPage() {
                   </option>
                 ))}
               </select>
-            </label>
+            </div>
 
-            <label className="space-y-2">
-              <span className="text-sm font-medium text-slate-700">Ship</span>
+            <div>
+              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Ship</label>
               <select
                 value={filters.ship}
-                onChange={event => setFilters(current => ({ ...current, ship: event.target.value }))}
-                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none"
+                onChange={event => setF("ship", event.target.value)}
+                className="w-full h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition"
               >
                 <option value="">All ships</option>
                 {shipOptions.map(item => (
@@ -321,33 +339,35 @@ export default function TaggedCruisesPage() {
                   </option>
                 ))}
               </select>
-            </label>
+            </div>
 
             <DateField
               label="Departure from"
               value={filters.startDateFrom}
-              onChange={value => setFilters(current => ({ ...current, startDateFrom: value }))}
+              onChange={value => setF("startDateFrom", value)}
             />
 
             <DateField
               label="Departure to"
               value={filters.endDateTo}
-              onChange={value => setFilters(current => ({ ...current, endDateTo: value }))}
+              onChange={value => setF("endDateTo", value)}
             />
           </div>
 
-          <div className="mt-5 flex flex-wrap gap-3">
+          <div className="flex items-center gap-3 pt-4 border-t border-slate-100">
             <button
               onClick={applyFilters}
-              className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+              className="inline-flex items-center gap-2 h-10 px-6 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white text-xs sm:text-sm font-bold shadow-sm shadow-emerald-700/20 active:scale-95 transition cursor-pointer"
             >
-              Apply filters
+              <Filter size={15} />
+              <span>Apply Filters</span>
             </button>
             <button
               onClick={resetFilters}
-              className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              className="inline-flex items-center gap-2 h-10 px-5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs sm:text-sm font-semibold active:scale-95 transition cursor-pointer"
             >
-              Reset
+              <RotateCcw size={14} />
+              <span>Reset</span>
             </button>
           </div>
         </div>
@@ -588,59 +608,66 @@ export default function TaggedCruisesPage() {
             </div>
           )}
 
-          <div className="mt-5 flex items-center justify-end gap-3">
-            <button
-              onClick={() => setPage(current => Math.max(1, current - 1))}
-              disabled={!pagination?.hasPreviousPage || loading}
-              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Previous
-            </button>
-            <button
-              onClick={() => setPage(current => current + 1)}
-              disabled={!pagination?.hasNextPage || loading}
-              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Next
-            </button>
+          <div className="mt-5 flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-slate-200/80">
+            <div className="text-xs text-slate-500 font-medium">
+              Showing page <strong className="text-slate-900 font-bold">{pagination?.page ?? 1}</strong> of <strong className="text-slate-900 font-bold">{pagination?.totalPages ?? 1}</strong>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPage(current => Math.max(1, current - 1))}
+                disabled={!pagination?.hasPreviousPage || loading}
+                className="inline-flex items-center gap-1 h-8 px-3 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-2xs"
+              >
+                <ChevronLeft size={14} />
+                <span>Previous</span>
+              </button>
+              <button
+                onClick={() => setPage(current => current + 1)}
+                disabled={!pagination?.hasNextPage || loading}
+                className="inline-flex items-center gap-1 h-8 px-3 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-2xs"
+              >
+                <span>Next</span>
+                <ChevronRight size={14} />
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
   )
 }
 
 function StatCard({ label, value }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-      <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</div>
-      <div className="mt-3 text-3xl font-semibold text-slate-900">{value}</div>
+    <div className="rounded-2xl border border-teal-200/80 bg-gradient-to-br from-white via-teal-50/40 to-teal-100/30 backdrop-blur-xs p-4 sm:p-5 shadow-2xs transition-all hover:border-teal-300 hover:shadow-xs">
+      <div className="text-[10px] font-extrabold uppercase tracking-wider text-teal-700/80">{label}</div>
+      <div className="mt-1.5 text-2xl font-black text-teal-950 font-mono tracking-tight">{value}</div>
     </div>
   )
 }
 
 function Metric({ label, value, icon: Icon }) {
   return (
-    <div className="rounded-2xl bg-white px-4 py-3">
-      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-        {Icon ? <Icon size={14} /> : null}
+    <div className="rounded-2xl bg-white px-4 py-3 border border-slate-100 shadow-2xs">
+      <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+        {Icon ? <Icon size={13} /> : null}
         <span>{label}</span>
       </div>
-      <div className="mt-2 font-semibold text-slate-900">{value}</div>
+      <div className="mt-1.5 font-bold text-slate-900 text-sm">{value}</div>
     </div>
   )
 }
 
 function DateField({ label, value, onChange }) {
   return (
-    <label className="space-y-2">
-      <span className="text-sm font-medium text-slate-700">{label}</span>
+    <div>
+      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">{label}</label>
       <input
         type="date"
         value={value}
         onChange={event => onChange(event.target.value)}
-        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none"
+        className="w-full h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition"
       />
-    </label>
+    </div>
   )
 }

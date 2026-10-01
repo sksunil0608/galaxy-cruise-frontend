@@ -18,13 +18,11 @@ function Tooltip({
 }
 
 function TooltipTrigger({
-  asChild = false,
   ...props
 }) {
   return (
     <TooltipPrimitive.Trigger
       data-slot="tooltip-trigger"
-      asChild={asChild}
       {...props}
     />
   )

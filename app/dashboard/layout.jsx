@@ -9,11 +9,8 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { syncScraperUrlFromSettings } from "./api"
 
 export default function DashboardLayout({ children }) {
-
   const pathname = usePathname()
   const router = useRouter()
-  const hasToken =
-    typeof window !== "undefined" && Boolean(localStorage.getItem("token"))
 
   const titles = {
     "/dashboard": "Dashboard",
@@ -33,61 +30,41 @@ export default function DashboardLayout({ children }) {
     "/dashboard/settings": "Settings"
   }
 
-  const title = pathname?.startsWith("/dashboard/vendors/")
+  const normalizedPathname = pathname ? pathname.replace(/\/+$/, "") || "/dashboard" : "/dashboard"
+
+  const title = normalizedPathname.startsWith("/dashboard/vendors/")
     ? "Vendor Detail"
-    : titles[pathname] || "Dashboard"
+    : titles[normalizedPathname] || "Dashboard"
 
   useEffect(() => {
-    if (!hasToken) {
-      router.replace("/login")
+    try {
+      const token = localStorage.getItem("token")
+      if (!token) {
+        router.replace("/login")
+      } else {
+        syncScraperUrlFromSettings()
+      }
+    } catch {
+      // In case localStorage is disabled or restricted
     }
-  }, [hasToken, router])
-
-  // Pull the configured scraper URL into localStorage once per dashboard load,
-  // so scraperBase() resolves to it instead of the build-time env value.
-  useEffect(() => {
-    if (hasToken) syncScraperUrlFromSettings()
-  }, [hasToken])
-
-  if (!hasToken) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 text-sm text-slate-500">
-        Redirecting to login...
-      </div>
-    )
-  }
+  }, [router])
 
   return (
     <SidebarProvider
-      defaultOpen={false}
+      defaultOpen={true}
       style={{
-        "--sidebar-width": "calc(var(--spacing) * 72)",
-        "--header-height": "calc(var(--spacing) * 12)"
+        "--sidebar-width": "15rem",
+        "--header-height": "4rem"
       }}
     >
+      <AppSidebar variant="sidebar" />
 
-      <AppSidebar variant="inset" />
-
-      <SidebarInset>
-
+      <SidebarInset className="bg-slate-50/60 min-h-screen flex flex-col m-0 rounded-none shadow-none w-full max-w-full">
         <SiteHeader title={title} />
-
-        <div className="flex flex-1 flex-col">
-
-          <div className="@container/main flex flex-1 flex-col gap-2">
-
-            <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-
-              {children}
-
-            </div>
-
-          </div>
-
-        </div>
-
+        <main className="flex-1 w-full max-w-full">
+          {children}
+        </main>
       </SidebarInset>
-
     </SidebarProvider>
   )
 }

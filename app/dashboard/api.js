@@ -1,4 +1,4 @@
-import { api } from "@/lib/api"
+import { api, getApiBaseUrl, setApiBaseUrl, API_URL_STORAGE_KEY } from "@/lib/api"
 import {
   dedupeCruises,
   normalizeCruiseResponsePayload
@@ -26,11 +26,11 @@ export async function fetchDashboardOverview() {
 
 export async function checkMainBackendHealth() {
   const start = Date.now()
-  const base = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api").replace(/\/api\/?$/, "")
+  const base = getApiBaseUrl().replace(/\/api\/?$/, "")
   try {
     const res = await fetch(`${base}/`, { headers: { Accept: "application/json" } })
-    const data = await res.json()
-    return { ok: res.ok, latencyMs: Date.now() - start, service: data?.message ?? "cruisesaga-backend" }
+    const data = await res.json().catch(() => ({}))
+    return { ok: res.ok, latencyMs: Date.now() - start, service: data?.message ?? data?.service ?? "cruisesaga-backend" }
   } catch (err) {
     return { ok: false, latencyMs: Date.now() - start, error: err.message }
   }
@@ -38,10 +38,13 @@ export async function checkMainBackendHealth() {
 
 export async function checkScraperBackendHealth() {
   const start = Date.now()
+  const base = scraperBase().replace(/\/api\/?$/, "")
   try {
-    const res = await fetch(`${scraperBase()}/health`)
-    const data = await res.json()
-    return { ok: res.ok, latencyMs: Date.now() - start, service: data?.service ?? "scrapper-backend" }
+    const res = await fetch(`${base}/health`).catch(async () => {
+      return fetch(getScraperEndpoint("/api/schedule"))
+    })
+    const data = await res?.json().catch(() => ({}))
+    return { ok: res?.ok || false, latencyMs: Date.now() - start, service: data?.service ?? "scrapper-backend" }
   } catch (err) {
     return { ok: false, latencyMs: Date.now() - start, error: err.message }
   }
@@ -150,18 +153,32 @@ export async function fetchCategoryDecks(cruiseCode, categoryCode) {
 //   2. NEXT_PUBLIC_SCRAPER_URL — baked in at build time, so it can't be changed
 //      after deploy, which is exactly why the setting above exists
 //   3. local dev default
-const SCRAPER_URL_STORAGE_KEY = "scraperUrl"
+export const SCRAPER_URL_STORAGE_KEY = "scraperUrl"
 
-const scraperBase = () => {
+export const scraperBase = () => {
   if (typeof window !== "undefined") {
     const stored = window.localStorage.getItem(SCRAPER_URL_STORAGE_KEY)
-    if (stored) return stored.replace(/\/+$/, "")
+    if (stored) {
+      const trimmed = stored.trim().replace(/\/+$/, "")
+      if (trimmed === "http://localhost:3001") return "http://localhost:3001/api"
+      return trimmed
+    }
   }
-  return (process.env.NEXT_PUBLIC_SCRAPER_URL || "http://localhost:3001").replace(/\/+$/, "")
+  return (process.env.NEXT_PUBLIC_SCRAPER_URL || "http://localhost:3001/api").trim().replace(/\/+$/, "")
 }
 
 export function getScraperBaseUrl() {
   return scraperBase()
+}
+
+export function getScraperEndpoint(path) {
+  const base = scraperBase()
+  const cleanPath = path.startsWith("/") ? path : `/${path}`
+
+  if (base.endsWith("/api") && cleanPath.startsWith("/api/")) {
+    return `${base}${cleanPath.replace(/^\/api/, "")}`
+  }
+  return `${base}${cleanPath}`
 }
 
 export async function fetchAppSettings() {
@@ -187,16 +204,16 @@ export async function syncScraperUrlFromSettings() {
   try {
     const res = await fetchAppSettings()
     const row = (res?.data ?? []).find(s => s.key === SCRAPER_URL_STORAGE_KEY)
-    if (row?.value) {
-      window.localStorage.setItem(SCRAPER_URL_STORAGE_KEY, row.value)
-      return row.value
-    }
+    let val = row?.value || "http://localhost:3001/api"
+    if (val === "http://localhost:3001") val = "http://localhost:3001/api"
+    window.localStorage.setItem(SCRAPER_URL_STORAGE_KEY, val)
+    return val
   } catch {}
   return null
 }
 
 async function scraperFetch(path, options = {}) {
-  const res = await fetch(`${scraperBase()}${path}`, {
+  const res = await fetch(getScraperEndpoint(path), {
     headers: { "Content-Type": "application/json" },
     ...options
   })
@@ -221,7 +238,7 @@ export async function getScraperVendorLastRuns() {
 
 export async function triggerVendorScrapeFetch(vendorKey, options = {}) {
   const res = await fetch(
-    `${scraperBase()}/api/scrapers/${encodeURIComponent(vendorKey)}/run`,
+    getScraperEndpoint(`/api/scrapers/${encodeURIComponent(vendorKey)}/run`),
     { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(options) }
   )
   const data = await res.json()
@@ -230,27 +247,45 @@ export async function triggerVendorScrapeFetch(vendorKey, options = {}) {
 }
 
 export async function refreshCruiseCabins(cruiseCode, vendorKey) {
-  const response = await fetch(
-    `${scraperBase()}/api/cruises/${encodeURIComponent(cruiseCode)}/refresh-cabins`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ vendorKey })
+  try {
+    const response = await fetch(
+      getScraperEndpoint(`/api/cruises/${encodeURIComponent(cruiseCode)}/refresh-cabins`),
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vendorKey })
+      }
+    )
+    const data = await response.json().catch(() => ({}))
+    // 202 = started, 409 = already in_progress — both are "ok" for the caller
+    if (response.status === 429) {
+      throw Object.assign(new Error(data?.message ?? "Too many requests"), { code: data?.status, retryAfter: data?.retryAfter })
     }
-  )
-  const data = await response.json()
-  // 202 = started, 409 = already in_progress — both are "ok" for the caller
-  if (response.status === 429) throw Object.assign(new Error(data?.message ?? "Too many requests"), { code: data?.status, retryAfter: data?.retryAfter })
-  if (!response.ok && response.status !== 409) throw new Error(data?.error ?? "Refresh failed")
-  return { ...data, httpStatus: response.status }
+    if (!response.ok && response.status !== 409) {
+      throw new Error(data?.error ?? "Refresh failed")
+    }
+    return { ...data, httpStatus: response.status }
+  } catch (err) {
+    if (err.name === "TypeError" || (err.message && err.message.toLowerCase().includes("fetch"))) {
+      throw new Error("Scraper server is offline.")
+    }
+    throw err
+  }
 }
 
 export async function getCruiseRefreshStatus(cruiseCode) {
-  const response = await fetch(
-    `${scraperBase()}/api/cruises/${encodeURIComponent(cruiseCode)}/refresh-status`
-  )
-  const data = await response.json()
-  return data
+  try {
+    const response = await fetch(
+      getScraperEndpoint(`/api/cruises/${encodeURIComponent(cruiseCode)}/refresh-status`)
+    )
+    if (!response.ok) {
+      return { status: "offline", error: "Scraper server is offline." }
+    }
+    const data = await response.json().catch(() => ({}))
+    return data
+  } catch (err) {
+    return { status: "offline", error: "Scraper server is offline." }
+  }
 }
 
 export async function deleteCruiseTag(code, tagId) {
