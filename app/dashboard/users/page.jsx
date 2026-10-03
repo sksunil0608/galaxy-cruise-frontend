@@ -685,47 +685,38 @@ export default function UsersPage() {
               No users found matching your filter criteria.
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50/80 text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                    <th className="py-3 px-4 w-16">ID</th>
-                    <th className="py-3 px-4">User</th>
-                    <th className="py-3 px-4">Email</th>
-                    <th className="py-3 px-4">Assigned Role</th>
-                    <th className="py-3 px-4">Status</th>
-                    <th className="py-3 px-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {paginatedUsers.map((user) => (
-                    <tr key={user.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3 px-4 font-mono font-semibold text-slate-400">#{user.id}</td>
-
-                      <td className="py-3 px-4">
-                        <button
-                          onClick={() => openUserProfile(user)}
-                          className="flex items-center gap-3 text-left group cursor-pointer"
-                        >
-                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-teal-700 text-white font-bold text-xs shadow-2xs group-hover:bg-teal-800 transition">
-                            {getInitials(user.name)}
+            <>
+              {/* ── Mobile List View (block md:hidden) ─────────────────────────── */}
+              <div className="block md:hidden divide-y divide-slate-100">
+                {paginatedUsers.map((user) => (
+                  <div key={user.id} className="p-4 bg-white hover:bg-slate-50/70 transition space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <button
+                        onClick={() => openUserProfile(user)}
+                        className="flex items-center gap-3 text-left group cursor-pointer min-w-0"
+                      >
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-teal-700 text-white font-bold text-xs shadow-2xs group-hover:bg-teal-800 transition">
+                          {getInitials(user.name)}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="font-bold text-slate-900 text-sm group-hover:text-teal-800 transition truncate">
+                            {user.name}
                           </div>
-                          <div>
-                            <div className="font-bold text-slate-900 group-hover:text-teal-800 transition">
-                              {user.name}
-                            </div>
-                            <div className="text-[11px] text-slate-400 font-normal sm:hidden">{user.email}</div>
-                          </div>
-                        </button>
-                      </td>
+                          <div className="text-xs text-slate-500 font-medium truncate">{user.email}</div>
+                        </div>
+                      </button>
 
-                      <td className="py-3 px-4 font-medium text-slate-600">{user.email}</td>
+                      <span className="font-mono text-[11px] font-semibold text-slate-400 bg-slate-50 px-2 py-0.5 rounded border border-slate-200/70 shrink-0">
+                        #{user.id}
+                      </span>
+                    </div>
 
-                      <td className="py-3 px-4">
+                    <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-100/80">
+                      <div className="flex items-center gap-2 flex-wrap">
                         {user.role ? (
                           <button
                             onClick={() => openRolePermissions(user.role)}
-                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold border transition cursor-pointer hover:shadow-2xs ${getRoleBadgeStyle(
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold border transition cursor-pointer ${getRoleBadgeStyle(
                               user.role.name
                             )}`}
                             title="Click to view role permissions"
@@ -736,44 +727,125 @@ export default function UsersPage() {
                         ) : (
                           <span className="text-xs text-slate-400 font-normal">—</span>
                         )}
-                      </td>
 
-                      <td className="py-3 px-4">
-                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold">
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
                           <span className="size-1.5 rounded-full bg-emerald-600"></span>
                           Active
                         </span>
-                      </td>
+                      </div>
 
-                      <td className="py-3 px-4 text-right">
-                        <div className="inline-flex items-center gap-1.5">
-                          <button
-                            onClick={() => openEdit(user)}
-                            className="flex h-7.5 w-7.5 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition cursor-pointer shadow-2xs"
-                            title="Edit User"
-                          >
-                            <Pencil className="size-3.5" />
-                          </button>
-                          <button
-                            onClick={() => deleteUser(user.id)}
-                            className="flex h-7.5 w-7.5 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-600 hover:text-rose-700 hover:bg-rose-100 transition cursor-pointer shadow-2xs"
-                            title="Delete User"
-                          >
-                            <Trash2 className="size-3.5" />
-                          </button>
-                        </div>
-                      </td>
+                      <div className="inline-flex items-center gap-1.5">
+                        <button
+                          onClick={() => openEdit(user)}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition cursor-pointer shadow-2xs"
+                          title="Edit User"
+                        >
+                          <Pencil className="size-3.5" />
+                        </button>
+                        <button
+                          onClick={() => deleteUser(user.id)}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-600 hover:text-rose-700 hover:bg-rose-100 transition cursor-pointer shadow-2xs"
+                          title="Delete User"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* ── Desktop Table View (hidden md:block) ─────────────────── */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-200 bg-slate-50/80 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                      <th className="py-3 px-4 w-16">ID</th>
+                      <th className="py-3 px-4">User</th>
+                      <th className="py-3 px-4">Email</th>
+                      <th className="py-3 px-4">Assigned Role</th>
+                      <th className="py-3 px-4">Status</th>
+                      <th className="py-3 px-4 text-right">Actions</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {paginatedUsers.map((user) => (
+                      <tr key={user.id} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="py-3 px-4 font-mono font-semibold text-slate-400">#{user.id}</td>
+
+                        <td className="py-3 px-4">
+                          <button
+                            onClick={() => openUserProfile(user)}
+                            className="flex items-center gap-3 text-left group cursor-pointer"
+                          >
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-teal-700 text-white font-bold text-xs shadow-2xs group-hover:bg-teal-800 transition">
+                              {getInitials(user.name)}
+                            </div>
+                            <div>
+                              <div className="font-bold text-slate-900 group-hover:text-teal-800 transition">
+                                {user.name}
+                              </div>
+                              <div className="text-[11px] text-slate-400 font-normal sm:hidden">{user.email}</div>
+                            </div>
+                          </button>
+                        </td>
+
+                        <td className="py-3 px-4 font-medium text-slate-600">{user.email}</td>
+
+                        <td className="py-3 px-4">
+                          {user.role ? (
+                            <button
+                              onClick={() => openRolePermissions(user.role)}
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold border transition cursor-pointer hover:shadow-2xs ${getRoleBadgeStyle(
+                                user.role.name
+                              )}`}
+                              title="Click to view role permissions"
+                            >
+                              <Shield className="size-3" />
+                              <span>{user.role.name}</span>
+                            </button>
+                          ) : (
+                            <span className="text-xs text-slate-400 font-normal">—</span>
+                          )}
+                        </td>
+
+                        <td className="py-3 px-4">
+                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold">
+                            <span className="size-1.5 rounded-full bg-emerald-600"></span>
+                            Active
+                          </span>
+                        </td>
+
+                        <td className="py-3 px-4 text-right">
+                          <div className="inline-flex items-center gap-1.5">
+                            <button
+                              onClick={() => openEdit(user)}
+                              className="flex h-7.5 w-7.5 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition cursor-pointer shadow-2xs"
+                              title="Edit User"
+                            >
+                              <Pencil className="size-3.5" />
+                            </button>
+                            <button
+                              onClick={() => deleteUser(user.id)}
+                              className="flex h-7.5 w-7.5 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-600 hover:text-rose-700 hover:bg-rose-100 transition cursor-pointer shadow-2xs"
+                              title="Delete User"
+                            >
+                              <Trash2 className="size-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
 
           {/* ── Modern Pagination Controls ──────────────────────────────────── */}
           {filteredUsers.length > 0 && (
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 border-t border-slate-100 bg-slate-50/40">
-              <div className="text-xs text-slate-500 font-medium">
+              <div className="text-xs text-slate-500 font-medium text-center sm:text-left">
                 Showing <strong className="text-slate-800">{(page - 1) * USERS_PER_PAGE + 1}</strong> to{" "}
                 <strong className="text-slate-800">
                   {Math.min(page * USERS_PER_PAGE, filteredUsers.length)}
@@ -781,7 +853,7 @@ export default function UsersPage() {
                 of <strong className="text-slate-800">{filteredUsers.length}</strong> users
               </div>
 
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 flex-wrap justify-center">
                 <button
                   onClick={() => setPage(1)}
                   disabled={page <= 1}

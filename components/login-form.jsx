@@ -67,7 +67,7 @@ return (
       border border-white/20
       shadow-2xl
       rounded-3xl
-      px-10 py-8
+      px-4 sm:px-10 py-6 sm:py-8
     ">
 
       <CardHeader className="text-center space-y-5">

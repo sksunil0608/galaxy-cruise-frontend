@@ -31,10 +31,10 @@ export function SiteHeader({ title }) {
   }, [])
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between gap-2 border-b border-slate-200/80 bg-white/95 px-3 sm:px-4 backdrop-blur-md transition-all">
+    <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between gap-2 border-b border-slate-200/80 bg-white/95 px-3.5 sm:px-4 backdrop-blur-md transition-all">
       {/* ── Left Title / Breadcrumb ────────────────────────────────────── */}
       <div className="flex items-center gap-2">
-        <SidebarTrigger className="-ml-1 text-slate-500 hover:text-slate-900" />
+        <SidebarTrigger className="ml-0.5 lg:-ml-1 text-slate-500 hover:text-slate-900" />
         <Separator orientation="vertical" className="mx-2 h-4" />
         <span className="text-sm font-semibold text-slate-900">{title}</span>
       </div>

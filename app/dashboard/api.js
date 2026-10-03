@@ -212,6 +212,31 @@ export async function syncScraperUrlFromSettings() {
   return null
 }
 
+// ── Frontend .env File Management ──────────────────────────────────────────
+export async function fetchFrontendEnv() {
+  try {
+    const res = await fetch("/api/env", { headers: { Accept: "application/json" }, cache: "no-store" })
+    const data = await res.json()
+    return data
+  } catch (err) {
+    return { success: false, error: err.message }
+  }
+}
+
+export async function saveFrontendEnv(payload) {
+  const res = await fetch("/api/env", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  })
+  const data = await res.json()
+  if (!res.ok || !data.success) {
+    throw new Error(data?.error || "Failed to update .env file")
+  }
+  return data
+}
+
+
 async function scraperFetch(path, options = {}) {
   const res = await fetch(getScraperEndpoint(path), {
     headers: { "Content-Type": "application/json" },

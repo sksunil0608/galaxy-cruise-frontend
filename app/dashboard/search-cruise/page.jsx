@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { ChevronDown, ChevronRight, ChevronUp, ChevronLeft, ChevronsLeft, ChevronsRight, Pin, Minus, Tag, TrendingDown, TrendingUp, X, ImageIcon, Search, RotateCcw, RefreshCw, Compass, Sparkles, AlertCircle, Ship, MapPin, CalendarDays, Layers } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronUp, ChevronLeft, ChevronsLeft, ChevronsRight, Pin, Minus, Tag, TrendingDown, TrendingUp, X, ImageIcon, Search, RotateCcw, RefreshCw, Compass, Sparkles, AlertCircle, Ship, MapPin, CalendarDays, Layers, Zap, CheckCircle2, Play } from "lucide-react";
 
 import {
   createCruiseTag,
@@ -21,7 +21,7 @@ import {
   getCruiseRouteLabel,
   normalizeCabinCategory
 } from "../cruise-helpers";
-import { fetchCategoryDecks, refreshCruiseCabins, getCruiseRefreshStatus, logActivity, fetchCruise } from "../api";
+import { fetchCategoryDecks, refreshCruiseCabins, getCruiseRefreshStatus, logActivity, fetchCruise, triggerVendorScrapeFetch } from "../api";
 
 const PAGE_SIZE = 20;
 
@@ -96,6 +96,19 @@ const VENDOR_COLOR_STYLES = {
   }
 };
 
+const VENDOR_SCRAPER_MAP = {
+  "MSC Cruises": "msc",
+  "Holland America (gohal)": "gohal",
+  "Complete Cruise Solution A": "completecruisesolutionA",
+  "Complete Cruise Solution B": "completecruisesolutionB",
+  "FirstMates": "firstmates",
+  "Azamara": "azamara",
+  "CruisingPower": "cruisingpower",
+  "GOCCL": "goccl",
+  "Seawebagents": "seawebagents",
+  "Celestyal": "celestyal",
+};
+
 const getVendorStyle = (vendorName) => {
   return VENDOR_COLOR_STYLES[vendorName] || {
     badge: "bg-slate-100 text-slate-800 border-slate-200/80",
@@ -135,16 +148,19 @@ const safeCurrency = (amount, currency = "GBP") =>
 
 // Type-to-filter combobox \u2014 replaces native <select>/<datalist> (unstyled,
 // browser-controlled popup) with a fully styled dropdown that filters as you type.
-function SearchableSelect({ placeholder, value, onChange, options }) {
+function SearchableSelect({ placeholder, value, onChange, options, onEnter }) {
   const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(value || "");
   const boxRef = useRef(null);
+
+  useEffect(() => {
+    setQuery(value || "");
+  }, [value]);
 
   useEffect(() => {
     function onClickOutside(event) {
       if (boxRef.current && !boxRef.current.contains(event.target)) {
         setOpen(false);
-        setQuery("");
       }
     }
     document.addEventListener("mousedown", onClickOutside);
@@ -154,10 +170,24 @@ function SearchableSelect({ placeholder, value, onChange, options }) {
   const uniqueOptions = useMemo(() => [...new Set(options || [])].filter(Boolean), [options]);
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = (query || "").trim().toLowerCase();
     if (!q) return uniqueOptions;
     return uniqueOptions.filter((opt) => opt.toLowerCase().includes(q));
   }, [uniqueOptions, query]);
+
+  const handleInputChange = (event) => {
+    const newVal = event.target.value;
+    setQuery(newVal);
+    onChange(newVal);
+    if (!open) setOpen(true);
+  };
+
+  const handleKeyDown = (event) => {
+    if (event.key === "Enter") {
+      setOpen(false);
+      if (onEnter) onEnter();
+    }
+  };
 
   return (
     <div ref={boxRef} className="relative">
@@ -165,16 +195,21 @@ function SearchableSelect({ placeholder, value, onChange, options }) {
         <input
           className="w-full h-9.5 rounded-lg border border-slate-200 bg-white px-3 pr-8 text-sm font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition shadow-2xs"
           placeholder={placeholder}
-          value={open ? query : value || ""}
-          onFocus={() => { setOpen(true); setQuery(""); }}
-          onChange={(event) => setQuery(event.target.value)}
+          value={query}
+          onFocus={() => setOpen(true)}
+          onChange={handleInputChange}
+          onKeyDown={handleKeyDown}
         />
-        {value && !open ? (
+        {query ? (
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); onChange(""); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setQuery("");
+              onChange("");
+            }}
             className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer p-0.5"
-            title="Clear selection"
+            title="Clear"
           >
             <X size={14} />
           </button>
@@ -185,21 +220,45 @@ function SearchableSelect({ placeholder, value, onChange, options }) {
       {open && (
         <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-40 max-h-64 overflow-y-auto bg-white rounded-lg border border-slate-200 shadow-lg py-1">
           <div
-            onMouseDown={(event) => { event.preventDefault(); onChange(""); setOpen(false); setQuery(""); }}
-            className="px-3.5 py-2.5 text-xs font-bold text-slate-500 hover:bg-slate-50 cursor-pointer border-b border-slate-100"
+            onMouseDown={(event) => {
+              event.preventDefault();
+              setQuery("");
+              onChange("");
+              setOpen(false);
+            }}
+            className="px-3.5 py-2 text-xs font-bold text-slate-500 hover:bg-slate-50 cursor-pointer border-b border-slate-100 flex items-center justify-between"
           >
-            {placeholder} (All)
+            <span>{placeholder} (All)</span>
+            <span className="text-[10px] text-slate-400 font-normal">Clear</span>
           </div>
-          {filtered.length === 0 && (
-            <div className="px-3.5 py-3 text-xs text-slate-400">No matches found</div>
+          {query.trim() && !uniqueOptions.some((opt) => opt.toLowerCase() === query.trim().toLowerCase()) && (
+            <div
+              onMouseDown={(event) => {
+                event.preventDefault();
+                onChange(query.trim());
+                setOpen(false);
+              }}
+              className="px-3.5 py-2 text-xs cursor-pointer bg-teal-50/70 hover:bg-teal-100/70 text-teal-900 font-semibold border-b border-teal-100 flex items-center justify-between"
+            >
+              <span>Search ship containing <strong className="font-bold">"{query.trim()}"</strong></span>
+              <span className="text-[10px] bg-teal-200/80 px-1.5 py-0.5 rounded text-teal-800 font-bold">Apply</span>
+            </div>
+          )}
+          {filtered.length === 0 && !query.trim() && (
+            <div className="px-3.5 py-3 text-xs text-slate-400">No options available</div>
           )}
           {filtered.map((opt, idx) => (
             <div
               key={`${opt}-${idx}`}
-              onMouseDown={(event) => { event.preventDefault(); onChange(opt); setOpen(false); setQuery(""); }}
+              onMouseDown={(event) => {
+                event.preventDefault();
+                setQuery(opt);
+                onChange(opt);
+                setOpen(false);
+              }}
               className={`px-3.5 py-2 text-xs cursor-pointer transition ${
-                opt === value
-                  ? "bg-emerald-50 text-emerald-700 font-bold"
+                opt.toLowerCase() === (value || "").toLowerCase()
+                  ? "bg-teal-50 text-teal-800 font-bold"
                   : "text-slate-800 hover:bg-slate-50 font-medium"
               }`}
             >
@@ -409,7 +468,7 @@ function ShipModal({ row, onClose }) {
               No deck plans saved for this ship yet.
             </div>
           ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "minmax(220px, 260px) minmax(0, 1fr)", gap: 16 }}>
+            <div className="grid grid-cols-1 md:grid-cols-[240px_minmax(0,1fr)] gap-4">
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {decks.map(deck => (
                   <button
@@ -499,6 +558,9 @@ const STATUS_STYLE = {
   Available: { bg: "#dcfce7", color: "#16a34a" },
   Guarantee: { bg: "#dbeafe", color: "#1d4ed8" },
   "Sold Out": { bg: "#f1f5f9", color: "#94a3b8" },
+  Unavailable: { bg: "#fef2f2", color: "#ef4444" },
+  Waitlist: { bg: "#fffbeb", color: "#d97706" },
+  Unknown: { bg: "#f8fafc", color: "#64748b" },
 };
 
 function statusStyle(status) {
@@ -657,7 +719,7 @@ function ItineraryModal({ row, onClose }) {
         </button>
       </div>
 
-      {/* Table */}
+      {/* Table & Mobile List View */}
       <div style={{ overflowY: "auto", maxHeight: "65vh" }}>
         {stops.length === 0 ? (
           <div className="py-12 px-6 text-center text-slate-500">
@@ -669,32 +731,64 @@ function ItineraryModal({ row, onClose }) {
           </div>
         ) : (
           <>
-            {/* Column headers */}
-            <div style={{ display: "grid", gridTemplateColumns: "44px 96px 76px 1fr 1fr 100px", gap: "0 12px", padding: "8px 20px", background: T.muted, borderBottom: `1px solid ${T.border}`, position: "sticky", top: 0 }}>
-              {["Day", "Date", "Time", "Activity", "Port of Call", "Country"].map(h => (
-                <span key={h} style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>{h}</span>
-              ))}
+            {/* Mobile List View (block md:hidden) */}
+            <div className="block md:hidden divide-y divide-slate-100">
+              {stops.map((stop, i) => {
+                const as = activityStyle(stop.activity ?? "");
+                return (
+                  <div key={i} className="p-3.5 space-y-2 bg-white hover:bg-slate-50 transition">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
+                          Day {stop.day}
+                        </span>
+                        <span className="font-bold text-slate-900 text-sm">{stop.port}</span>
+                      </div>
+                      <span style={{ background: as.bg, color: as.color }} className="rounded-full px-2.5 py-0.5 text-[10px] font-bold shrink-0">
+                        {stop.activity}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs text-slate-500 pt-1">
+                      <span className="font-medium text-slate-600">{stop.country || "Port of call"}</span>
+                      <span className="font-mono text-[11px] text-slate-400">
+                        {stop.date} {stop.time ? `· ${stop.time}` : ""}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-            {stops.map((stop, i) => {
-              const as = activityStyle(stop.activity ?? "");
-              return (
-                <div
-                  key={i}
-                  style={{ display: "grid", gridTemplateColumns: "44px 96px 76px 1fr 1fr 100px", gap: "0 12px", padding: "11px 20px", borderBottom: `1px solid ${T.border}`, alignItems: "center", background: i % 2 === 0 ? "#fff" : T.muted }}
-                >
-                  <span style={{ fontSize: 12, fontWeight: 700, color: T.textSlate }}>{stop.day}</span>
-                  <span style={{ fontSize: 12, color: T.textPrimary, fontFamily: T.fontMono }}>{stop.date}</span>
-                  <span style={{ fontSize: 12, color: T.textSlate, fontFamily: T.fontMono }}>{stop.time}</span>
-                  <span>
-                    <span style={{ background: as.bg, color: as.color, borderRadius: 999, padding: "3px 9px", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>
-                      {stop.activity}
+
+            {/* Desktop Grid / Table View (hidden md:block) */}
+            <div className="hidden md:block">
+              {/* Column headers */}
+              <div style={{ display: "grid", gridTemplateColumns: "44px 96px 76px 1fr 1fr 100px", gap: "0 12px", padding: "8px 20px", background: T.muted, borderBottom: `1px solid ${T.border}`, position: "sticky", top: 0 }}>
+                {["Day", "Date", "Time", "Activity", "Port of Call", "Country"].map(h => (
+                  <span key={h} style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>{h}</span>
+                ))}
+              </div>
+              {stops.map((stop, i) => {
+                const as = activityStyle(stop.activity ?? "");
+                return (
+                  <div
+                    key={i}
+                    style={{ display: "grid", gridTemplateColumns: "44px 96px 76px 1fr 1fr 100px", gap: "0 12px", padding: "11px 20px", borderBottom: `1px solid ${T.border}`, alignItems: "center", background: i % 2 === 0 ? "#fff" : T.muted }}
+                  >
+                    <span style={{ fontSize: 12, fontWeight: 700, color: T.textSlate }}>{stop.day}</span>
+                    <span style={{ fontSize: 12, color: T.textPrimary, fontFamily: T.fontMono }}>{stop.date}</span>
+                    <span style={{ fontSize: 12, color: T.textSlate, fontFamily: T.fontMono }}>{stop.time}</span>
+                    <span>
+                      <span style={{ background: as.bg, color: as.color, borderRadius: 999, padding: "3px 9px", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>
+                        {stop.activity}
+                      </span>
                     </span>
-                  </span>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: T.textPrimary }}>{stop.port}</span>
-                  <span style={{ fontSize: 12, color: T.textSlate }}>{stop.country}</span>
-                </div>
-              );
-            })}
+                    <span style={{ fontSize: 13, fontWeight: 600, color: T.textPrimary }}>{stop.port}</span>
+                    <span style={{ fontSize: 12, color: T.textSlate }}>{stop.country}</span>
+                  </div>
+                );
+              })}
+            </div>
           </>
         )}
       </div>
@@ -795,15 +889,16 @@ function PricingModal({ row, onClose, onRefreshComplete }) {
     setExpandedCategory(code);
     setExpandedDecks(new Set());
 
-    // GTY = no cabin list; WTL/non-OK = no cabins available
+    // Guarantee categories don't have individual cabin selections
     if (cat.avlResult === "GTY" || cat.status === "Guarantee") return;
-    if (cat.avlResult !== "OK") return;
+
     // Already cached
     if (cabinCache[code]) return;
 
+    const cruiseIdOrCode = row.code ?? row.id;
     setCabinCache(prev => ({ ...prev, [code]: { loading: true, decks: [] } }));
     try {
-      const result = await fetchCategoryDecks(row.id ?? row.code, code);
+      const result = await fetchCategoryDecks(cruiseIdOrCode, code);
       const decks = result?.data?.decks ?? [];
       setCabinCache(prev => ({ ...prev, [code]: { loading: false, decks } }));
       if (decks[0]?.deckNumber != null) {
@@ -1030,7 +1125,9 @@ function PricingModal({ row, onClose, onRefreshComplete }) {
           // let the actual count be the source of truth for the pill too.
           const effectiveStatus = hasRealCabinData
             ? (realCabinCount > 0 ? "Available" : "Sold Out")
-            : cat.status;
+            : (cat.status && cat.status !== "Unknown"
+                ? cat.status
+                : (avail > 0 ? "Available" : "Unavailable"));
 
           const categoryPrice = [
             cat.cabinPrice,
@@ -1079,14 +1176,18 @@ function PricingModal({ row, onClose, onRefreshComplete }) {
                     <div style={{ padding: "14px 24px", fontSize: 13, color: T.textSlate, fontStyle: "italic" }}>
                       Guarantee — specific cabin assigned at time of sailing.
                     </div>
-                  ) : cat.avlResult !== "OK" ? (
-                    <div style={{ padding: "14px 24px", fontSize: 13, color: T.textMuted, fontStyle: "italic" }}>
-                      Waitlist — no cabins currently available for selection.
-                    </div>
                   ) : cache?.loading ? (
                     <div style={{ padding: "14px 24px", fontSize: 13, color: T.textMuted }}>Loading cabins…</div>
                   ) : cache?.error ? (
-                    <div style={{ padding: "14px 24px", fontSize: 13, color: T.red }}>Failed to load cabin data.</div>
+                    <div style={{ padding: "14px 24px", fontSize: 13, color: T.red }}>
+                      Failed to load cabin data.
+                      <div style={{ marginTop: 10 }}>
+                        <RefreshBanner
+                          job={refreshJob}
+                          onRefresh={() => handleRefresh(cat.code)}
+                        />
+                      </div>
+                    </div>
                   ) : !cache || cache.decks.length === 0 ? (
                     <RefreshBanner
                       job={refreshJob}
@@ -1375,6 +1476,7 @@ export default function CruiseSearchPage() {
     cruiseLine: "",
     startDate: "",
     endDate: "",
+    horizonDays: null,
     nights: "",
     route: "",
     portFrom: "",
@@ -1387,12 +1489,21 @@ export default function CruiseSearchPage() {
     cruiseLine: "",
     startDate: "",
     endDate: "",
+    horizonDays: null,
     nights: "",
     route: "",
     portFrom: "",
     portTo: "",
   });
   const [datePreset, setDatePreset] = useState("All");
+
+  // Targeted Individual Ship Live Search / Scrape State
+  const [targetStartDate, setTargetStartDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [targetHorizonDays, setTargetHorizonDays] = useState(30);
+  const [targetShipName, setTargetShipName] = useState("");
+  const [targetVendor, setTargetVendor] = useState("");
+  const [scraperLoading, setScraperLoading] = useState(false);
+  const [scraperStatus, setScraperStatus] = useState(null);
 
   useEffect(() => {
     let active = true;
@@ -1409,6 +1520,7 @@ export default function CruiseSearchPage() {
           search: appliedFilters.code || undefined,
           vendorName: appliedFilters.vendor || undefined,
           ship: appliedFilters.ship || undefined,
+          shipName: appliedFilters.ship || undefined,
           cruiseLine: appliedFilters.cruiseLine || undefined,
           nights: appliedFilters.nights || undefined,
           route: appliedFilters.route || undefined,
@@ -1416,6 +1528,8 @@ export default function CruiseSearchPage() {
           portTo: appliedFilters.portTo || undefined,
           startDateFrom: appliedFilters.startDate || undefined,
           startDateTo: appliedFilters.endDate || undefined,
+          startDate: appliedFilters.startDate || undefined,
+          horizonDays: appliedFilters.horizonDays || undefined,
         });
 
         if (!active) {
@@ -1453,10 +1567,10 @@ export default function CruiseSearchPage() {
     const loadLookups = async () => {
       try {
         const [tagResponse, vendorResponse, shipResponse, userResponse] = await Promise.all([
-          fetchCruiseTags(),
-          fetchVendors({ limit: 100 }),
-          fetchShips({ limit: 300 }),
-          fetchUsers()
+          fetchCruiseTags().catch(() => ({ data: {} })),
+          fetchVendors({ limit: 100 }).catch(() => ({ data: [] })),
+          fetchShips({ limit: 300 }).catch(() => ({ data: [] })),
+          fetchUsers().catch(() => ({ data: [] }))
         ]);
 
         if (!active) {
@@ -1474,7 +1588,7 @@ export default function CruiseSearchPage() {
         });
       } catch (err) {
         if (active) {
-          console.error(err);
+          console.warn("Failed to load search cruise lookups:", err?.message || err);
         }
       }
     };
@@ -1533,7 +1647,14 @@ export default function CruiseSearchPage() {
   const setF = (key, value) => {
     setFilters((current) => {
       const next = { ...current, [key]: value };
-      if (key !== "code") {
+      if (key === "startDate" && current.horizonDays) {
+        if (value) {
+          const base = new Date(value);
+          const end = new Date(base.getTime() + current.horizonDays * 86400000);
+          next.endDate = end.toISOString().slice(0, 10);
+        }
+      }
+      if (key !== "code" && key !== "ship") {
         setAppliedFilters(next);
         setPage(1);
       }
@@ -1552,17 +1673,21 @@ export default function CruiseSearchPage() {
 
   const applyDatePreset = (preset) => {
     setDatePreset(preset.label);
-    let startDate = "";
+    let startDate = filters.startDate || new Date().toISOString().slice(0, 10);
     let endDate = "";
     if (preset.days != null) {
-      const today = new Date();
-      const end = new Date(today.getTime() + preset.days * 86400000);
+      const base = filters.startDate ? new Date(filters.startDate) : new Date();
+      const end = new Date(base.getTime() + preset.days * 86400000);
       const toInputDate = (d) => d.toISOString().slice(0, 10);
-      startDate = toInputDate(today);
       endDate = toInputDate(end);
     }
     setFilters((current) => {
-      const next = { ...current, startDate, endDate };
+      const next = {
+        ...current,
+        startDate: preset.days == null ? current.startDate : (current.startDate || startDate),
+        endDate,
+        horizonDays: preset.days
+      };
       setAppliedFilters(next);
       setPage(1);
       return next;
@@ -1570,10 +1695,10 @@ export default function CruiseSearchPage() {
   };
 
   const reset = () => {
-    const empty = { code: "", vendor: "", ship: "", cruiseLine: "", startDate: "", endDate: "", nights: "", route: "", portFrom: "", portTo: "" };
+    const empty = { code: "", vendor: "", ship: "", cruiseLine: "", startDate: "", endDate: "", horizonDays: null, nights: "", route: "", portFrom: "", portTo: "" };
     setFilters(empty);
     setAppliedFilters(empty);
-    setDatePreset("All");
+    setDatePreset("All Dates");
     setPage(1);
   };
 
@@ -1582,16 +1707,65 @@ export default function CruiseSearchPage() {
     setPage(1);
   };
 
-  // Debounce keyword search input so typing naturally filters after short delay
+  const handleTargetedSearch = () => {
+    const trimmedShip = targetShipName.trim();
+    const base = targetStartDate ? new Date(targetStartDate) : new Date();
+    const end = new Date(base.getTime() + targetHorizonDays * 86400000);
+    const toInputDate = (d) => d.toISOString().slice(0, 10);
+    const endDate = toInputDate(end);
+
+    const nextFilters = {
+      ...filters,
+      ship: trimmedShip,
+      vendor: targetVendor || filters.vendor,
+      startDate: targetStartDate,
+      endDate: endDate,
+      horizonDays: targetHorizonDays,
+    };
+    setFilters(nextFilters);
+    setAppliedFilters(nextFilters);
+    setDatePreset(`${targetHorizonDays} Days`);
+    setPage(1);
+  };
+
+  const handleTriggerScraper = async () => {
+    const trimmedShip = targetShipName.trim();
+    const vendorKey = VENDOR_SCRAPER_MAP[targetVendor] || (targetVendor ? targetVendor.toLowerCase() : "msc");
+    setScraperLoading(true);
+    setScraperStatus(null);
+    try {
+      const res = await triggerVendorScrapeFetch(vendorKey, {
+        startDate: targetStartDate,
+        horizonDays: targetHorizonDays,
+        ...(trimmedShip ? { shipName: trimmedShip } : {}),
+      });
+      const ok = res.httpStatus === 202 || res.result?.status === "queued" || res.success;
+      setScraperStatus({
+        ok,
+        msg: res.result?.status ?? (ok ? `Scraper run queued for ${targetVendor || vendorKey} (Ship: ${trimmedShip || "All"})` : res.error ?? "Triggered")
+      });
+      handleTargetedSearch();
+    } catch (err) {
+      setScraperStatus({ ok: false, msg: err.message || "Failed to trigger scraper" });
+    } finally {
+      setScraperLoading(false);
+    }
+  };
+
+  // Debounce keyword and ship search inputs so typing naturally filters after short delay
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (filters.code !== appliedFilters.code) {
-        setAppliedFilters((current) => ({ ...current, code: filters.code }));
+      if (filters.code !== appliedFilters.code || filters.ship !== appliedFilters.ship) {
+        setAppliedFilters((current) => ({
+          ...current,
+          code: filters.code,
+          ship: filters.ship
+        }));
         setPage(1);
       }
     }, 400);
     return () => clearTimeout(timer);
-  }, [filters.code, appliedFilters.code]);
+  }, [filters.code, filters.ship, appliedFilters.code, appliedFilters.ship]);
 
   const replaceCruiseInState = (updatedCruise) => {
     if (!updatedCruise) {
@@ -1688,7 +1862,7 @@ export default function CruiseSearchPage() {
   return (
     <div className="w-full min-h-screen bg-slate-50/50 px-3 sm:px-4 py-4 space-y-4">
       {/* ── Top Header Banner ────────────────────────────────────────────── */}
-      <div className="relative overflow-hidden rounded-3xl border border-teal-200/60 bg-gradient-to-br from-teal-50/70 via-sky-50/50 to-emerald-50/60 p-6 sm:p-8 shadow-xs">
+      <div className="relative overflow-hidden rounded-2xl border border-teal-200/80 bg-gradient-to-r from-teal-500/10 via-sky-500/5 to-teal-500/10 p-5 sm:p-6 shadow-xs">
         <div className="pointer-events-none absolute -right-12 -top-12 h-48 w-48 rounded-full bg-teal-500/10 blur-3xl" />
         <div className="pointer-events-none absolute -left-12 -bottom-12 h-48 w-48 rounded-full bg-sky-500/10 blur-3xl" />
 
@@ -1744,8 +1918,176 @@ export default function CruiseSearchPage() {
         </div>
       </div>
 
-        {/* ── Filter Form Card ───────────────────────────────────────────── */}
-        <div className="rounded-2xl border border-slate-200/90 bg-white p-5 sm:p-6 shadow-xs space-y-5">
+      {/* ── Separate Targeted Individual Ship Search & Live Scraper Card ── */}
+      <div className="rounded-2xl border border-teal-200/90 bg-gradient-to-br from-teal-50/50 via-white to-sky-50/30 p-5 sm:p-6 shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-teal-100">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-xl bg-teal-700 text-white shadow-xs">
+              <Ship size={18} />
+            </div>
+            <div>
+              <h3 className="text-sm sm:text-base font-black text-slate-900 flex items-center gap-2 flex-wrap">
+                <span>Targeted Individual Ship Search</span>
+                <span className="text-[10px] uppercase font-bold text-teal-700 bg-teal-100/90 border border-teal-200 px-2 py-0.5 rounded-md">
+                  Ship + Dates + Horizon
+                </span>
+              </h3>
+              <p className="text-xs font-medium text-slate-500 mt-0.5">
+                Quickly search specific ship sailings by start date & horizon, or trigger live scraper worker runs.
+              </p>
+            </div>
+          </div>
+
+          {/* Active Query JSON preview badge */}
+          <div className="hidden lg:flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-900 text-slate-200 font-mono text-[11px] shadow-2xs">
+            <span className="text-teal-400 font-bold">query:</span>
+            <span>{`{ startDate: "${targetStartDate}", horizonDays: ${targetHorizonDays}${targetShipName ? `, shipName: "${targetShipName}"` : ""} }`}</span>
+          </div>
+        </div>
+
+        {/* 3 Main Inputs Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3.5 items-end">
+          {/* Ship Name Input */}
+          <div className="sm:col-span-1 lg:col-span-4 space-y-1">
+            <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+              <Ship size={13} className="text-teal-600" />
+              <span>Ship Name (shipName: "{targetShipName || "..."}")</span>
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                value={targetShipName}
+                onChange={(e) => setTargetShipName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleTargetedSearch(); }}
+                placeholder="Type ship name (e.g. as, Seaside, Arvia...)"
+                className="w-full h-10 px-3 pr-8 rounded-lg border border-teal-200 bg-white text-sm font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 shadow-2xs transition"
+              />
+              {targetShipName && (
+                <button
+                  type="button"
+                  onClick={() => setTargetShipName("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+                  title="Clear"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Start Date */}
+          <div className="sm:col-span-1 lg:col-span-3 space-y-1">
+            <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+              <CalendarDays size={13} className="text-teal-600" />
+              <span>Start Date (startDate)</span>
+            </label>
+            <input
+              type="date"
+              value={targetStartDate}
+              onChange={(e) => setTargetStartDate(e.target.value)}
+              className="w-full h-10 px-3 rounded-lg border border-teal-200 bg-white text-sm font-semibold text-slate-900 shadow-2xs focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition"
+            />
+          </div>
+
+          {/* Horizon Days Selector */}
+          <div className="sm:col-span-2 lg:col-span-5 space-y-1">
+            <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+              <Compass size={13} className="text-teal-600" />
+              <span>Search Horizon (horizonDays: {targetHorizonDays}d)</span>
+            </label>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {[
+                { label: "1 Day", days: 1 },
+                { label: "7 Days", days: 7 },
+                { label: "30 Days", days: 30 },
+                { label: "60 Days", days: 60 },
+                { label: "3 Months", days: 90 },
+              ].map((opt) => (
+                <button
+                  type="button"
+                  key={opt.days}
+                  onClick={() => setTargetHorizonDays(opt.days)}
+                  className={`h-10 px-3 rounded-lg text-xs font-bold transition cursor-pointer flex-1 min-w-[65px] ${
+                    targetHorizonDays === opt.days
+                      ? "bg-teal-700 text-white shadow-xs border border-teal-700"
+                      : "bg-white text-slate-700 hover:bg-teal-50 hover:text-teal-900 border border-teal-200/80 shadow-2xs"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Action Row & Live Scraper Trigger */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2">
+          {/* Vendor selector optional */}
+          <div className="flex items-center gap-2 flex-1 max-w-md">
+            <span className="text-xs font-bold text-slate-600 whitespace-nowrap">Vendor (Optional):</span>
+            <select
+              value={targetVendor}
+              onChange={(e) => setTargetVendor(e.target.value)}
+              className="h-9.5 rounded-lg border border-teal-200 bg-white px-2.5 text-xs font-semibold text-slate-800 shadow-2xs focus:outline-none focus:border-teal-600 flex-1"
+            >
+              <option value="">All / Auto-detect Provider</option>
+              {opts.vendors.map((v) => (
+                <option key={v} value={v}>{v}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+            <button
+              type="button"
+              onClick={handleTargetedSearch}
+              className="inline-flex items-center justify-center gap-2 h-9.5 px-5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white text-xs sm:text-sm font-bold shadow-xs active:scale-95 transition cursor-pointer flex-1 sm:flex-initial"
+            >
+              <Search size={15} />
+              <span>Search Ship Inventory</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleTriggerScraper}
+              disabled={scraperLoading}
+              className="inline-flex items-center justify-center gap-2 h-9.5 px-4 rounded-lg bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white text-xs sm:text-sm font-bold shadow-xs active:scale-95 transition cursor-pointer flex-1 sm:flex-initial"
+              title="Dispatch scraper worker with { startDate, horizonDays, shipName }"
+            >
+              {scraperLoading ? (
+                <RefreshCw size={14} className="animate-spin" />
+              ) : (
+                <Zap size={15} className="text-emerald-300" />
+              )}
+              <span>{scraperLoading ? "Triggering Scraper…" : "Run Live Scraper"}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Live Scraper feedback alert if triggered */}
+        {scraperStatus && (
+          <div className={`p-3 rounded-xl text-xs font-semibold flex items-center justify-between gap-2 ${
+            scraperStatus.ok
+              ? "bg-emerald-50 text-emerald-900 border border-emerald-200"
+              : "bg-rose-50 text-rose-900 border border-rose-200"
+          }`}>
+            <div className="flex items-center gap-2">
+              {scraperStatus.ok ? <CheckCircle2 size={16} className="text-emerald-600 shrink-0" /> : <AlertCircle size={16} className="text-rose-600 shrink-0" />}
+              <span>{scraperStatus.msg}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setScraperStatus(null)}
+              className="text-slate-400 hover:text-slate-600 text-xs font-bold cursor-pointer"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* ── Filter Form Card ───────────────────────────────────────────── */}
+      <div className="rounded-2xl border border-slate-200/90 bg-white p-5 sm:p-6 shadow-xs space-y-5">
           {/* Cruise Code Input */}
           <div>
             <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
@@ -1780,11 +2122,11 @@ export default function CruiseSearchPage() {
               <Layers size={13} className="text-teal-600" />
               <span>Cruise Line Provider</span>
             </label>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex items-center gap-2 overflow-x-auto pb-1.5 flex-nowrap scroll-smooth">
               <button
                 type="button"
                 onClick={() => selectVendor("")}
-                className={`h-8 px-3 rounded-lg text-xs font-bold transition cursor-pointer ${
+                className={`h-8 px-3.5 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 whitespace-nowrap ${
                   filters.vendor === ""
                     ? "bg-teal-700 text-white shadow-xs border border-teal-700"
                     : "bg-slate-50 text-slate-700 hover:bg-slate-100 hover:text-slate-900 border border-slate-200/80 shadow-2xs"
@@ -1800,7 +2142,7 @@ export default function CruiseSearchPage() {
                     type="button"
                     key={value}
                     onClick={() => selectVendor(value)}
-                    className={`h-8 px-3 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                    className={`h-8 px-3.5 rounded-lg text-xs font-semibold transition cursor-pointer shrink-0 whitespace-nowrap ${
                       isSelected
                         ? "bg-teal-700 text-white font-bold shadow-xs border border-teal-700"
                         : "bg-white text-slate-700 hover:bg-slate-50 hover:text-slate-900 border border-slate-200/80 shadow-2xs"
@@ -1817,7 +2159,7 @@ export default function CruiseSearchPage() {
           </div>
 
           {/* 4 Multi-Select Options Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
             {[
               { key: "ship", ph: "Select Ship", mode: "input", values: opts.ships, icon: Ship, iconColor: "text-sky-600" },
               { key: "cruiseLine", ph: "Select Cruise Line", mode: "select", values: opts.cruiseLines, icon: Compass, iconColor: "text-teal-600" },
@@ -1836,6 +2178,7 @@ export default function CruiseSearchPage() {
                     value={filters[field.key]}
                     onChange={(value) => setF(field.key, value)}
                     options={field.values}
+                    onEnter={applyFilters}
                   />
                 </div>
               ) : (
@@ -1893,7 +2236,7 @@ export default function CruiseSearchPage() {
                   </button>
                 );
               })}
-              <div className="flex items-center gap-1.5 ml-1">
+              <div className="flex flex-wrap items-center gap-1.5 mt-1 sm:mt-0">
                 <input
                   type="date"
                   className="h-8 rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 font-semibold shadow-2xs focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-500/20"
@@ -1962,13 +2305,16 @@ export default function CruiseSearchPage() {
               {/* ── Mobile List View (md:hidden) ─────────────────────────── */}
               <div className="block md:hidden divide-y divide-slate-100">
                 {rows.map((row) => {
-                  const lowestPrice = Math.min(...(row.cabinCategories || []).filter((cabin) => cabin.avlResult === "OK").map((cabin) => Number(cabin.cabinPrice ?? 0)));
+                  const validPrices = (row.cabinCategories || [])
+                    .map((cabin) => Number(cabin.cabinPrice ?? cabin.price ?? 0))
+                    .filter((p) => Number.isFinite(p) && p > 0);
+                  const lowestPrice = validPrices.length > 0 ? Math.min(...validPrices) : (Number(row.price ?? row.leadInPrice) || NaN);
                   const hasFullDetails = (row.cabinCategories || []).some(
                     c => c.confidence === "Medium" || c.confidence === "High"
                   );
                   const isTagged = (row.tags?.length || 0) > 0;
                   const canTag = hasFullDetails || isTagged;
-                  const availableCabins = row.cabinCategories?.filter(c => c.avlResult === "OK").length ?? 0;
+                  const availableCabins = row.cabinCategories?.filter(c => c.avlResult === "OK" || c.status === "Available" || (Number(c.avail ?? c.available ?? 0) > 0)).length ?? 0;
                   const vStyle = getVendorStyle(row.vendor?.name);
 
                   return (
@@ -1976,20 +2322,20 @@ export default function CruiseSearchPage() {
                       {/* Top bar: Vendor, Ship badge, Pin */}
                       <div className="flex items-start justify-between gap-2 mb-2">
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-md border ${vStyle.badge}`}>
+                          <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-md border whitespace-nowrap shrink-0 ${vStyle.badge}`}>
                             {row.vendor?.name}
                           </span>
                           {row.cruiseLine && (
-                            <span className="text-[10px] font-semibold text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md">
+                            <span className="text-[10px] font-semibold text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md whitespace-nowrap shrink-0">
                               {CRUISE_LINE_LABELS[row.cruiseLine] ?? row.cruiseLine}
                             </span>
                           )}
                           <button
                             onClick={() => setShipRow(row)}
-                            className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-sky-50 border border-sky-200 text-sky-800 hover:bg-sky-100 text-[11px] font-bold transition cursor-pointer"
+                            className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-sky-50 border border-sky-200 text-sky-800 hover:bg-sky-100 text-[11px] font-bold transition cursor-pointer whitespace-nowrap shrink-0"
                           >
-                            <Ship size={11} className="text-sky-600" />
-                            <span>{row.ship}</span>
+                            <Ship size={11} className="text-sky-600 shrink-0" />
+                            <span className="whitespace-nowrap">{row.ship}</span>
                           </button>
                         </div>
                         <button
@@ -2016,13 +2362,13 @@ export default function CruiseSearchPage() {
                       <div className="flex items-center gap-2 text-xs mb-3 flex-wrap">
                         <button
                           onClick={() => setItineraryRow(row)}
-                          className="inline-flex items-center gap-1 font-semibold text-teal-700 hover:text-teal-900 text-xs cursor-pointer hover:underline underline-offset-2"
+                          className="inline-flex items-center gap-1 font-semibold text-teal-700 hover:text-teal-900 text-xs cursor-pointer hover:underline underline-offset-2 whitespace-nowrap"
                         >
                           <MapPin size={12} className="shrink-0 text-teal-600" />
                           <span>{getCruiseRouteLabel(row)}</span>
                         </button>
                         <span className="text-slate-300">•</span>
-                        <span className="font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md text-[11px]">
+                        <span className="font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md text-[11px] whitespace-nowrap shrink-0">
                           {row.nights} Nights
                         </span>
                       </div>
@@ -2031,24 +2377,24 @@ export default function CruiseSearchPage() {
                       <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 p-2.5 rounded-lg border border-slate-200/70 mb-3">
                         <div>
                           <div className="text-[10px] uppercase font-bold text-slate-400">Departure</div>
-                          <div className="font-semibold text-slate-900 mt-0.5">{fmtDate(row.startDate)}</div>
+                          <div className="font-semibold text-slate-900 mt-0.5 whitespace-nowrap">{fmtDate(row.startDate)}</div>
                         </div>
                         <div>
                           <div className="text-[10px] uppercase font-bold text-slate-400">Arrival</div>
-                          <div className="font-semibold text-slate-900 mt-0.5">{fmtDate(row.endDate)}</div>
+                          <div className="font-semibold text-slate-900 mt-0.5 whitespace-nowrap">{fmtDate(row.endDate)}</div>
                         </div>
                       </div>
 
                       {/* Bottom Bar: Availability & Price Button */}
-                      <div className="flex items-center justify-between gap-2 pt-1">
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-semibold bg-emerald-50 border border-emerald-200 text-emerald-800">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                          {availableCabins} cabins available
+                      <div className="flex items-center justify-between gap-2 pt-1 flex-wrap sm:flex-nowrap">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-semibold bg-emerald-50 border border-emerald-200 text-emerald-800 whitespace-nowrap shrink-0">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                          <span className="whitespace-nowrap">{availableCabins} cabins available</span>
                         </span>
 
                         <button
                           onClick={() => setPricingRow(row)}
-                          className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                          className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer whitespace-nowrap shrink-0 ${
                             Number.isFinite(lowestPrice)
                               ? "bg-teal-700 hover:bg-teal-800 text-white shadow-2xs"
                               : "bg-amber-50 border border-amber-200 text-amber-900 hover:bg-amber-100"
@@ -2063,12 +2409,12 @@ export default function CruiseSearchPage() {
               </div>
 
               {/* ── Desktop Table View (hidden md:block) ─────────────────── */}
-              <div className="hidden md:block overflow-x-auto">
-                <table className="w-full text-left border-collapse min-w-[1000px]">
+              <div className="hidden md:block overflow-x-auto w-full max-w-full rounded-xl">
+                <table className="w-full text-left border-collapse min-w-[1100px]">
                   <thead className="bg-slate-50 border-b border-slate-200">
                     <tr>
                       {["", "Vendor", "Ship", "Cruise", "Nights", "Route", "Departure", "Arrival", "Avail.", "Refreshed", "Price"].map((header) => (
-                        <th key={header} className="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-600">
+                        <th key={header} className="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-600 whitespace-nowrap">
                           {header}
                         </th>
                       ))}
@@ -2076,17 +2422,21 @@ export default function CruiseSearchPage() {
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-sm">
                     {rows.map((row, index) => {
-                      const lowestPrice = Math.min(...(row.cabinCategories || []).filter((cabin) => cabin.avlResult === "OK").map((cabin) => Number(cabin.cabinPrice ?? 0)));
+                      const validPrices = (row.cabinCategories || [])
+                        .map((cabin) => Number(cabin.cabinPrice ?? cabin.price ?? 0))
+                        .filter((p) => Number.isFinite(p) && p > 0);
+                      const lowestPrice = validPrices.length > 0 ? Math.min(...validPrices) : (Number(row.price ?? row.leadInPrice) || NaN);
                       const hasFullDetails = (row.cabinCategories || []).some(
                         c => c.confidence === "Medium" || c.confidence === "High"
                       );
                       const isTagged = (row.tags?.length || 0) > 0;
                       const canTag = hasFullDetails || isTagged;
+                      const availableCabins = row.cabinCategories?.filter(c => c.avlResult === "OK" || c.status === "Available" || (Number(c.avail ?? c.available ?? 0) > 0)).length ?? 0;
                       const vStyle = getVendorStyle(row.vendor?.name);
 
                       return (
                         <tr key={row.id} className={`transition-all hover:bg-slate-50/70 ${isTagged ? "bg-amber-50/50" : index % 2 === 0 ? "bg-white" : "bg-slate-50/30"}`}>
-                          <td className="px-4 py-3">
+                          <td className="px-4 py-3 whitespace-nowrap">
                             <button
                               onClick={() => canTag ? togglePin(row.id) : null}
                               className={`p-1 rounded-md transition ${
@@ -2101,40 +2451,43 @@ export default function CruiseSearchPage() {
                               <Pin size={15} className={isTagged ? "fill-amber-500 text-amber-600" : ""} />
                             </button>
                           </td>
-                          <td className="px-4 py-3">
-                            <span className={`inline-block px-2.5 py-0.5 rounded-md text-[11px] font-semibold border ${vStyle.badge}`}>
-                              {row.vendor?.name}
-                            </span>
-                            {row.cruiseLine && (
-                              <div className="mt-0.5 text-[10px] font-semibold text-slate-500">
-                                {CRUISE_LINE_LABELS[row.cruiseLine] ?? row.cruiseLine}
-                              </div>
-                            )}
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <div className="flex flex-col items-start gap-0.5 whitespace-nowrap">
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-semibold border whitespace-nowrap shrink-0 ${vStyle.badge}`}>
+                                {row.vendor?.name}
+                              </span>
+                              {row.cruiseLine && (
+                                <div className="mt-0.5 text-[10px] font-semibold text-slate-500 whitespace-nowrap">
+                                  {CRUISE_LINE_LABELS[row.cruiseLine] ?? row.cruiseLine}
+                                </div>
+                              )}
+                            </div>
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-4 py-3 whitespace-nowrap">
                             <button
                               onClick={() => setShipRow(row)}
-                              className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-sky-50 border border-sky-200 text-sky-800 hover:bg-sky-100 text-xs font-bold transition cursor-pointer"
+                              className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-sky-50 border border-sky-200 text-sky-800 hover:bg-sky-100 text-xs font-bold transition cursor-pointer whitespace-nowrap shrink-0"
                             >
-                              <Ship size={11} className="text-sky-600" />
-                              <span>{row.ship}</span>
+                              <Ship size={11} className="text-sky-600 shrink-0" />
+                              <span className="whitespace-nowrap">{row.ship}</span>
                             </button>
-                            <div className="mt-0.5 text-[11px] font-mono text-slate-400">
+                            <div className="mt-0.5 text-[11px] font-mono text-slate-400 whitespace-nowrap">
                               {getCruiseDisplayId(row)}
                             </div>
                           </td>
-                          <td className="px-4 py-3 font-semibold text-slate-900 max-w-[240px] truncate" title={row.package}>
+                          <td className="px-4 py-3 font-semibold text-slate-900 max-w-[260px] truncate whitespace-nowrap" title={row.package}>
                             {row.package}
                           </td>
-                          <td className="px-4 py-3">
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold bg-indigo-50 border border-indigo-200 text-indigo-700">
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold bg-indigo-50 border border-indigo-200 text-indigo-700 whitespace-nowrap">
                               {row.nights}N
                             </span>
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-4 py-3 whitespace-nowrap">
                             <button
                               onClick={() => setItineraryRow(row)}
-                              className="text-left font-semibold text-teal-700 hover:text-teal-900 hover:underline text-xs decoration-dotted underline-offset-4 cursor-pointer"
+                              className="text-left font-semibold text-teal-700 hover:text-teal-900 hover:underline text-xs decoration-dotted underline-offset-4 cursor-pointer whitespace-nowrap max-w-[280px] truncate block"
+                              title={getCruiseRouteLabel(row)}
                             >
                               {getCruiseRouteLabel(row)}
                             </button>
@@ -2145,10 +2498,10 @@ export default function CruiseSearchPage() {
                           <td className="px-4 py-3 text-xs font-medium text-slate-700 whitespace-nowrap">
                             {fmtDate(row.endDate)}
                           </td>
-                          <td className="px-4 py-3">
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-semibold bg-emerald-50 border border-emerald-200 text-emerald-800">
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                              {row.cabinCategories?.filter(c => c.avlResult === "OK").length ?? 0} avail
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-semibold bg-emerald-50 border border-emerald-200 text-emerald-800 whitespace-nowrap shrink-0">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                              <span className="whitespace-nowrap">{availableCabins} avail</span>
                             </span>
                           </td>
                           <td className="px-4 py-3 text-xs font-medium text-slate-400 whitespace-nowrap">
@@ -2157,10 +2510,10 @@ export default function CruiseSearchPage() {
                               return ts ? fmtFetchedAt(new Date(ts).getTime()) : "—";
                             })()}
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-4 py-3 whitespace-nowrap">
                             <button
                               onClick={() => setPricingRow(row)}
-                              className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer shadow-2xs ${
+                              className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer shadow-2xs whitespace-nowrap shrink-0 ${
                                 Number.isFinite(lowestPrice)
                                   ? "bg-teal-700 hover:bg-teal-800 text-white"
                                   : "bg-amber-50 border border-amber-200 text-amber-800 hover:bg-amber-100"

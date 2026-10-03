@@ -2,6 +2,16 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
+import {
+  Layers,
+  MapPin,
+  Pencil,
+  Plus,
+  Ship,
+  Trash2,
+  Upload,
+  X
+} from "lucide-react";
 
 import {
   createShipDeck,
@@ -10,19 +20,6 @@ import {
   fetchShips,
   updateShipDeck
 } from "../api";
-
-const T = {
-  border: "#e2e8f0",
-  muted: "#f8fafc",
-  textMuted: "#64748b",
-  textPrimary: "#0f172a",
-  blue: "#1d4ed8",
-  blueBg: "#eff6ff",
-  red: "#dc2626",
-  redBg: "#fff1f2",
-  green: "#166534",
-  greenBg: "#dcfce7"
-};
 
 const createEmptySection = () => ({
   title: "",
@@ -151,17 +148,22 @@ export default function ShipDecksPage() {
     };
   }, [selectedShipCode]);
 
-  const decks = shipData?.decks || [];
+  const decks = useMemo(() => {
+    return Array.isArray(shipData?.decks) ? shipData.decks : [];
+  }, [shipData]);
 
-  const overview = useMemo(
-    () => [
-      ["Ship", shipData?.name || "--"],
-      ["Code", shipData?.code || "--"],
-      ["Decks", decks.length],
-      ["Cruises", shipData?.cruiseCount ?? 0]
-    ],
-    [decks.length, shipData]
-  );
+  const overview = useMemo(() => {
+    if (!shipData) {
+      return [];
+    }
+
+    return [
+      ["Ship Code", shipData.code || "--"],
+      ["Vendor Line", shipData.vendor?.name || "--"],
+      ["Registered Decks", String(decks.length)],
+      ["Deck Range", decks.length ? `${Math.min(...decks.map(d => d.deckNumber || 0))} - ${Math.max(...decks.map(d => d.deckNumber || 0))}` : "--"]
+    ];
+  }, [shipData, decks]);
 
   const resetForm = () => {
     setForm(createEmptyForm());
@@ -169,44 +171,54 @@ export default function ShipDecksPage() {
     setError("");
   };
 
-  const reloadShip = async (shipCode = selectedShipCode) => {
-    const response = await fetchShip(shipCode);
-    setShipData(response.data || null);
-  };
-
-  const handleSectionChange = (index, key, value) => {
-    setForm(current => ({
-      ...current,
-      sections: current.sections.map((section, sectionIndex) =>
-        sectionIndex === index ? { ...section, [key]: value } : section
-      )
-    }));
+  const handleSectionChange = (index, field, value) => {
+    setForm(current => {
+      const nextSections = [...current.sections];
+      nextSections[index] = {
+        ...nextSections[index],
+        [field]: value
+      };
+      return { ...current, sections: nextSections };
+    });
   };
 
   const handleImageFile = async event => {
     const file = event.target.files?.[0];
-
     if (!file) {
       return;
     }
 
     try {
-      const imageData = await readFileAsDataUrl(file);
+      const dataUrl = await readFileAsDataUrl(file);
       setForm(current => ({
         ...current,
-        imageData,
+        imageData: dataUrl,
         imageFileName: file.name,
         imageUrl: ""
       }));
     } catch (err) {
-      setError(err.message || "Failed to load image");
+      setError(err.message || "Failed to process image file");
     }
+  };
+
+  const reloadShip = async () => {
+    if (!selectedShipCode) {
+      return;
+    }
+
+    const response = await fetchShip(selectedShipCode);
+    setShipData(response.data || null);
   };
 
   const handleSubmit = async event => {
     event.preventDefault();
-
     if (!selectedShipCode) {
+      setError("Please select a ship first");
+      return;
+    }
+
+    if (!form.name.trim()) {
+      setError("Deck name is required");
       return;
     }
 
@@ -216,25 +228,40 @@ export default function ShipDecksPage() {
       setMessage("");
 
       const payload = {
-        name: form.name,
-        deckNumber: form.deckNumber,
-        description: form.description,
-        imageUrl: form.imageUrl,
-        imageData: form.imageData,
+        name: form.name.trim(),
+        deckNumber: form.deckNumber === "" ? null : Number(form.deckNumber),
+        description: form.description.trim() || null,
         sections: form.sections
+          .filter(section => section.title.trim())
+          .map(section => ({
+            title: section.title.trim(),
+            sectionType: section.sectionType.trim() || null,
+            cabinCodes: section.cabinCodes
+              .split(",")
+              .map(code => code.trim())
+              .filter(Boolean),
+            description: section.description.trim() || null
+          }))
       };
+
+      if (form.imageData) {
+        payload.image = form.imageData;
+      } else if (form.imageUrl) {
+        payload.image = form.imageUrl.trim();
+      }
 
       if (form.id) {
         await updateShipDeck(selectedShipCode, form.id, payload);
+        setMessage("Deck updated successfully.");
       } else {
         await createShipDeck(selectedShipCode, payload);
+        setMessage("Deck created successfully.");
       }
 
       await reloadShip();
-      setMessage(form.id ? "Deck updated successfully." : "Deck created successfully.");
       resetForm();
     } catch (err) {
-      setError(err.message || "Failed to save deck");
+      setError(err.message || "Failed to save ship deck");
     } finally {
       setSaving(false);
     }
@@ -268,33 +295,33 @@ export default function ShipDecksPage() {
   return (
     <div className="w-full min-h-screen bg-slate-50/50 px-3 sm:px-4 py-4 space-y-4">
       {/* ── Top Header Banner ────────────────────────────────────────────── */}
-      <div className="relative overflow-hidden rounded-3xl border border-teal-200/60 bg-gradient-to-br from-teal-50/70 via-sky-50/50 to-emerald-50/60 p-6 sm:p-8 shadow-xs">
+      <div className="relative overflow-hidden rounded-2xl border border-teal-200/80 bg-gradient-to-r from-teal-500/10 via-sky-500/5 to-teal-500/10 p-5 sm:p-6 shadow-xs">
         <div className="pointer-events-none absolute -right-12 -top-12 h-48 w-48 rounded-full bg-teal-500/10 blur-3xl" />
         <div className="pointer-events-none absolute -left-12 -bottom-12 h-48 w-48 rounded-full bg-sky-500/10 blur-3xl" />
 
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-          <div className="space-y-2 max-w-3xl">
-            <div className="inline-flex items-center gap-2 rounded-full border border-teal-200/80 bg-white/80 backdrop-blur-xs px-3.5 py-1 text-[11px] font-bold text-teal-800 shadow-2xs">
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
+          <div className="space-y-1.5 max-w-3xl">
+            <div className="inline-flex items-center gap-2 rounded-full border border-teal-200/80 bg-white/90 backdrop-blur-xs px-3 py-0.5 text-[11px] font-bold text-teal-800 shadow-2xs">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-teal-600"></span>
               </span>
-              <span>Ship Deck Admin · Interactive Mapping</span>
+              <span>Ship Deck Blueprints · Interactive Deck Mapping</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
-              Manage Deck Plans
+            <h1 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900">
+              Manage Ship Decks & Layouts
             </h1>
             <p className="text-xs sm:text-sm font-medium text-slate-600 leading-relaxed max-w-2xl">
-              Upload deck plans to Cloudinary, map sections and cabin codes, and keep ship deck blueprints organized across your fleet.
+              Upload deck plans, map sections and cabin codes, and keep vessel blueprints organized across all fleets in the database.
             </p>
           </div>
 
-          <div className="min-w-[280px] rounded-2xl border border-slate-200/90 bg-white/90 backdrop-blur-xs p-3.5 shadow-2xs">
-            <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-slate-400">Select Ship</label>
+          <div className="min-w-[280px] rounded-xl border border-slate-200/90 bg-white/90 backdrop-blur-xs p-3 shadow-2xs">
+            <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-slate-400">Select Ship</label>
             <select
               value={selectedShipCode}
               onChange={event => setSelectedShipCode(event.target.value)}
-              className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-800 shadow-xs outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 transition"
+              className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-800 shadow-2xs outline-none focus:border-teal-600 transition"
               disabled={loadingShips}
             >
               {ships.map(ship => (
@@ -307,60 +334,71 @@ export default function ShipDecksPage() {
         </div>
       </div>
 
-      {message ? <div className="rounded-2xl px-4 py-3 text-sm font-semibold shadow-xs" style={{ background: T.greenBg, color: T.green }}>{message}</div> : null}
-      {error ? <div className="rounded-2xl px-4 py-3 text-sm font-semibold shadow-xs" style={{ background: T.redBg, color: T.red }}>{error}</div> : null}
+      {message && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-xs font-bold text-emerald-800 shadow-2xs">
+          {message}
+        </div>
+      )}
+      {error && (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-xs font-bold text-rose-800 shadow-2xs">
+          {error}
+        </div>
+      )}
 
-      <div className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
-        <div className="space-y-6">
-          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="text-base font-semibold text-slate-900">Ship overview</div>
-            <div className="mt-4 space-y-3">
+      <div className="grid gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
+        {/* Left Sidebar: Overview & Saved Decks */}
+        <div className="space-y-4">
+          <div className="rounded-xl border border-slate-200/90 bg-white p-4 shadow-2xs">
+            <h2 className="text-sm font-bold text-slate-900 pb-3 border-b border-slate-100">Ship Overview</h2>
+            <div className="mt-3 space-y-2">
               {overview.map(([label, value]) => (
-                <div key={label} className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 text-sm">
-                  <span className="text-slate-500">{label}</span>
-                  <span className="font-medium text-slate-900">{value}</span>
+                <div key={label} className="flex items-center justify-between rounded-lg bg-slate-50/70 border border-slate-200/60 px-3 py-2 text-xs">
+                  <span className="text-slate-500 font-medium">{label}</span>
+                  <span className="font-bold text-slate-900 font-mono">{value}</span>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div className="text-base font-semibold text-slate-900">Saved decks</div>
+          <div className="rounded-xl border border-slate-200/90 bg-white p-4 shadow-2xs">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h2 className="text-sm font-bold text-slate-900">Saved Decks</h2>
               <button
                 onClick={resetForm}
-                className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700"
+                className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-bold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
               >
-                New deck
+                + New Deck
               </button>
             </div>
 
-            <div className="mt-4 space-y-3">
+            <div className="mt-3 space-y-2 max-h-[480px] overflow-y-auto pr-1">
               {loadingShip ? (
-                <div className="text-sm text-slate-500">Loading decks...</div>
+                <div className="py-8 text-center text-xs text-slate-400">Loading decks…</div>
               ) : decks.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-6 text-center text-sm text-slate-500">
-                  No deck plans yet.
+                <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-xs text-slate-500">
+                  No deck plans configured yet.
                 </div>
               ) : (
                 decks.map(deck => (
-                  <div key={deck.id} className="rounded-2xl border border-slate-200 p-4">
-                    <div className="font-semibold text-slate-900">{deck.name}</div>
-                    <div className="mt-1 text-xs text-slate-500">
-                      {deck.deckNumber ? `Deck ${deck.deckNumber}` : "No deck number"} · {deck.sections?.length || 0} sections
+                  <div key={deck.id} className="rounded-lg border border-slate-200/80 bg-slate-50/50 p-3 hover:bg-slate-50 transition">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="font-bold text-slate-900 text-xs truncate">{deck.name}</div>
+                        <div className="mt-0.5 text-[11px] text-slate-500">
+                          {deck.deckNumber ? `Deck ${deck.deckNumber}` : "No deck number"} · {deck.sections?.length || 0} sections
+                        </div>
+                      </div>
                     </div>
-                    <div className="mt-3 flex gap-2">
+                    <div className="mt-2.5 flex gap-1.5 pt-2 border-t border-slate-200/60">
                       <button
                         onClick={() => handleEdit(deck)}
-                        className="flex-1 rounded-xl px-3 py-2 text-sm font-medium"
-                        style={{ background: T.blueBg, color: T.blue }}
+                        className="flex-1 rounded-md border border-slate-200 bg-white hover:bg-slate-50 py-1 text-[11px] font-bold text-slate-700 transition cursor-pointer"
                       >
                         Edit
                       </button>
                       <button
                         onClick={() => handleDelete(deck.id)}
-                        className="flex-1 rounded-xl px-3 py-2 text-sm font-medium"
-                        style={{ background: T.redBg, color: T.red }}
+                        className="flex-1 rounded-md border border-rose-200 bg-rose-50 hover:bg-rose-100 py-1 text-[11px] font-bold text-rose-700 transition cursor-pointer"
                       >
                         Delete
                       </button>
@@ -372,173 +410,206 @@ export default function ShipDecksPage() {
           </div>
         </div>
 
-        <div className="space-y-6">
-          <form onSubmit={handleSubmit} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-            <div className="flex items-center justify-between gap-4">
+        {/* Right Area: Form & Previews */}
+        <div className="space-y-4">
+          <form onSubmit={handleSubmit} className="rounded-xl border border-slate-200/90 bg-white p-5 shadow-2xs space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div>
-                <div className="text-base font-semibold text-slate-900">
-                  {form.id ? "Edit deck plan" : "Create deck plan"}
-                </div>
-                <div className="mt-1 text-sm text-slate-500">
-                  Upload from your machine or keep a Cloudinary/remote image URL.
-                </div>
+                <h2 className="text-sm font-bold text-slate-900">
+                  {form.id ? "Edit Deck Blueprint" : "Create New Deck Blueprint"}
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Upload schematic image or provide remote Cloudinary URL.
+                </p>
               </div>
-              {form.id ? (
-                <button type="button" onClick={resetForm} className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700">
-                  Cancel
+              {form.id && (
+                <button
+                  type="button"
+                  onClick={resetForm}
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs font-bold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+                >
+                  Cancel Edit
                 </button>
-              ) : null}
+              )}
             </div>
 
-            <div className="mt-5 grid gap-4 md:grid-cols-[2fr_1fr]">
-              <input
-                value={form.name}
-                onChange={event => setForm(current => ({ ...current, name: event.target.value }))}
-                placeholder="Deck name"
-                className="h-11 rounded-xl border border-slate-200 px-3"
-                required
-              />
-              <input
-                value={form.deckNumber}
-                onChange={event => setForm(current => ({ ...current, deckNumber: event.target.value }))}
-                placeholder="Deck number"
-                className="h-11 rounded-xl border border-slate-200 px-3"
+            <div className="grid gap-3 sm:grid-cols-[2fr_1fr]">
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">Deck Name *</label>
+                <input
+                  value={form.name}
+                  onChange={event => setForm(current => ({ ...current, name: event.target.value }))}
+                  placeholder="e.g. Lido Deck"
+                  className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 shadow-2xs outline-none focus:border-teal-600"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">Deck Number</label>
+                <input
+                  value={form.deckNumber}
+                  onChange={event => setForm(current => ({ ...current, deckNumber: event.target.value }))}
+                  placeholder="e.g. 10"
+                  className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 shadow-2xs outline-none focus:border-teal-600"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">Deck Description</label>
+              <textarea
+                value={form.description}
+                onChange={event => setForm(current => ({ ...current, description: event.target.value }))}
+                placeholder="Amenities, public spaces, and general features on this deck…"
+                rows={2}
+                className="w-full rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-800 shadow-2xs outline-none focus:border-teal-600"
               />
             </div>
 
-            <textarea
-              value={form.description}
-              onChange={event => setForm(current => ({ ...current, description: event.target.value }))}
-              placeholder="Deck description"
-              rows={3}
-              className="mt-4 w-full rounded-xl border border-slate-200 px-3 py-3"
-            />
-
-            <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
-              <div className="space-y-3">
+            {/* Image Upload / URL */}
+            <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_240px]">
+              <div className="space-y-2">
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400">Deck Plan Image</label>
                 <input
                   value={form.imageUrl}
                   onChange={event => setForm(current => ({ ...current, imageUrl: event.target.value, imageData: "", imageFileName: "" }))}
-                  placeholder="Optional remote image URL"
-                  className="h-11 w-full rounded-xl border border-slate-200 px-3"
+                  placeholder="Optional remote image URL (https://...)"
+                  className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 shadow-2xs outline-none focus:border-teal-600"
                 />
-                <label className="flex h-28 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 text-sm text-slate-500">
-                  <span>{form.imageFileName || "Choose image from device"}</span>
-                  <span className="mt-1 text-xs">PNG, JPG, WEBP</span>
+                <label className="flex h-24 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50/70 text-xs text-slate-500 hover:bg-slate-100 transition">
+                  <Upload size={16} className="text-slate-400 mb-1" />
+                  <span className="font-bold text-slate-700">{form.imageFileName || "Choose deck image file"}</span>
+                  <span className="text-[10px] text-slate-400">PNG, JPG, WEBP formats</span>
                   <input type="file" accept="image/*" className="hidden" onChange={handleImageFile} />
                 </label>
               </div>
 
               {(form.imageData || form.imageUrl) ? (
-                <div className="relative min-h-[180px] overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+                <div className="relative min-h-[140px] overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
                   <Image
                     src={form.imageData || form.imageUrl}
                     alt="Deck preview"
                     fill
-                    sizes="280px"
+                    sizes="240px"
                     style={{ objectFit: "contain" }}
                   />
                 </div>
-              ) : null}
+              ) : (
+                <div className="flex items-center justify-center min-h-[140px] rounded-lg border border-slate-200 bg-slate-50/50 text-xs text-slate-400 font-medium">
+                  No image selected
+                </div>
+              )}
             </div>
 
-            <div className="mt-6 flex items-center justify-between">
-              <div className="text-base font-semibold text-slate-900">Deck sections</div>
+            {/* Sections Sub-form */}
+            <div className="pt-2 border-t border-slate-100 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900">Deck Sections</h3>
+                  <p className="text-[11px] text-slate-500">Cabin clusters, dining, entertainment zones</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setForm(current => ({ ...current, sections: [...current.sections, createEmptySection()] }))}
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs font-bold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+                >
+                  + Add Section
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                {form.sections.map((section, index) => (
+                  <div key={`${form.id || "new"}-${index}`} className="rounded-lg border border-slate-200/80 bg-slate-50/50 p-3 space-y-2">
+                    <div className="grid gap-2 sm:grid-cols-[2fr_1fr_auto]">
+                      <input
+                        value={section.title}
+                        onChange={event => handleSectionChange(index, "title", event.target.value)}
+                        placeholder="Section title (e.g. Forward Balconies)"
+                        className="h-8.5 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-teal-600"
+                      />
+                      <input
+                        value={section.sectionType}
+                        onChange={event => handleSectionChange(index, "sectionType", event.target.value)}
+                        placeholder="Section type (e.g. Cabins)"
+                        className="h-8.5 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-teal-600"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setForm(current => ({
+                            ...current,
+                            sections:
+                              current.sections.length > 1
+                                ? current.sections.filter((_, sectionIndex) => sectionIndex !== index)
+                                : [createEmptySection()]
+                          }))
+                        }
+                        className="rounded-lg border border-rose-200 bg-rose-50 px-3 h-8.5 text-xs font-bold text-rose-700 hover:bg-rose-100 transition cursor-pointer"
+                      >
+                        Remove
+                      </button>
+                    </div>
+
+                    <input
+                      value={section.cabinCodes}
+                      onChange={event => handleSectionChange(index, "cabinCodes", event.target.value)}
+                      placeholder="Cabin codes (comma separated, e.g. 10101, 10102, 10103)"
+                      className="h-8.5 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-teal-600 font-mono"
+                    />
+
+                    <textarea
+                      value={section.description}
+                      onChange={event => handleSectionChange(index, "description", event.target.value)}
+                      placeholder="Section description…"
+                      rows={1}
+                      className="w-full rounded-lg border border-slate-200 bg-white p-2 text-xs text-slate-800 outline-none focus:border-teal-600"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end pt-3 border-t border-slate-100">
               <button
-                type="button"
-                onClick={() => setForm(current => ({ ...current, sections: [...current.sections, createEmptySection()] }))}
-                className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700"
+                type="submit"
+                disabled={saving || !selectedShipCode}
+                className="rounded-lg bg-teal-700 hover:bg-teal-800 text-white px-5 h-9 text-xs font-bold shadow-xs transition disabled:opacity-50 cursor-pointer"
               >
-                Add section
+                {saving ? "Saving…" : form.id ? "Update Deck Blueprint" : "Create Deck Blueprint"}
               </button>
             </div>
-
-            <div className="mt-4 space-y-4">
-              {form.sections.map((section, index) => (
-                <div key={`${form.id || "new"}-${index}`} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <div className="grid gap-3 md:grid-cols-[2fr_1fr_auto]">
-                    <input
-                      value={section.title}
-                      onChange={event => handleSectionChange(index, "title", event.target.value)}
-                      placeholder="Section title"
-                      className="h-11 rounded-xl border border-slate-200 px-3"
-                    />
-                    <input
-                      value={section.sectionType}
-                      onChange={event => handleSectionChange(index, "sectionType", event.target.value)}
-                      placeholder="Section type"
-                      className="h-11 rounded-xl border border-slate-200 px-3"
-                    />
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setForm(current => ({
-                          ...current,
-                          sections:
-                            current.sections.length > 1
-                              ? current.sections.filter((_, sectionIndex) => sectionIndex !== index)
-                              : [createEmptySection()]
-                        }))
-                      }
-                      className="rounded-xl px-3 py-2 text-sm font-medium"
-                      style={{ background: T.redBg, color: T.red }}
-                    >
-                      Remove
-                    </button>
-                  </div>
-
-                  <input
-                    value={section.cabinCodes}
-                    onChange={event => handleSectionChange(index, "cabinCodes", event.target.value)}
-                    placeholder="Cabin codes, comma separated"
-                    className="mt-3 h-11 w-full rounded-xl border border-slate-200 px-3"
-                  />
-
-                  <textarea
-                    value={section.description}
-                    onChange={event => handleSectionChange(index, "description", event.target.value)}
-                    placeholder="Section description"
-                    rows={2}
-                    className="mt-3 w-full rounded-xl border border-slate-200 px-3 py-3"
-                  />
-                </div>
-              ))}
-            </div>
-
-            <button
-              type="submit"
-              disabled={saving || !selectedShipCode}
-              className="mt-6 rounded-2xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white"
-            >
-              {saving ? "Saving..." : form.id ? "Update deck" : "Create deck"}
-            </button>
           </form>
 
-          {decks.length > 0 ? (
-            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-              <div className="text-base font-semibold text-slate-900">Deck preview</div>
-              <div className="mt-4 grid gap-4">
+          {/* Decks Preview Cards */}
+          {decks.length > 0 && (
+            <div className="rounded-xl border border-slate-200/90 bg-white p-5 shadow-2xs space-y-4">
+              <h2 className="text-sm font-bold text-slate-900 pb-3 border-b border-slate-100">Deck Plan Previews</h2>
+              <div className="space-y-4">
                 {decks.map(deck => (
-                  <div key={deck.id} className="rounded-2xl border border-slate-200 p-4">
+                  <div key={deck.id} className="rounded-xl border border-slate-200/80 bg-slate-50/40 p-4">
                     <div className="flex flex-col gap-4 lg:flex-row">
                       <div className="min-w-0 flex-1">
-                        <div className="text-lg font-semibold text-slate-900">{deck.name}</div>
-                        <div className="mt-1 text-sm text-slate-500">
-                          {deck.deckNumber ? `Deck ${deck.deckNumber}` : "No deck number"}
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-base font-bold text-slate-900">{deck.name}</h3>
+                          {deck.deckNumber && (
+                            <span className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-xs font-bold text-slate-700 font-mono">
+                              Deck {deck.deckNumber}
+                            </span>
+                          )}
                         </div>
-                        {deck.description ? (
-                          <div className="mt-3 text-sm text-slate-600">{deck.description}</div>
-                        ) : null}
-                        <div className="mt-4 grid gap-3 md:grid-cols-2">
+                        {deck.description && (
+                          <p className="mt-1 text-xs text-slate-600 leading-relaxed">{deck.description}</p>
+                        )}
+                        <div className="mt-3.5 grid gap-2.5 sm:grid-cols-2">
                           {(deck.sections || []).map(section => (
-                            <div key={section.id} className="rounded-xl bg-slate-50 px-4 py-3">
-                              <div className="font-medium text-slate-900">{section.title}</div>
-                              {section.sectionType ? <div className="mt-1 text-xs text-slate-500">{section.sectionType}</div> : null}
-                              {section.description ? <div className="mt-2 text-sm text-slate-600">{section.description}</div> : null}
+                            <div key={section.id} className="rounded-lg border border-slate-200/70 bg-white p-3 shadow-2xs">
+                              <div className="font-bold text-slate-900 text-xs">{section.title}</div>
+                              {section.sectionType && <div className="text-[11px] font-semibold text-teal-700">{section.sectionType}</div>}
+                              {section.description && <div className="mt-1 text-xs text-slate-500">{section.description}</div>}
                               {section.cabinCodes?.length ? (
-                                <div className="mt-3 flex flex-wrap gap-2">
+                                <div className="mt-2 flex flex-wrap gap-1">
                                   {section.cabinCodes.map(code => (
-                                    <span key={`${section.id}-${code}`} className="rounded-full border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700">
+                                    <span key={`${section.id}-${code}`} className="rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-bold text-slate-700 font-mono">
                                       {code}
                                     </span>
                                   ))}
@@ -549,23 +620,23 @@ export default function ShipDecksPage() {
                         </div>
                       </div>
 
-                      {deck.image ? (
-                        <div className="relative h-[220px] w-full overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 lg:w-[360px]">
+                      {deck.image && (
+                        <div className="relative h-[180px] w-full overflow-hidden rounded-lg border border-slate-200 bg-white lg:w-[280px] shrink-0">
                           <Image
                             src={deck.image}
                             alt={deck.name}
                             fill
-                            sizes="360px"
+                            sizes="280px"
                             style={{ objectFit: "contain" }}
                           />
                         </div>
-                      ) : null}
+                      )}
                     </div>
                   </div>
                 ))}
               </div>
             </div>
-          ) : null}
+          )}
         </div>
       </div>
     </div>

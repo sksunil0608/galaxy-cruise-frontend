@@ -28,8 +28,8 @@ export function buildCabinGroups(categories = []) {
     if (!groupMap.has(groupName)) continue
     const cats = groupMap.get(groupName)
     const prices = cats
-      .filter(c => c.avlResult === "OK")
-      .map(c => Number(c.cabinPrice ?? 0))
+      .filter(c => c.avlResult === "OK" || c.status === "Available" || (Number(c.avail ?? c.available ?? 0) > 0) || !c.avlResult)
+      .map(c => Number(c.cabinPrice ?? c.price ?? 0))
       .filter(p => Number.isFinite(p) && p > 0)
     result.push({
       group: groupName,
@@ -41,8 +41,8 @@ export function buildCabinGroups(categories = []) {
   for (const [groupName, cats] of groupMap) {
     if (GROUP_ORDER.includes(groupName)) continue
     const prices = cats
-      .filter(c => c.avlResult === "OK")
-      .map(c => Number(c.cabinPrice ?? 0))
+      .filter(c => c.avlResult === "OK" || c.status === "Available" || (Number(c.avail ?? c.available ?? 0) > 0) || !c.avlResult)
+      .map(c => Number(c.cabinPrice ?? c.price ?? 0))
       .filter(p => Number.isFinite(p) && p > 0)
     result.push({
       group: groupName,
@@ -119,7 +119,7 @@ export function normalizeCruise(cruise = {}) {
   const cabinCategories = (cruise.cabinCategories ?? []).map(normalizeCabinCategory)
 
   const seatsAvailable = cabinCategories
-    .filter(c => c.avlResult === "OK")
+    .filter(c => c.avlResult === "OK" || c.status === "Available" || (Number(c.avail ?? c.available ?? 0) > 0))
     .reduce((sum, c) => sum + (normalizeInteger(c.avail) ?? 0), 0)
   const totalCapacity = cabinCategories
     .reduce((sum, c) => sum + (normalizeInteger(c.totalCabins) ?? 0), 0)

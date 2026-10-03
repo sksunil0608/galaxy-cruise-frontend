@@ -1,7 +1,17 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { Plus, Pencil, Trash2, X, Search } from "lucide-react"
+import {
+  Compass,
+  MapPin,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Search,
+  Ship,
+  Trash2,
+  X
+} from "lucide-react"
 
 import {
   fetchItineraries,
@@ -14,20 +24,7 @@ import {
   deletePortAlias
 } from "../api"
 
-const T = {
-  border: "#e2e8f0",
-  muted: "#f8fafc",
-  textPrimary: "#0f172a",
-  textMuted: "#94a3b8",
-  textSlate: "#64748b",
-  blue: "#1d4ed8",
-  blueBg: "#eff6ff",
-  red: "#ef4444",
-  redBg: "#fef2f2",
-  shadowCard: "0 2px 8px rgba(0,0,0,0.04)",
-}
-
-function Modal({ children, onClose, width = "min(96vw, 640px)" }) {
+function Modal({ children, onClose, maxWidth = "max-w-xl" }) {
   useEffect(() => {
     const handle = (e) => e.key === "Escape" && onClose()
     window.addEventListener("keydown", handle)
@@ -36,11 +33,11 @@ function Modal({ children, onClose, width = "min(96vw, 640px)" }) {
 
   return (
     <div
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in duration-200"
       onClick={onClose}
     >
       <div
-        style={{ width, maxHeight: "90vh", overflowY: "auto", background: "#fff", borderRadius: 16, boxShadow: "0 32px 80px rgba(15,23,42,0.22)" }}
+        className={`w-full ${maxWidth} max-h-[90vh] overflow-y-auto rounded-xl border border-slate-200/80 bg-white p-6 shadow-2xl transition-all`}
         onClick={(e) => e.stopPropagation()}
       >
         {children}
@@ -48,12 +45,6 @@ function Modal({ children, onClose, width = "min(96vw, 640px)" }) {
     </div>
   )
 }
-
-const inputStyle = {
-  width: "100%", height: 38, borderRadius: 8, border: `1px solid ${T.border}`,
-  padding: "8px 12px", fontSize: 13, outline: "none"
-}
-const labelStyle = { fontSize: 12, fontWeight: 600, color: T.textSlate, marginBottom: 4, display: "block" }
 
 // ── Itinerary form modal ────────────────────────────────────────────────────
 
@@ -73,7 +64,8 @@ function ItineraryFormModal({ row, onClose, onSaved }) {
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
 
-  async function submit() {
+  async function submit(e) {
+    if (e) e.preventDefault()
     if (!form.shipName.trim() || !form.stops.trim()) {
       setError("Ship name and stops are required")
       return
@@ -101,68 +93,120 @@ function ItineraryFormModal({ row, onClose, onSaved }) {
   }
 
   return (
-    <Modal onClose={onClose}>
-      <div style={{ padding: "20px 24px", borderBottom: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{isEdit ? "Edit Itinerary" : "Add Itinerary"}</h2>
-        <button onClick={onClose} style={{ border: "none", background: T.muted, borderRadius: "50%", width: 32, height: 32, cursor: "pointer" }}><X size={14} /></button>
+    <Modal onClose={onClose} maxWidth="max-w-xl">
+      <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+        <div>
+          <h2 className="text-base font-bold text-slate-900">{isEdit ? "Edit Itinerary Blueprint" : "Add Itinerary Blueprint"}</h2>
+          <p className="text-xs text-slate-500">Configure ports of call and reference route metadata.</p>
+        </div>
+        <button
+          onClick={onClose}
+          className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition"
+        >
+          <X size={16} />
+        </button>
       </div>
 
-      <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 14 }}>
+      <form onSubmit={submit} className="mt-4 space-y-4">
         <div>
-          <label style={labelStyle}>Ship Name *</label>
-          <input style={inputStyle} value={form.shipName} onChange={(e) => set("shipName", e.target.value)} placeholder="e.g. Azamara Journey" />
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <div>
-            <label style={labelStyle}>Port From</label>
-            <input style={inputStyle} value={form.portFrom} onChange={(e) => set("portFrom", e.target.value)} placeholder="e.g. Miami" />
-          </div>
-          <div>
-            <label style={labelStyle}>Port To</label>
-            <input style={inputStyle} value={form.portTo} onChange={(e) => set("portTo", e.target.value)} placeholder="e.g. Miami" />
-          </div>
-        </div>
-
-        <div>
-          <label style={labelStyle}>Stops (comma-separated, in order) *</label>
-          <textarea
-            style={{ ...inputStyle, height: 80, resize: "vertical", paddingTop: 8 }}
-            value={form.stops}
-            onChange={(e) => set("stops", e.target.value)}
-            placeholder="Miami, Nassau, Great Stirrup Cay, Miami"
+          <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">Ship Name *</label>
+          <input
+            className="w-full h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 shadow-2xs outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-600"
+            value={form.shipName}
+            onChange={(e) => set("shipName", e.target.value)}
+            placeholder="e.g. Azamara Journey"
+            required
           />
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label style={labelStyle}>Nights</label>
-            <input style={inputStyle} type="number" value={form.nights} onChange={(e) => set("nights", e.target.value)} />
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">Port From</label>
+            <input
+              className="w-full h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 shadow-2xs outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-600"
+              value={form.portFrom}
+              onChange={(e) => set("portFrom", e.target.value)}
+              placeholder="e.g. Miami"
+            />
           </div>
           <div>
-            <label style={labelStyle}>Price</label>
-            <input style={inputStyle} type="number" value={form.price} onChange={(e) => set("price", e.target.value)} />
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">Port To</label>
+            <input
+              className="w-full h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 shadow-2xs outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-600"
+              value={form.portTo}
+              onChange={(e) => set("portTo", e.target.value)}
+              placeholder="e.g. Miami"
+            />
           </div>
         </div>
 
         <div>
-          <label style={labelStyle}>Deals Link</label>
-          <input style={inputStyle} value={form.dealsLink} onChange={(e) => set("dealsLink", e.target.value)} placeholder="https://..." />
+          <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">Stops (comma-separated in sequence) *</label>
+          <textarea
+            className="w-full h-20 rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-800 shadow-2xs outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-600"
+            value={form.stops}
+            onChange={(e) => set("stops", e.target.value)}
+            placeholder="Miami, Nassau, Great Stirrup Cay, Miami"
+            required
+          />
         </div>
 
-        {error && <div style={{ fontSize: 12, color: T.red, background: T.redBg, borderRadius: 8, padding: "8px 12px" }}>{error}</div>}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">Nights</label>
+            <input
+              className="w-full h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 shadow-2xs outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-600"
+              type="number"
+              value={form.nights}
+              onChange={(e) => set("nights", e.target.value)}
+              placeholder="e.g. 7"
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">Reference Price (£)</label>
+            <input
+              className="w-full h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 shadow-2xs outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-600"
+              type="number"
+              value={form.price}
+              onChange={(e) => set("price", e.target.value)}
+              placeholder="e.g. 899"
+            />
+          </div>
+        </div>
 
-        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 }}>
-          <button onClick={onClose} style={{ border: `1px solid ${T.border}`, background: "#fff", borderRadius: 8, padding: "9px 18px", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>Cancel</button>
+        <div>
+          <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">Deals Link (URL)</label>
+          <input
+            className="w-full h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 shadow-2xs outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-600"
+            value={form.dealsLink}
+            onChange={(e) => set("dealsLink", e.target.value)}
+            placeholder="https://..."
+          />
+        </div>
+
+        {error && (
+          <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">
+            {error}
+          </div>
+        )}
+
+        <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
           <button
-            onClick={submit}
-            disabled={saving}
-            style={{ border: "none", background: T.blue, color: "#fff", borderRadius: 8, padding: "9px 18px", cursor: saving ? "not-allowed" : "pointer", fontSize: 13, fontWeight: 600, opacity: saving ? 0.6 : 1 }}
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-slate-200 bg-white px-3.5 h-9 text-xs font-bold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
           >
-            {saving ? "Saving..." : isEdit ? "Save Changes" : "Add Itinerary"}
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={saving}
+            className="rounded-lg bg-teal-700 hover:bg-teal-800 text-white px-4 h-9 text-xs font-bold shadow-xs transition disabled:opacity-50 cursor-pointer"
+          >
+            {saving ? "Saving…" : isEdit ? "Save Changes" : "Create Itinerary"}
           </button>
         </div>
-      </div>
+      </form>
     </Modal>
   )
 }
@@ -179,9 +223,10 @@ function AliasFormModal({ row, onClose, onSaved }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
 
-  async function submit() {
+  async function submit(e) {
+    if (e) e.preventDefault()
     if (!form.aliasKey.trim() || !form.canonical.trim()) {
-      setError("Alias and canonical port are required")
+      setError("Alias code and canonical port are required")
       return
     }
     setSaving(true)
@@ -199,45 +244,83 @@ function AliasFormModal({ row, onClose, onSaved }) {
   }
 
   return (
-    <Modal onClose={onClose} width="min(96vw, 460px)">
-      <div style={{ padding: "20px 24px", borderBottom: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{isEdit ? "Edit Port Alias" : "Add Port Alias"}</h2>
-        <button onClick={onClose} style={{ border: "none", background: T.muted, borderRadius: "50%", width: 32, height: 32, cursor: "pointer" }}><X size={14} /></button>
+    <Modal onClose={onClose} maxWidth="max-w-md">
+      <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+        <div>
+          <h2 className="text-base font-bold text-slate-900">{isEdit ? "Edit Port Alias" : "Add Port Alias"}</h2>
+          <p className="text-xs text-slate-500">Map vendor port codes to canonical names.</p>
+        </div>
+        <button
+          onClick={onClose}
+          className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition"
+        >
+          <X size={16} />
+        </button>
       </div>
 
-      <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 14 }}>
+      <form onSubmit={submit} className="mt-4 space-y-4">
         <div>
-          <label style={labelStyle}>Vendor Code / Alias *</label>
-          <input style={inputStyle} value={form.aliasKey} onChange={(e) => setForm((f) => ({ ...f, aliasKey: e.target.value }))} placeholder="e.g. MIA" disabled={isEdit} />
-          {isEdit && <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4 }}>Alias key can&apos;t be changed — delete and re-add instead.</div>}
-        </div>
-        <div>
-          <label style={labelStyle}>Maps To (canonical port name) *</label>
-          <input style={inputStyle} value={form.canonical} onChange={(e) => setForm((f) => ({ ...f, canonical: e.target.value }))} placeholder="e.g. Miami" />
-        </div>
-        <div>
-          <label style={labelStyle}>Note</label>
-          <input style={inputStyle} value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} placeholder="e.g. GOCCL 3-letter code" />
+          <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">Vendor Code / Alias *</label>
+          <input
+            className="w-full h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 shadow-2xs outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-600 disabled:bg-slate-50 font-mono"
+            value={form.aliasKey}
+            onChange={(e) => setForm((f) => ({ ...f, aliasKey: e.target.value }))}
+            placeholder="e.g. MIA"
+            disabled={isEdit}
+            required
+          />
+          {isEdit && <p className="mt-1 text-[11px] text-slate-400">Alias code cannot be altered. Delete and recreate if needed.</p>}
         </div>
 
-        {error && <div style={{ fontSize: 12, color: T.red, background: T.redBg, borderRadius: 8, padding: "8px 12px" }}>{error}</div>}
+        <div>
+          <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">Maps To (Canonical Port Name) *</label>
+          <input
+            className="w-full h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 shadow-2xs outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-600"
+            value={form.canonical}
+            onChange={(e) => setForm((f) => ({ ...f, canonical: e.target.value }))}
+            placeholder="e.g. Miami"
+            required
+          />
+        </div>
 
-        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 }}>
-          <button onClick={onClose} style={{ border: `1px solid ${T.border}`, background: "#fff", borderRadius: 8, padding: "9px 18px", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>Cancel</button>
+        <div>
+          <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">Note (Optional)</label>
+          <input
+            className="w-full h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 shadow-2xs outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-600"
+            value={form.note}
+            onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
+            placeholder="e.g. Carnival / GOCCL 3-letter abbreviation"
+          />
+        </div>
+
+        {error && (
+          <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">
+            {error}
+          </div>
+        )}
+
+        <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
           <button
-            onClick={submit}
-            disabled={saving}
-            style={{ border: "none", background: T.blue, color: "#fff", borderRadius: 8, padding: "9px 18px", cursor: saving ? "not-allowed" : "pointer", fontSize: 13, fontWeight: 600, opacity: saving ? 0.6 : 1 }}
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-slate-200 bg-white px-3.5 h-9 text-xs font-bold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
           >
-            {saving ? "Saving..." : isEdit ? "Save Changes" : "Add Alias"}
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={saving}
+            className="rounded-lg bg-teal-700 hover:bg-teal-800 text-white px-4 h-9 text-xs font-bold shadow-xs transition disabled:opacity-50 cursor-pointer"
+          >
+            {saving ? "Saving…" : isEdit ? "Save Changes" : "Create Alias"}
           </button>
         </div>
-      </div>
+      </form>
     </Modal>
   )
 }
 
-// ── Main page ────────────────────────────────────────────────────────────────
+// ── Main Page ───────────────────────────────────────────────────────────────
 
 export default function ItineraryManagerPage() {
   const [tab, setTab] = useState("itineraries") // "itineraries" | "aliases"
@@ -248,7 +331,7 @@ export default function ItineraryManagerPage() {
   const [itinPage, setItinPage] = useState(1)
   const [itinSearch, setItinSearch] = useState("")
   const [itinLoading, setItinLoading] = useState(true)
-  const [itinEditing, setItinEditing] = useState(null) // null=closed, {}=new, {...row}=edit
+  const [itinEditing, setItinEditing] = useState(null)
   const PAGE_SIZE = 20
 
   // aliases state
@@ -257,7 +340,7 @@ export default function ItineraryManagerPage() {
   const [aliasLoading, setAliasLoading] = useState(true)
   const [aliasEditing, setAliasEditing] = useState(null)
 
-  const [deleteTarget, setDeleteTarget] = useState(null) // { kind: "itinerary"|"alias", id, label }
+  const [deleteTarget, setDeleteTarget] = useState(null)
 
   async function loadItineraries() {
     setItinLoading(true)
@@ -309,29 +392,29 @@ export default function ItineraryManagerPage() {
   return (
     <div className="w-full min-h-screen bg-slate-50/50 px-3 sm:px-4 py-4 space-y-4">
       {/* ── Top Header Banner ────────────────────────────────────────────── */}
-      <div className="relative overflow-hidden rounded-3xl border border-teal-200/60 bg-gradient-to-br from-teal-50/70 via-sky-50/50 to-emerald-50/60 p-6 sm:p-8 shadow-xs">
+      <div className="relative overflow-hidden rounded-2xl border border-teal-200/80 bg-gradient-to-r from-teal-500/10 via-sky-500/5 to-teal-500/10 p-5 sm:p-6 shadow-xs">
         <div className="pointer-events-none absolute -right-12 -top-12 h-48 w-48 rounded-full bg-teal-500/10 blur-3xl" />
         <div className="pointer-events-none absolute -left-12 -bottom-12 h-48 w-48 rounded-full bg-sky-500/10 blur-3xl" />
 
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-          <div className="space-y-2 max-w-3xl">
-            <div className="inline-flex items-center gap-2 rounded-full border border-teal-200/80 bg-white/80 backdrop-blur-xs px-3.5 py-1 text-[11px] font-bold text-teal-800 shadow-2xs">
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
+          <div className="space-y-1.5 max-w-3xl">
+            <div className="inline-flex items-center gap-2 rounded-full border border-teal-200/80 bg-white/90 backdrop-blur-xs px-3 py-0.5 text-[11px] font-bold text-teal-800 shadow-2xs">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-teal-600"></span>
               </span>
               <span>Reference Data · Ship Route Blueprints</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
+            <h1 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900">
               Itinerary Manager & Port Aliases
             </h1>
             <p className="text-xs sm:text-sm font-medium text-slate-600 leading-relaxed max-w-2xl">
-              Manage static ship-route-stops reference data matched at ingestion time, and configure port-name aliases to reconcile vendor codes with standard port names.
+              Manage static route-stop blueprints matched during ingestion, and configure port-name aliases to normalize vendor codes into standard port locations.
             </p>
           </div>
 
-          {/* Tab Selector Pills */}
-          <div className="flex items-center gap-2 rounded-2xl border border-slate-200/90 bg-white/90 backdrop-blur-xs p-1.5 shadow-2xs">
+          {/* Segmented Tab Selector */}
+          <div className="flex items-center gap-1.5 rounded-xl border border-slate-200/90 bg-white/90 backdrop-blur-xs p-1 shadow-2xs">
             {[
               { key: "itineraries", label: `Itineraries (${itinTotal})` },
               { key: "aliases", label: `Port Aliases (${aliases.length})` }
@@ -339,9 +422,9 @@ export default function ItineraryManagerPage() {
               <button
                 key={t.key}
                 onClick={() => setTab(t.key)}
-                className={`rounded-xl px-4 py-2 text-xs font-bold transition-all cursor-pointer ${
+                className={`rounded-lg px-3.5 h-8 text-xs font-bold transition-all cursor-pointer ${
                   tab === t.key
-                    ? "bg-slate-900 text-white shadow-xs"
+                    ? "bg-teal-700 text-white shadow-xs"
                     : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
                 }`}
               >
@@ -352,120 +435,329 @@ export default function ItineraryManagerPage() {
         </div>
       </div>
 
-        {tab === "itineraries" ? (
-          <div style={{ background: "#fff", borderRadius: 16, border: `1px solid ${T.border}`, boxShadow: T.shadowCard, overflow: "hidden" }}>
-            <div style={{ padding: 16, display: "flex", gap: 10, borderBottom: `1px solid ${T.border}`, alignItems: "center" }}>
-              <div style={{ position: "relative", flex: 1, maxWidth: 360 }}>
-                <Search size={14} color={T.textMuted} style={{ position: "absolute", left: 12, top: 12 }} />
-                <input
-                  style={{ ...inputStyle, paddingLeft: 34 }}
-                  placeholder="Search ship or port..."
-                  value={itinSearch}
-                  onChange={(e) => { setItinSearch(e.target.value); setItinPage(1) }}
-                />
-              </div>
-              <div style={{ flex: 1 }} />
-              <button
-                onClick={() => setItinEditing({})}
-                style={{ display: "flex", alignItems: "center", gap: 6, border: "none", background: T.blue, color: "#fff", borderRadius: 8, padding: "9px 16px", cursor: "pointer", fontSize: 13, fontWeight: 700 }}
-              >
-                <Plus size={14} /> Add Itinerary
-              </button>
+      {tab === "itineraries" ? (
+        <div className="rounded-xl border border-slate-200/90 bg-white shadow-2xs overflow-hidden">
+          {/* Action & Search Bar */}
+          <div className="p-3.5 sm:p-4 border-b border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="relative w-full sm:max-w-xs">
+              <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
+              <input
+                className="w-full h-9 rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-xs text-slate-800 shadow-2xs outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-600"
+                placeholder="Search ship or port…"
+                value={itinSearch}
+                onChange={(e) => { setItinSearch(e.target.value); setItinPage(1) }}
+              />
             </div>
+            <button
+              onClick={() => setItinEditing({})}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white px-4 h-9 text-xs font-bold shadow-xs transition cursor-pointer"
+            >
+              <Plus size={14} />
+              <span>Add Itinerary</span>
+            </button>
+          </div>
 
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 900 }}>
-                <thead style={{ background: T.muted }}>
+          {/* Itineraries Mobile List View */}
+          <div className="block md:hidden divide-y divide-slate-100">
+            {itinLoading ? (
+              <div className="px-4 py-12 text-center text-xs text-slate-400 font-medium">
+                Loading itineraries…
+              </div>
+            ) : itineraries.length === 0 ? (
+              <div className="px-4 py-12 text-center text-xs text-slate-400 font-medium">
+                No itineraries found.
+              </div>
+            ) : (
+              itineraries.map((row) => (
+                <div key={row.id} className="p-4 bg-white hover:bg-slate-50/70 transition space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="font-bold text-slate-900 text-sm truncate">{row.shipName}</div>
+                      <div className="mt-0.5 text-xs font-semibold text-teal-700">
+                        {row.portFrom || "--"} → {row.portTo || "--"}
+                      </div>
+                    </div>
+                    <span className="font-bold text-slate-900 font-mono text-sm bg-slate-50 border border-slate-200 px-2.5 py-0.5 rounded-md shrink-0">
+                      {row.price != null ? `£${row.price}` : "--"}
+                    </span>
+                  </div>
+
+                  {/* Stops info & Nights */}
+                  <div className="rounded-lg bg-slate-50/80 border border-slate-100 p-2.5 space-y-1.5 text-xs">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="font-bold text-slate-500 uppercase">Duration</span>
+                      <span className="font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded">
+                        {row.nights != null ? `${row.nights} Nights` : "--"}
+                      </span>
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">
+                        Stops ({row.stops?.length || 0})
+                      </div>
+                      <div className="text-xs text-slate-600 line-clamp-2 leading-relaxed">
+                        {row.stops?.join(", ") || "--"}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Action buttons */}
+                  <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100">
+                    <button
+                      onClick={() => setItinEditing(row)}
+                      className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 transition shadow-2xs cursor-pointer"
+                    >
+                      <Pencil size={13} />
+                      <span>Edit</span>
+                    </button>
+                    <button
+                      onClick={() => setDeleteTarget({ kind: "itinerary", id: row.id, label: row.shipName })}
+                      className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-rose-200 bg-rose-50 text-xs font-semibold text-rose-700 hover:bg-rose-100 transition shadow-2xs cursor-pointer"
+                    >
+                      <Trash2 size={13} />
+                      <span>Delete</span>
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Itineraries Desktop Table View */}
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="border-b border-slate-100 bg-slate-50/80 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                <tr>
+                  <th className="px-4 py-3">Ship</th>
+                  <th className="px-4 py-3">Route</th>
+                  <th className="px-4 py-3">Nights</th>
+                  <th className="px-4 py-3">Stops</th>
+                  <th className="px-4 py-3">Price</th>
+                  <th className="px-4 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                {itinLoading ? (
                   <tr>
-                    {["Ship", "Route", "Nights", "Stops", "Price", ""].map((h) => (
-                      <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontSize: 11, color: T.textSlate, textTransform: "uppercase" }}>{h}</th>
-                    ))}
+                    <td colSpan={6} className="px-4 py-12 text-center text-slate-400">
+                      Loading itineraries…
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {itinLoading ? (
-                    <tr><td colSpan={6} style={{ padding: 40, textAlign: "center", color: T.textMuted }}>Loading...</td></tr>
-                  ) : itineraries.length === 0 ? (
-                    <tr><td colSpan={6} style={{ padding: 40, textAlign: "center", color: T.textMuted }}>No itineraries found.</td></tr>
-                  ) : itineraries.map((row, i) => (
-                    <tr key={row.id} style={{ background: i % 2 === 0 ? "#fff" : T.muted, borderTop: `1px solid ${T.border}` }}>
-                      <td style={{ padding: "10px 14px", fontSize: 13, fontWeight: 600 }}>{row.shipName}</td>
-                      <td style={{ padding: "10px 14px", fontSize: 13, color: T.textSlate }}>{row.portFrom} → {row.portTo}</td>
-                      <td style={{ padding: "10px 14px", fontSize: 13, fontFamily: "monospace" }}>{row.nights ?? "-"}</td>
-                      <td style={{ padding: "10px 14px", fontSize: 12, color: T.textMuted, maxWidth: 320, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={row.stops.join(", ")}>
-                        {row.stops.length} stop{row.stops.length !== 1 ? "s" : ""}: {row.stops.join(", ")}
+                ) : itineraries.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-12 text-center text-slate-400">
+                      No itineraries found.
+                    </td>
+                  </tr>
+                ) : (
+                  itineraries.map((row) => (
+                    <tr key={row.id} className="hover:bg-slate-50/70 transition">
+                      <td className="px-4 py-3 font-bold text-slate-900">
+                        {row.shipName}
                       </td>
-                      <td style={{ padding: "10px 14px", fontSize: 13, fontFamily: "monospace" }}>{row.price != null ? `£${row.price}` : "-"}</td>
-                      <td style={{ padding: "10px 14px", textAlign: "right", whiteSpace: "nowrap" }}>
-                        <button onClick={() => setItinEditing(row)} style={{ border: "none", background: "transparent", cursor: "pointer", padding: 6 }}><Pencil size={14} color={T.textSlate} /></button>
-                        <button onClick={() => setDeleteTarget({ kind: "itinerary", id: row.id, label: row.shipName })} style={{ border: "none", background: "transparent", cursor: "pointer", padding: 6 }}><Trash2 size={14} color={T.red} /></button>
+                      <td className="px-4 py-3 text-slate-600">
+                        {row.portFrom || "--"} → {row.portTo || "--"}
+                      </td>
+                      <td className="px-4 py-3 font-mono">
+                        {row.nights ?? "--"}
+                      </td>
+                      <td className="px-4 py-3 max-w-xs truncate" title={row.stops?.join(", ")}>
+                        <div className="flex items-center gap-1.5">
+                          <span className="rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-bold text-slate-600">
+                            {row.stops?.length || 0} stops
+                          </span>
+                          <span className="truncate text-slate-500">
+                            {row.stops?.join(", ")}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 font-bold text-slate-900 font-mono">
+                        {row.price != null ? `£${row.price}` : "--"}
+                      </td>
+                      <td className="px-4 py-3 text-right whitespace-nowrap">
+                        <div className="inline-flex items-center gap-1">
+                          <button
+                            onClick={() => setItinEditing(row)}
+                            className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition cursor-pointer"
+                            title="Edit"
+                          >
+                            <Pencil size={13} />
+                          </button>
+                          <button
+                            onClick={() => setDeleteTarget({ kind: "itinerary", id: row.id, label: row.shipName })}
+                            className="rounded-lg p-1.5 text-rose-500 hover:bg-rose-50 transition cursor-pointer"
+                            title="Delete"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: 14, borderTop: `1px solid ${T.border}` }}>
-              <div style={{ fontSize: 12, color: T.textMuted }}>Page {itinPage} of {totalPages} · {itinTotal} total</div>
-              <div style={{ display: "flex", gap: 6 }}>
-                <button disabled={itinPage <= 1} onClick={() => setItinPage((p) => p - 1)} style={{ border: `1px solid ${T.border}`, background: "#fff", borderRadius: 6, padding: "5px 12px", cursor: itinPage <= 1 ? "not-allowed" : "pointer", opacity: itinPage <= 1 ? 0.5 : 1, fontSize: 12 }}>Prev</button>
-                <button disabled={itinPage >= totalPages} onClick={() => setItinPage((p) => p + 1)} style={{ border: `1px solid ${T.border}`, background: "#fff", borderRadius: 6, padding: "5px 12px", cursor: itinPage >= totalPages ? "not-allowed" : "pointer", opacity: itinPage >= totalPages ? 0.5 : 1, fontSize: 12 }}>Next</button>
-              </div>
-            </div>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
-        ) : (
-          <div style={{ background: "#fff", borderRadius: 16, border: `1px solid ${T.border}`, boxShadow: T.shadowCard, overflow: "hidden" }}>
-            <div style={{ padding: 16, display: "flex", gap: 10, borderBottom: `1px solid ${T.border}`, alignItems: "center" }}>
-              <div style={{ position: "relative", flex: 1, maxWidth: 360 }}>
-                <Search size={14} color={T.textMuted} style={{ position: "absolute", left: 12, top: 12 }} />
-                <input
-                  style={{ ...inputStyle, paddingLeft: 34 }}
-                  placeholder="Search alias or port..."
-                  value={aliasSearch}
-                  onChange={(e) => setAliasSearch(e.target.value)}
-                />
-              </div>
-              <div style={{ flex: 1 }} />
+
+          {/* Pagination Footer */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-slate-100 px-4 py-3 text-xs text-slate-500">
+            <div className="text-center sm:text-left">
+              Showing page <span className="font-bold text-slate-800">{itinPage}</span> of <span className="font-bold text-slate-800">{totalPages}</span> · {itinTotal} total blueprints
+            </div>
+            <div className="flex items-center gap-1.5">
               <button
-                onClick={() => setAliasEditing({})}
-                style={{ display: "flex", alignItems: "center", gap: 6, border: "none", background: T.blue, color: "#fff", borderRadius: 8, padding: "9px 16px", cursor: "pointer", fontSize: 13, fontWeight: 700 }}
+                disabled={itinPage <= 1}
+                onClick={() => setItinPage((p) => Math.max(1, p - 1))}
+                className="h-8 rounded-lg border border-slate-200 bg-white px-3 font-bold text-slate-700 shadow-2xs hover:bg-slate-50 disabled:opacity-40 cursor-pointer"
               >
-                <Plus size={14} /> Add Alias
+                Previous
+              </button>
+              <button
+                disabled={itinPage >= totalPages}
+                onClick={() => setItinPage((p) => p + 1)}
+                className="h-8 rounded-lg border border-slate-200 bg-white px-3 font-bold text-slate-700 shadow-2xs hover:bg-slate-50 disabled:opacity-40 cursor-pointer"
+              >
+                Next
               </button>
             </div>
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-slate-200/90 bg-white shadow-2xs overflow-hidden">
+          {/* Action & Search Bar */}
+          <div className="p-3.5 sm:p-4 border-b border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="relative w-full sm:max-w-xs">
+              <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
+              <input
+                className="w-full h-9 rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-xs text-slate-800 shadow-2xs outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-600"
+                placeholder="Search alias code or port…"
+                value={aliasSearch}
+                onChange={(e) => setAliasSearch(e.target.value)}
+              />
+            </div>
+            <button
+              onClick={() => setAliasEditing({})}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white px-4 h-9 text-xs font-bold shadow-xs transition cursor-pointer"
+            >
+              <Plus size={14} />
+              <span>Add Port Alias</span>
+            </button>
+          </div>
 
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 600 }}>
-                <thead style={{ background: T.muted }}>
+          {/* Port Aliases Mobile List View */}
+          <div className="block md:hidden divide-y divide-slate-100">
+            {aliasLoading ? (
+              <div className="px-4 py-12 text-center text-xs text-slate-400 font-medium">
+                Loading port aliases…
+              </div>
+            ) : aliases.length === 0 ? (
+              <div className="px-4 py-12 text-center text-xs text-slate-400 font-medium">
+                No port aliases found.
+              </div>
+            ) : (
+              aliases.map((row) => (
+                <div key={row.id} className="p-4 bg-white hover:bg-slate-50/70 transition space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="space-y-1 min-w-0">
+                      <span className="inline-block rounded-md border border-teal-200 bg-teal-50 px-2 py-0.5 text-[11px] font-bold text-teal-800 font-mono">
+                        {row.aliasKey}
+                      </span>
+                      <div className="font-bold text-slate-900 text-sm truncate">{row.canonical}</div>
+                    </div>
+
+                    <div className="inline-flex items-center gap-1.5 shrink-0">
+                      <button
+                        onClick={() => setAliasEditing(row)}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition cursor-pointer shadow-2xs"
+                        title="Edit"
+                      >
+                        <Pencil size={13} />
+                      </button>
+                      <button
+                        onClick={() => setDeleteTarget({ kind: "alias", id: row.id, label: row.aliasKey })}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-600 hover:text-rose-700 hover:bg-rose-100 transition cursor-pointer shadow-2xs"
+                        title="Delete"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {row.note && (
+                    <div className="text-xs text-slate-500 bg-slate-50 p-2 rounded-lg border border-slate-100">
+                      {row.note}
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Port Aliases Desktop Table View */}
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="border-b border-slate-100 bg-slate-50/80 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                <tr>
+                  <th className="px-4 py-3">Vendor Code / Alias</th>
+                  <th className="px-4 py-3">Canonical Port Name</th>
+                  <th className="px-4 py-3">Note</th>
+                  <th className="px-4 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                {aliasLoading ? (
                   <tr>
-                    {["Vendor Code", "Maps To", "Note", ""].map((h) => (
-                      <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontSize: 11, color: T.textSlate, textTransform: "uppercase" }}>{h}</th>
-                    ))}
+                    <td colSpan={4} className="px-4 py-12 text-center text-slate-400">
+                      Loading port aliases…
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {aliasLoading ? (
-                    <tr><td colSpan={4} style={{ padding: 40, textAlign: "center", color: T.textMuted }}>Loading...</td></tr>
-                  ) : aliases.length === 0 ? (
-                    <tr><td colSpan={4} style={{ padding: 40, textAlign: "center", color: T.textMuted }}>No aliases found.</td></tr>
-                  ) : aliases.map((row, i) => (
-                    <tr key={row.id} style={{ background: i % 2 === 0 ? "#fff" : T.muted, borderTop: `1px solid ${T.border}` }}>
-                      <td style={{ padding: "10px 14px", fontSize: 13, fontWeight: 700, fontFamily: "monospace" }}>{row.aliasKey}</td>
-                      <td style={{ padding: "10px 14px", fontSize: 13 }}>{row.canonical}</td>
-                      <td style={{ padding: "10px 14px", fontSize: 12, color: T.textMuted }}>{row.note || "-"}</td>
-                      <td style={{ padding: "10px 14px", textAlign: "right", whiteSpace: "nowrap" }}>
-                        <button onClick={() => setAliasEditing(row)} style={{ border: "none", background: "transparent", cursor: "pointer", padding: 6 }}><Pencil size={14} color={T.textSlate} /></button>
-                        <button onClick={() => setDeleteTarget({ kind: "alias", id: row.id, label: row.aliasKey })} style={{ border: "none", background: "transparent", cursor: "pointer", padding: 6 }}><Trash2 size={14} color={T.red} /></button>
+                ) : aliases.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-4 py-12 text-center text-slate-400">
+                      No port aliases found.
+                    </td>
+                  </tr>
+                ) : (
+                  aliases.map((row) => (
+                    <tr key={row.id} className="hover:bg-slate-50/70 transition">
+                      <td className="px-4 py-3">
+                        <span className="rounded-md border border-teal-200 bg-teal-50 px-2 py-0.5 text-[11px] font-bold text-teal-800 font-mono">
+                          {row.aliasKey}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 font-bold text-slate-900">
+                        {row.canonical}
+                      </td>
+                      <td className="px-4 py-3 text-slate-500">
+                        {row.note || "--"}
+                      </td>
+                      <td className="px-4 py-3 text-right whitespace-nowrap">
+                        <div className="inline-flex items-center gap-1">
+                          <button
+                            onClick={() => setAliasEditing(row)}
+                            className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition cursor-pointer"
+                            title="Edit"
+                          >
+                            <Pencil size={13} />
+                          </button>
+                          <button
+                            onClick={() => setDeleteTarget({ kind: "alias", id: row.id, label: row.aliasKey })}
+                            className="rounded-lg p-1.5 text-rose-500 hover:bg-rose-50 transition cursor-pointer"
+                            title="Delete"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
-        )}
+        </div>
+      )}
 
+      {/* Modals */}
       {itinEditing !== null && (
         <ItineraryFormModal
           row={itinEditing.id ? itinEditing : null}
@@ -483,15 +775,27 @@ export default function ItineraryManagerPage() {
       )}
 
       {deleteTarget && (
-        <Modal onClose={() => setDeleteTarget(null)} width="min(94vw, 380px)">
-          <div style={{ padding: 24 }}>
-            <h3 style={{ margin: "0 0 8px", fontSize: 16, fontWeight: 700 }}>Delete {deleteTarget.kind === "itinerary" ? "itinerary" : "alias"}?</h3>
-            <p style={{ margin: "0 0 20px", fontSize: 13, color: T.textSlate }}>
-              &quot;{deleteTarget.label}&quot; will be permanently removed. This won&apos;t affect cruises that already have stops assigned.
+        <Modal onClose={() => setDeleteTarget(null)} maxWidth="max-w-sm">
+          <div className="space-y-3">
+            <h3 className="text-sm font-bold text-slate-900">
+              Delete {deleteTarget.kind === "itinerary" ? "Itinerary Blueprint" : "Port Alias"}?
+            </h3>
+            <p className="text-xs text-slate-600">
+              &quot;{deleteTarget.label}&quot; will be permanently deleted from the database.
             </p>
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-              <button onClick={() => setDeleteTarget(null)} style={{ border: `1px solid ${T.border}`, background: "#fff", borderRadius: 8, padding: "9px 18px", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>Cancel</button>
-              <button onClick={confirmDelete} style={{ border: "none", background: T.red, color: "#fff", borderRadius: 8, padding: "9px 18px", cursor: "pointer", fontSize: 13, fontWeight: 700 }}>Delete</button>
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                className="rounded-lg border border-slate-200 bg-white px-3 h-8.5 text-xs font-bold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="rounded-lg bg-rose-600 hover:bg-rose-700 text-white px-3.5 h-8.5 text-xs font-bold shadow-xs transition cursor-pointer"
+              >
+                Confirm Delete
+              </button>
             </div>
           </div>
         </Modal>

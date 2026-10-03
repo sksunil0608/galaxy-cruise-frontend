@@ -53,15 +53,15 @@ export default function DashboardLayout({ children }) {
     <SidebarProvider
       defaultOpen={true}
       style={{
-        "--sidebar-width": "15rem",
+        "--sidebar-width": "16.5rem",
         "--header-height": "4rem"
       }}
     >
       <AppSidebar variant="sidebar" />
 
-      <SidebarInset className="bg-slate-50/60 min-h-screen flex flex-col m-0 rounded-none shadow-none w-full max-w-full">
+      <SidebarInset className="bg-slate-50/60 min-h-screen flex flex-col m-0 rounded-none shadow-none w-full max-w-full min-w-0 overflow-x-hidden">
         <SiteHeader title={title} />
-        <main className="flex-1 w-full max-w-full">
+        <main className="flex-1 w-full max-w-full min-w-0 overflow-x-hidden">
           {children}
         </main>
       </SidebarInset>

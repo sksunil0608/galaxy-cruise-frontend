@@ -40,7 +40,7 @@ export function NavUser({ user }) {
 
   const triggerContent = (
     <>
-      <div className="flex flex-col text-right leading-tight max-w-[170px]">
+      <div className="hidden sm:flex flex-col text-right leading-tight max-w-[170px]">
         <span className="truncate text-xs font-bold text-slate-800">{name}</span>
         <span className="truncate text-[11px] text-slate-500 font-medium">
           {email}
