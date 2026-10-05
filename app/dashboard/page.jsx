@@ -3,21 +3,38 @@
 import { useEffect, useMemo, useState } from "react"
 import {
   Activity,
+  AlertCircle,
+  ArrowRight,
+  ArrowUpRight,
   BarChart3,
   BellRing,
+  Calendar,
   CalendarRange,
   CheckCircle2,
+  ChevronRight,
   Clock3,
+  Compass,
   Database,
+  Eye,
+  Filter,
+  Flame,
   Gauge,
   Layers,
+  MapPin,
+  Moon,
+  Percent,
   RefreshCcw,
   Sailboat,
+  Search,
   ServerCrash,
   ShieldCheck,
   Ship,
+  Sparkles,
   TrendingDown,
-  Users
+  TrendingUp,
+  Users,
+  Waves,
+  X
 } from "lucide-react"
 import {
   BarChart,
@@ -26,7 +43,8 @@ import {
   YAxis,
   Tooltip,
   ResponsiveContainer,
-  CartesianGrid
+  CartesianGrid,
+  Cell
 } from "recharts"
 
 import { fetchCapacityInsightsData, fetchCruisePriceAlerts, fetchDashboardOverview, markCruisePriceAlertRead } from "./api"
@@ -141,93 +159,224 @@ export default function DashboardPage() {
         value: overview.active_vendors,
         hint: "Vendors with live runs or inventory",
         icon: Activity,
-        accent: "border-teal-200/80 bg-gradient-to-br from-white via-teal-50/20 to-teal-50/40",
-        iconBg: "bg-teal-100 text-teal-700",
-        textVal: "text-teal-950"
+        accent: "border-slate-200/80 bg-white hover:border-slate-300",
+        iconBg: "bg-teal-50 text-teal-700 border border-teal-100",
+        textVal: "text-slate-900"
       },
       {
         title: "Fleet Health",
         value: `${overview.fleet_health_score}%`,
         hint: overview.fleet_health_label,
         icon: ShieldCheck,
-        accent: "border-emerald-200/80 bg-gradient-to-br from-white via-emerald-50/20 to-emerald-50/40",
-        iconBg: "bg-emerald-100 text-emerald-700",
-        textVal: "text-emerald-950"
+        accent: "border-slate-200/80 bg-white hover:border-slate-300",
+        iconBg: "bg-emerald-50 text-emerald-700 border border-emerald-100",
+        textVal: "text-slate-900"
       },
       {
         title: "Total Runs",
         value: overview.total_runs,
         hint: "Historical extraction cycles stored",
         icon: RefreshCcw,
-        accent: "border-sky-200/80 bg-gradient-to-br from-white via-sky-50/20 to-sky-50/40",
-        iconBg: "bg-sky-100 text-sky-700",
-        textVal: "text-sky-950"
+        accent: "border-slate-200/80 bg-white hover:border-slate-300",
+        iconBg: "bg-sky-50 text-sky-700 border border-sky-100",
+        textVal: "text-slate-900"
       },
       {
         title: "Avg Response Time",
         value: formatResponseTime(overview.average_response_time_ms),
         hint: "Average runtime across vendors",
         icon: Clock3,
-        accent: "border-amber-200/80 bg-gradient-to-br from-white via-amber-50/20 to-amber-50/40",
-        iconBg: "bg-amber-100 text-amber-700",
-        textVal: "text-amber-950"
+        accent: "border-slate-200/80 bg-white hover:border-slate-300",
+        iconBg: "bg-amber-50 text-amber-700 border border-amber-100",
+        textVal: "text-slate-900"
       },
       {
         title: "Price Alerts",
         value: priceAlerts.length,
         hint: "New lowest fares detected",
         icon: BellRing,
-        accent: "border-rose-200/80 bg-gradient-to-br from-white via-rose-50/20 to-rose-50/40",
-        iconBg: "bg-rose-100 text-rose-700",
-        textVal: "text-rose-950"
+        accent: "border-slate-200/80 bg-white hover:border-slate-300",
+        iconBg: "bg-rose-50 text-rose-700 border border-rose-100",
+        textVal: "text-slate-900"
       }
     ]
   }, [overview, priceAlerts])
+
+  const [capacityMetricView, setCapacityMetricView] = useState("volume") // 'volume' | 'loadFactor'
+  const [highDemandQuery, setHighDemandQuery] = useState("")
+  const [opportunityQuery, setOpportunityQuery] = useState("")
+  const [selectedVendorFilter, setSelectedVendorFilter] = useState("all")
 
   const capacityOverviewCards = useMemo(() => {
     const totalCapacity = capacityCruises.reduce((sum, cruise) => sum + (cruise.totalCapacity ?? 0), 0)
     const totalSailings = capacityCruises.length
     const seatsAvailable = capacityCruises.reduce((sum, cruise) => sum + getSafeSeatsAvailable(cruise), 0)
+    const soldSeats = Math.max(0, totalCapacity - seatsAvailable)
     const avgLoadFactor = capacityCruises.length > 0
       ? capacityCruises.reduce((sum, cruise) => sum + calcLoadFactor(cruise), 0) / capacityCruises.length
       : 0
-    const fleetUtilization = totalCapacity > 0 ? ((totalCapacity - seatsAvailable) / totalCapacity) * 100 : 0
+    const fleetUtilization = totalCapacity > 0 ? (soldSeats / totalCapacity) * 100 : 0
 
     return [
-      { title: "Total Capacity", value: formatNumber(totalCapacity), hint: "Seats across all active sailings", icon: Users },
-      { title: "Total Sailings", value: formatNumber(totalSailings), hint: "Cruises currently in database", icon: Sailboat },
-      { title: "Seats Available", value: formatNumber(seatsAvailable), hint: "Remaining seats open for booking", icon: CalendarRange },
-      { title: "Avg Load Factor", value: formatPercent(avgLoadFactor), hint: "Average sold capacity per cruise", icon: BarChart3 },
-      { title: "Fleet Utilization", value: formatPercent(fleetUtilization), hint: "Used capacity across whole fleet", icon: Gauge }
+      {
+        title: "Total Capacity",
+        value: formatNumber(totalCapacity),
+        hint: "Total seats across active voyages",
+        icon: Users,
+        accent: "border-teal-200/80 bg-gradient-to-br from-white via-teal-50/20 to-teal-50/40",
+        iconBg: "bg-teal-100 text-teal-700",
+        textVal: "text-teal-950",
+        badge: "Total Inventory",
+        badgeStyle: "bg-teal-50 text-teal-700 border-teal-200/80",
+        progress: 100,
+        progressColor: "bg-teal-600"
+      },
+      {
+        title: "Total Sailings",
+        value: formatNumber(totalSailings),
+        hint: "Cruises currently in inventory",
+        icon: Sailboat,
+        accent: "border-sky-200/80 bg-gradient-to-br from-white via-sky-50/20 to-sky-50/40",
+        iconBg: "bg-sky-100 text-sky-700",
+        textVal: "text-sky-950",
+        badge: "Live Schedules",
+        badgeStyle: "bg-sky-50 text-sky-700 border-sky-200/80",
+        progress: Math.min(100, (totalSailings / 50) * 100),
+        progressColor: "bg-sky-600"
+      },
+      {
+        title: "Seats Available",
+        value: formatNumber(seatsAvailable),
+        hint: "Open seats ready for booking",
+        icon: CalendarRange,
+        accent: "border-indigo-200/80 bg-gradient-to-br from-white via-indigo-50/20 to-indigo-50/40",
+        iconBg: "bg-indigo-100 text-indigo-700",
+        textVal: "text-indigo-950",
+        badge: "Open Seats",
+        badgeStyle: "bg-indigo-50 text-indigo-700 border-indigo-200/80",
+        progress: totalCapacity > 0 ? (seatsAvailable / totalCapacity) * 100 : 0,
+        progressColor: "bg-indigo-600"
+      },
+      {
+        title: "Avg Load Factor",
+        value: formatPercent(avgLoadFactor),
+        hint: "Average sold capacity per cruise",
+        icon: BarChart3,
+        accent: "border-emerald-200/80 bg-gradient-to-br from-white via-emerald-50/20 to-emerald-50/40",
+        iconBg: "bg-emerald-100 text-emerald-700",
+        textVal: "text-emerald-950",
+        badge: "Fleet Fill Rate",
+        badgeStyle: "bg-emerald-50 text-emerald-700 border-emerald-200/80",
+        progress: Math.min(100, Math.round(avgLoadFactor)),
+        progressColor: avgLoadFactor >= 80 ? "bg-rose-500" : avgLoadFactor >= 60 ? "bg-amber-500" : "bg-emerald-500"
+      },
+      {
+        title: "Fleet Utilization",
+        value: formatPercent(fleetUtilization),
+        hint: "Overall sold capacity depth",
+        icon: Gauge,
+        accent: "border-violet-200/80 bg-gradient-to-br from-white via-violet-50/20 to-violet-50/40",
+        iconBg: "bg-violet-100 text-violet-700",
+        textVal: "text-violet-950",
+        badge: "Utilization",
+        badgeStyle: "bg-violet-50 text-violet-700 border-violet-200/80",
+        progress: Math.min(100, Math.round(fleetUtilization)),
+        progressColor: "bg-violet-600"
+      }
     ]
   }, [capacityCruises])
 
   const demandDistribution = useMemo(() => {
     return capacityVendorFleet.map(vendor => {
-      const vendorCruises = capacityCruises.filter(cruise => cruise.vendor?.id === vendor.vendor_id)
+      const vendorCruises = capacityCruises.filter(cruise => {
+        const cId = cruise.vendor?.id != null ? String(cruise.vendor.id).trim().toLowerCase() : ""
+        const vId = vendor.vendor_id != null ? String(vendor.vendor_id).trim().toLowerCase() : ""
+        const cName = (cruise.vendor?.name || "").trim().toLowerCase()
+        const vName = (vendor.vendor_name || "").trim().toLowerCase()
+
+        if (cId && vId && cId === vId) return true
+        if (cName && vName && (cName === vName || cName.includes(vName) || vName.includes(cName))) return true
+        return false
+      })
+
       const totalCapacity = vendorCruises.reduce((sum, cruise) => sum + (cruise.totalCapacity ?? 0), 0)
       const seatsAvailable = vendorCruises.reduce((sum, cruise) => sum + getSafeSeatsAvailable(cruise), 0)
-      const soldSeats = totalCapacity - seatsAvailable
+      const effectiveCapacity = Math.max(totalCapacity, seatsAvailable)
+      const soldSeats = Math.max(0, totalCapacity - seatsAvailable)
       const avgLoad = vendorCruises.length > 0
-        ? vendorCruises.reduce((sum, cruise) => sum + calcLoadFactor(cruise), 0) / vendorCruises.length
+        ? Math.round(vendorCruises.reduce((sum, cruise) => sum + calcLoadFactor(cruise), 0) / vendorCruises.length)
         : 0
-      return { vendor: vendor.vendor_name, soldSeats, seatsAvailable, avgLoad: Math.round(avgLoad) }
+
+      return {
+        vendor: vendor.vendor_name,
+        cruisesCount: vendorCruises.length,
+        soldSeats,
+        seatsAvailable,
+        totalCapacity: effectiveCapacity,
+        avgLoad
+      }
     })
   }, [capacityCruises, capacityVendorFleet])
+
+  const uniqueCapacityVendors = useMemo(() => {
+    const map = new Map()
+    capacityCruises.forEach(c => {
+      if (c.vendor?.id && c.vendor?.name) {
+        map.set(String(c.vendor.id), c.vendor.name)
+      }
+    })
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name }))
+  }, [capacityCruises])
 
   const highDemandSailings = useMemo(() => {
     return [...capacityCruises]
       .map(cruise => ({ ...cruise, loadFactor: calcLoadFactor(cruise), safeSeatsAvailable: getSafeSeatsAvailable(cruise) }))
       .sort((a, b) => b.loadFactor - a.loadFactor)
-      .slice(0, 6)
   }, [capacityCruises])
 
   const capacityOpportunities = useMemo(() => {
     return [...capacityCruises]
       .map(cruise => ({ ...cruise, loadFactor: calcLoadFactor(cruise), safeSeatsAvailable: getSafeSeatsAvailable(cruise) }))
       .sort((a, b) => (b.safeSeatsAvailable !== a.safeSeatsAvailable ? b.safeSeatsAvailable - a.safeSeatsAvailable : a.loadFactor - b.loadFactor))
-      .slice(0, 6)
   }, [capacityCruises])
+
+  const filteredHighDemand = useMemo(() => {
+    return highDemandSailings.filter(item => {
+      const matchesVendor = selectedVendorFilter === "all" || String(item.vendor?.id) === selectedVendorFilter || item.vendor?.name === selectedVendorFilter
+      const text = `${item.package || ""} ${item.vendor?.name || ""} ${getCruiseRouteLabel(item)} ${item.code || ""}`.toLowerCase()
+      const matchesQuery = !highDemandQuery.trim() || text.includes(highDemandQuery.toLowerCase())
+      return matchesVendor && matchesQuery
+    }).slice(0, 6)
+  }, [highDemandSailings, selectedVendorFilter, highDemandQuery])
+
+  const filteredOpportunities = useMemo(() => {
+    return capacityOpportunities.filter(item => {
+      const matchesVendor = selectedVendorFilter === "all" || String(item.vendor?.id) === selectedVendorFilter || item.vendor?.name === selectedVendorFilter
+      const text = `${item.package || ""} ${item.vendor?.name || ""} ${getCruiseRouteLabel(item)} ${item.code || ""}`.toLowerCase()
+      const matchesQuery = !opportunityQuery.trim() || text.includes(opportunityQuery.toLowerCase())
+      return matchesVendor && matchesQuery
+    }).slice(0, 6)
+  }, [capacityOpportunities, selectedVendorFilter, opportunityQuery])
+
+  const capacityStats = useMemo(() => {
+    const totalSold = demandDistribution.reduce((acc, v) => acc + (v.soldSeats || 0), 0)
+    const totalOpen = demandDistribution.reduce((acc, v) => acc + (v.seatsAvailable || 0), 0)
+    const totalCap = totalSold + totalOpen
+    const activeWithSeats = demandDistribution.filter(v => v.seatsAvailable > 0 || v.soldSeats > 0)
+    const topVendorWithLoad = [...activeWithSeats].filter(v => v.avgLoad > 0).sort((a, b) => b.avgLoad - a.avgLoad)[0]
+    const topVendorWithVol = [...activeWithSeats].sort((a, b) => (b.seatsAvailable + b.soldSeats) - (a.seatsAvailable + a.soldSeats))[0]
+    const topVendor = topVendorWithLoad || topVendorWithVol || demandDistribution[0]
+
+    return {
+      totalSold,
+      totalOpen,
+      totalCap,
+      topVendor: topVendor?.vendor || "None",
+      topVendorLoad: topVendor?.avgLoad || 0,
+      topVendorOpen: topVendor?.seatsAvailable || 0,
+      activeVendorCount: activeWithSeats.length
+    }
+  }, [demandDistribution])
 
   const handleMarkAlertRead = async alertId => {
     try {
@@ -556,71 +705,278 @@ export default function DashboardPage() {
       </div>
 
       {/* ── Capacity Insights Section ───────────────────────────────────────── */}
-      <div className="rounded-xl border border-slate-200/90 bg-white p-5 shadow-2xs space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-slate-100">
-          <div className="space-y-1">
-            <div className="inline-flex items-center gap-1.5 rounded-full border border-teal-200/80 bg-teal-50 px-2.5 py-0.5 text-[11px] font-bold text-teal-800">
-              <span className="h-1.5 w-1.5 rounded-full bg-teal-600 animate-pulse" />
-              <span>Fleet Utilization & Capacity Insights</span>
+      <div className="relative overflow-hidden rounded-2xl border border-slate-200/90 bg-white p-5 sm:p-6 shadow-xs space-y-6">
+        {/* Decorative Ambient Background Glows */}
+        <div className="pointer-events-none absolute -right-20 -top-20 h-72 w-72 rounded-full bg-teal-500/5 blur-3xl" />
+        <div className="pointer-events-none absolute -left-20 bottom-10 h-72 w-72 rounded-full bg-sky-500/5 blur-3xl" />
+
+        {/* ── Section Header ────────────────────────────────────────────── */}
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 pb-5 border-b border-slate-100">
+          <div className="space-y-1.5 max-w-3xl">
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="inline-flex items-center gap-1.5 rounded-full border border-teal-200/80 bg-teal-50/90 px-3 py-0.5 text-[11px] font-bold text-teal-900 shadow-2xs">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-teal-600" />
+                </span>
+                <span>Fleet Utilization & Capacity Intelligence</span>
+              </div>
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[11px] font-bold text-slate-600">
+                {capacityCruises.length} active sailings
+              </span>
             </div>
-            <h2 className="text-lg font-bold text-slate-900">
+
+            <h2 className="text-lg sm:text-xl font-black tracking-tight text-slate-900">
               Seat & Demand Visibility Across Fleet
             </h2>
-            <p className="text-xs text-slate-500">
-              Real-time calculation from live vendor inventory runs and scheduled sailings.
+            <p className="text-xs sm:text-sm font-medium text-slate-500 leading-relaxed">
+              Real-time seat occupancy calculations from live vendor inventory runs and scheduled sailings.
             </p>
+          </div>
+
+          <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+            {/* Vendor Filter Pill selector */}
+            <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50/80 p-1 text-xs">
+              <button
+                onClick={() => setSelectedVendorFilter("all")}
+                className={`rounded-md px-2.5 py-1 font-bold text-[11px] transition cursor-pointer ${
+                  selectedVendorFilter === "all"
+                    ? "bg-white text-teal-900 shadow-2xs border border-slate-200/80"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                All Lines
+              </button>
+              {uniqueCapacityVendors.map(v => (
+                <button
+                  key={v.id}
+                  onClick={() => setSelectedVendorFilter(v.id)}
+                  className={`rounded-md px-2.5 py-1 font-bold text-[11px] transition cursor-pointer ${
+                    selectedVendorFilter === v.id
+                      ? "bg-white text-teal-900 shadow-2xs border border-slate-200/80"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  {v.name}
+                </button>
+              ))}
+            </div>
+
+            <button
+              onClick={loadCapacityData}
+              disabled={capacityLoading}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-2xs transition hover:bg-slate-50 hover:text-slate-900 cursor-pointer disabled:opacity-60"
+            >
+              <RefreshCcw size={12} className={capacityLoading ? "animate-spin text-teal-600" : "text-slate-500"} />
+              <span>{capacityLoading ? "Syncing…" : "Refresh"}</span>
+            </button>
           </div>
         </div>
 
-        <div className="grid gap-3 grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
+        {/* ── 5 Executive KPI Metric Cards ─────────────────────────────────── */}
+        <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           {capacityOverviewCards.map(card => {
             const Icon = card.icon
+
             return (
-              <div key={card.title} className="rounded-xl border border-slate-200/80 bg-slate-50/50 p-3.5 shadow-2xs">
+              <div
+                key={card.title}
+                className={`group relative overflow-hidden rounded-xl border p-4 shadow-2xs transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md ${card.accent}`}
+              >
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">{card.title}</div>
-                    <div className="mt-1 text-xl font-extrabold text-slate-900 font-mono">{card.value}</div>
+                    <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                      {card.title}
+                    </div>
+                    <div className={`mt-1 text-2xl font-black font-mono tracking-tight ${card.textVal}`}>
+                      {card.value}
+                    </div>
                   </div>
-                  <div className="rounded-lg bg-white border border-slate-200/80 p-2 text-slate-700 shadow-2xs">
-                    <Icon size={15} />
+                  <div className={`rounded-lg p-2.5 shadow-2xs transition-transform group-hover:scale-105 ${card.iconBg}`}>
+                    <Icon size={16} />
                   </div>
                 </div>
-                <div className="mt-2 text-[11px] font-medium text-slate-500 line-clamp-1">{card.hint}</div>
+
+                {/* Progress Visual Track */}
+                <div className="mt-3">
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200/60">
+                    <div
+                      className={`h-full rounded-full transition-all duration-700 ${card.progressColor}`}
+                      style={{ width: `${card.progress}%` }}
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-2.5 flex items-center justify-between text-[11px] font-medium text-slate-500">
+                  <span className="line-clamp-1">{card.hint}</span>
+                  <span className={`rounded-md border px-1.5 py-0.2 text-[10px] font-bold shrink-0 ${card.badgeStyle}`}>
+                    {card.badge}
+                  </span>
+                </div>
               </div>
             )
           })}
         </div>
 
-        {/* Demand Distribution Bar */}
-        <div className="rounded-xl border border-slate-200/80 bg-slate-50/30 p-4">
-          <div className="text-sm font-bold text-slate-900">Vendor Demand Distribution</div>
-          <div className="text-xs text-slate-500">Sold seats vs open seats across vendors.</div>
-          <div className="mt-4 h-[240px]">
+        {/* ── Vendor Demand Distribution Chart ────────────────────────────── */}
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-2xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-slate-100">
+            <div className="flex items-center gap-3">
+              <div className="rounded-xl bg-teal-50 p-2.5 text-teal-700 border border-teal-100">
+                <BarChart3 size={17} />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">
+                  Vendor Demand & Seat Occupancy Distribution
+                </h3>
+                <p className="text-xs font-medium text-slate-500">
+                  Comparison of booked versus open cabin inventory across vendor fleets.
+                </p>
+              </div>
+            </div>
+
+            {/* View Mode Toggle Switch & Legend */}
+            <div className="flex flex-wrap items-center gap-3">
+              {capacityMetricView === "volume" && (
+                <div className="flex items-center gap-3 text-xs font-semibold text-slate-500 pr-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-xs bg-teal-600" />
+                    <span>Booked</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-xs bg-sky-500" />
+                    <span>Available</span>
+                  </div>
+                </div>
+              )}
+              <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50/70 p-1 text-xs font-bold shadow-2xs">
+                <button
+                  onClick={() => setCapacityMetricView("volume")}
+                  className={`rounded-lg px-3 py-1.5 transition cursor-pointer text-xs ${
+                    capacityMetricView === "volume"
+                      ? "bg-slate-900 text-white shadow-xs"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-white"
+                  }`}
+                >
+                  Seats Volume
+                </button>
+                <button
+                  onClick={() => setCapacityMetricView("loadFactor")}
+                  className={`rounded-lg px-3 py-1.5 transition cursor-pointer text-xs ${
+                    capacityMetricView === "loadFactor"
+                      ? "bg-slate-900 text-white shadow-xs"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-white"
+                  }`}
+                >
+                  Load Factor %
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Chart Graphic Area */}
+          <div className="h-[270px] w-full pt-1">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={demandDistribution}>
+              <BarChart data={demandDistribution} margin={{ top: 12, right: 16, left: 4, bottom: 6 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                <XAxis dataKey="vendor" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "#64748b" }} />
-                <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "#64748b" }} />
-                <Tooltip contentStyle={{ borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 12 }} />
-                <Bar dataKey="soldSeats" name="Sold Seats" fill="#0f766e" radius={[6, 6, 0, 0]} />
-                <Bar dataKey="seatsAvailable" name="Seats Open" fill="#cbd5e1" radius={[6, 6, 0, 0]} />
+                <XAxis
+                  dataKey="vendor"
+                  tickLine={false}
+                  axisLine={{ stroke: "#e2e8f0" }}
+                  tick={{ fontSize: 11, fill: "#475569", fontWeight: 600 }}
+                  tickFormatter={v => (v && v.length > 15 ? `${v.slice(0, 13)}…` : v)}
+                  interval={0}
+                />
+                <YAxis
+                  tickLine={false}
+                  axisLine={{ stroke: "#e2e8f0" }}
+                  tick={{ fontSize: 11, fill: "#64748b" }}
+                  width={38}
+                  allowDecimals={false}
+                  unit={capacityMetricView === "loadFactor" ? "%" : ""}
+                />
+                <Tooltip content={<DemandChartTooltip />} />
+                {capacityMetricView === "volume" ? (
+                  <>
+                    <Bar
+                      dataKey="soldSeats"
+                      name="Sold Seats"
+                      fill="#0d9488"
+                      radius={[4, 4, 0, 0]}
+                      maxBarSize={32}
+                    />
+                    <Bar
+                      dataKey="seatsAvailable"
+                      name="Seats Open"
+                      fill="#0ea5e9"
+                      radius={[4, 4, 0, 0]}
+                      maxBarSize={32}
+                    />
+                  </>
+                ) : (
+                  <Bar
+                    dataKey="avgLoad"
+                    name="Avg Load Factor %"
+                    fill="#6366f1"
+                    radius={[4, 4, 0, 0]}
+                    maxBarSize={40}
+                  />
+                )}
               </BarChart>
             </ResponsiveContainer>
           </div>
+
+          {/* Demand Summary Ribbon under chart */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-slate-100 text-xs">
+            <div className="flex items-center justify-between rounded-xl bg-slate-50/70 border border-slate-200/70 px-4 py-3">
+              <span className="text-slate-500 font-semibold">Total Sold Seats:</span>
+              <span className="font-bold text-teal-700 font-mono text-sm">{formatNumber(capacityStats.totalSold)}</span>
+            </div>
+            <div className="flex items-center justify-between rounded-xl bg-slate-50/70 border border-slate-200/70 px-4 py-3">
+              <span className="text-slate-500 font-semibold">Total Open Seats:</span>
+              <span className="font-bold text-sky-700 font-mono text-sm">{formatNumber(capacityStats.totalOpen)}</span>
+            </div>
+            <div className="flex items-center justify-between rounded-xl bg-slate-50/70 border border-slate-200/70 px-4 py-3">
+              <span className="text-slate-500 font-semibold">
+                {capacityStats.topVendorLoad > 0 ? "Highest Demand Line:" : "Active Inventory Line:"}
+              </span>
+              <span className="font-bold text-indigo-700 font-mono text-sm">
+                {capacityStats.topVendor} {capacityStats.topVendorLoad > 0 ? `(${capacityStats.topVendorLoad}%)` : `(${formatNumber(capacityStats.totalOpen)} seats)`}
+              </span>
+            </div>
+          </div>
         </div>
 
-        {/* High Demand vs Opportunities */}
-        <div className="grid gap-4 xl:grid-cols-2">
-          <InsightPanelV2
+        {/* ── High Demand vs Capacity Opportunities Panels ─────────────────── */}
+        <div className="grid gap-5 xl:grid-cols-2">
+          {/* Panel 1: High Demand Sailings */}
+          <EnhancedSailingPanel
             title="High Demand Sailings"
-            subtitle="Cruises with highest load factor."
-            items={highDemandSailings}
+            subtitle="Voyages with highest booking load factor needing yield management."
+            icon={Flame}
+            iconBg="bg-rose-100 text-rose-700 border-rose-200"
+            badge="Yield Alert"
+            badgeStyle="bg-rose-50 text-rose-700 border-rose-200"
+            items={filteredHighDemand}
+            totalCount={highDemandSailings.length}
+            searchQuery={highDemandQuery}
+            onSearchChange={setHighDemandQuery}
+            mode="demand"
           />
-          <OpportunityPanelV2
+
+          {/* Panel 2: Capacity Opportunities */}
+          <EnhancedSailingPanel
             title="Capacity Opportunities"
-            subtitle="Sailings with most open seats available."
-            items={capacityOpportunities}
+            subtitle="Sailings with most unsold seats available to drive promotional campaigns."
+            icon={Sparkles}
+            iconBg="bg-teal-100 text-teal-700 border-teal-200"
+            badge="Open Inventory"
+            badgeStyle="bg-teal-50 text-teal-700 border-teal-200"
+            items={filteredOpportunities}
+            totalCount={capacityOpportunities.length}
+            searchQuery={opportunityQuery}
+            onSearchChange={setOpportunityQuery}
+            mode="opportunity"
           />
         </div>
       </div>
@@ -644,84 +1000,257 @@ function MetricItem({ label, value, icon: Icon }) {
   )
 }
 
-function CapacityMetric({ label, value }) {
+function DemandChartTooltip({ active, payload }) {
+  if (!active || !payload || !payload.length) return null
+  const data = payload[0]?.payload
+  if (!data) return null
+  const total = (data.soldSeats ?? 0) + (data.seatsAvailable ?? 0)
+  const loadPct = total > 0 ? Math.round((data.soldSeats / total) * 100) : (data.avgLoad ?? 0)
+
   return (
-    <div>
-      <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</div>
-      <div className="mt-0.5 font-bold text-slate-900 font-mono text-xs">{value}</div>
+    <div className="rounded-xl border border-slate-700/80 bg-slate-950/95 p-3.5 shadow-2xl backdrop-blur-md text-white text-xs min-w-[220px] space-y-2">
+      <div className="flex items-center justify-between gap-2 border-b border-slate-800 pb-2">
+        <div className="flex items-center gap-1.5 font-bold text-slate-100 text-sm">
+          <Ship size={14} className="text-teal-400" />
+          <span>{data.vendor}</span>
+        </div>
+        <span className="rounded-md bg-teal-950/90 border border-teal-500/40 px-2 py-0.5 text-[10px] font-bold text-teal-300 font-mono">
+          {loadPct}% Sold
+        </span>
+      </div>
+
+      <div className="space-y-1.5 pt-0.5">
+        <div className="flex items-center justify-between text-slate-300">
+          <span className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-teal-400" />
+            Sold Seats
+          </span>
+          <span className="font-mono font-bold text-teal-300">{formatNumber(data.soldSeats)}</span>
+        </div>
+
+        <div className="flex items-center justify-between text-slate-300">
+          <span className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-sky-400" />
+            Available Seats
+          </span>
+          <span className="font-mono font-bold text-sky-300">{formatNumber(data.seatsAvailable)}</span>
+        </div>
+
+        <div className="flex items-center justify-between text-slate-400 pt-1 border-t border-slate-800/80 text-[11px]">
+          <span>Total Capacity</span>
+          <span className="font-mono font-semibold text-slate-200">{formatNumber(total)} seats</span>
+        </div>
+      </div>
+
+      <div className="pt-1">
+        <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-teal-500 to-emerald-400"
+            style={{ width: `${Math.min(100, loadPct)}%` }}
+          />
+        </div>
+      </div>
     </div>
   )
 }
 
-function InsightPanelV2({ title, subtitle, items }) {
+function EnhancedSailingPanel({
+  title,
+  subtitle,
+  icon: Icon,
+  iconBg,
+  badge,
+  badgeStyle,
+  items,
+  totalCount,
+  searchQuery,
+  onSearchChange,
+  mode
+}) {
   return (
-    <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-2xs">
-      <div className="text-sm font-bold text-slate-900">{title}</div>
-      <div className="text-xs text-slate-500">{subtitle}</div>
-      <div className="mt-3.5 space-y-2.5">
-        {items.map(item => (
-          <div key={item.id} className="rounded-lg border border-slate-200/80 bg-slate-50/50 p-3 hover:bg-slate-50 transition">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="text-xs font-bold text-slate-900 truncate">{item.package}</div>
-                <div className="mt-0.5 text-[11px] font-medium text-slate-500 truncate">
-                  {item.vendor?.name} · {getCruiseRouteLabel(item)}
-                </div>
-                <div className="mt-0.5 text-[10px] font-semibold text-slate-400">{formatCapacityDate(item.startDate)}</div>
-              </div>
-              <div className="text-right shrink-0">
-                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Load factor</div>
-                <div className="mt-0.5 text-sm font-extrabold text-slate-900 font-mono">{formatPercent(item.loadFactor)}</div>
-              </div>
-            </div>
-            <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-slate-200">
-              <div className={`h-full rounded-full ${loadTone(item.loadFactor)}`} style={{ width: `${Math.min(100, item.loadFactor)}%` }} />
-            </div>
-            <div className="mt-2.5 grid grid-cols-3 gap-2 border-t border-slate-200/60 pt-2 text-xs">
-              <CapacityMetric label="Seats Open" value={formatNumber(item.safeSeatsAvailable ?? getSafeSeatsAvailable(item))} />
-              <CapacityMetric label="Capacity" value={formatNumber(item.totalCapacity ?? 0)} />
-              <CapacityMetric label="Nights" value={item.nights ?? "--"} />
-            </div>
+    <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-2xs space-y-4">
+      {/* Panel Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-slate-100">
+        <div className="flex items-center gap-2.5">
+          <div className={`rounded-xl p-2.5 border ${iconBg}`}>
+            <Icon size={16} />
           </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-bold text-slate-900">{title}</h3>
+              <span className={`rounded-md border px-2 py-0.2 text-[10px] font-bold ${badgeStyle}`}>
+                {badge}
+              </span>
+            </div>
+            <p className="text-xs font-medium text-slate-500 line-clamp-1">{subtitle}</p>
+          </div>
+        </div>
+
+        <div className="text-xs font-bold text-slate-500 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-md shrink-0 self-start sm:self-auto">
+          {items.length} of {totalCount}
+        </div>
+      </div>
+
+      {/* Search Filter Bar */}
+      <div className="relative">
+        <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={e => onSearchChange(e.target.value)}
+          placeholder={`Search ${title.toLowerCase()} by route, package, port…`}
+          className="w-full rounded-xl border border-slate-200 bg-slate-50/50 pl-8 pr-8 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:border-teal-500 focus:bg-white focus:outline-hidden focus:ring-1 focus:ring-teal-500/30 transition shadow-2xs"
+        />
+        {searchQuery && (
+          <button
+            onClick={() => onSearchChange("")}
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer p-0.5"
+          >
+            <X size={12} />
+          </button>
+        )}
+      </div>
+
+      {/* Sailings List */}
+      <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1">
+        {items.map(item => (
+          <EnhancedSailingCard key={item.id} item={item} mode={mode} />
         ))}
+
         {items.length === 0 && (
-          <div className="py-6 text-center text-xs text-slate-400">No sailings found.</div>
+          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/70 py-8 px-4 text-center space-y-1.5">
+            <div className="inline-flex rounded-full bg-slate-100 p-2 text-slate-400">
+              <Search size={16} />
+            </div>
+            <p className="text-xs font-bold text-slate-600">No matching sailings found</p>
+            <p className="text-[11px] text-slate-400">
+              {searchQuery ? "Try refining your search filter terms." : "No sailings currently available in this category."}
+            </p>
+            {searchQuery && (
+              <button
+                onClick={() => onSearchChange("")}
+                className="mt-2 text-xs font-bold text-teal-700 hover:text-teal-900 cursor-pointer underline"
+              >
+                Clear Search Filter
+              </button>
+            )}
+          </div>
         )}
       </div>
     </div>
   )
 }
 
-function OpportunityPanelV2({ title, subtitle, items }) {
+function EnhancedSailingCard({ item, mode = "demand" }) {
+  const loadFactor = item.loadFactor ?? calcLoadFactor(item)
+  const seatsOpen = item.safeSeatsAvailable ?? getSafeSeatsAvailable(item)
+  const totalSeats = item.totalCapacity ?? 0
+  const routeLabel = getCruiseRouteLabel(item)
+
+  const statusBadge =
+    loadFactor >= 85
+      ? {
+          text: "Critical High",
+          bg: "bg-rose-50 text-rose-700 border-rose-200/80",
+          icon: Flame,
+          progressBg: "bg-gradient-to-r from-rose-500 to-red-600",
+        }
+      : loadFactor >= 65
+        ? {
+            text: "Filling Fast",
+            bg: "bg-amber-50 text-amber-700 border-amber-200/80",
+            icon: TrendingUp,
+            progressBg: "bg-gradient-to-r from-amber-500 to-orange-500",
+          }
+        : {
+            text: "High Availability",
+            bg: "bg-teal-50 text-teal-700 border-teal-200/80",
+            icon: Sparkles,
+            progressBg: "bg-gradient-to-r from-teal-500 to-emerald-500",
+          }
+
+  const StatusIcon = statusBadge.icon
+
   return (
-    <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-2xs">
-      <div className="text-sm font-bold text-slate-900">{title}</div>
-      <div className="text-xs text-slate-500">{subtitle}</div>
-      <div className="mt-3.5 space-y-2.5">
-        {items.map(item => (
-          <div key={item.id} className="rounded-lg border border-slate-200/80 bg-slate-50/50 p-3 hover:bg-slate-50 transition">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="text-xs font-bold text-slate-900 truncate">{item.package}</div>
-                <div className="mt-0.5 text-[11px] font-medium text-slate-500 truncate">
-                  {item.vendor?.name} · {getCruiseRouteLabel(item)}
-                </div>
-                <div className="mt-0.5 text-[10px] font-semibold text-slate-400">{formatCapacityDate(item.startDate)}</div>
-              </div>
-              <div className="rounded-md bg-teal-50 border border-teal-200 px-2 py-0.5 text-[10px] font-bold text-teal-800 shrink-0">
-                Open
-              </div>
+    <div className="group relative overflow-hidden rounded-xl border border-slate-200/80 bg-white p-3.5 sm:p-4 shadow-2xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-slate-300">
+      <div className="space-y-3">
+        {/* Top Header Row */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 space-y-1">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-bold text-slate-700">
+                <Ship size={11} className="text-slate-500" />
+                <span>{item.vendor?.name || "Vendor"}</span>
+              </span>
+              {item.nights && (
+                <span className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-bold text-slate-600">
+                  <Moon size={10} className="text-slate-400" />
+                  <span>{item.nights} Nights</span>
+                </span>
+              )}
             </div>
-            <div className="mt-2.5 grid grid-cols-3 gap-2 border-t border-slate-200/60 pt-2 text-xs">
-              <CapacityMetric label="Seats Open" value={formatNumber(item.safeSeatsAvailable ?? getSafeSeatsAvailable(item))} />
-              <CapacityMetric label="Load factor" value={formatPercent(item.loadFactor)} />
-              <CapacityMetric label="Capacity" value={formatNumber(item.totalCapacity ?? 0)} />
+            <h4
+              className="text-xs sm:text-sm font-bold text-slate-900 truncate group-hover:text-teal-700 transition-colors font-mono"
+              title={item.package || item.code}
+            >
+              {item.code || item.package || "Cruise Package"}
+            </h4>
+          </div>
+
+          <div className="text-right shrink-0">
+            <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-bold ${statusBadge.bg}`}>
+              <StatusIcon size={11} />
+              <span>{statusBadge.text}</span>
+            </span>
+            <div className="mt-1 font-mono text-sm font-black text-slate-900">
+              {formatPercent(loadFactor)}
             </div>
           </div>
-        ))}
-        {items.length === 0 && (
-          <div className="py-6 text-center text-xs text-slate-400">No sailings found.</div>
-        )}
+        </div>
+
+        {/* Route & Date */}
+        <div className="flex items-center justify-between gap-2 text-xs text-slate-500 flex-wrap pt-0.5">
+          <div className="flex items-center gap-1.5 min-w-0 text-slate-600">
+            <MapPin size={12} className="text-teal-600 shrink-0" />
+            <span className="truncate font-medium text-[11px]">{routeLabel}</span>
+          </div>
+          <div className="flex items-center gap-1 text-[11px] font-medium text-slate-500 shrink-0">
+            <Calendar size={11} className="text-slate-400" />
+            <span>{formatCapacityDate(item.startDate)}</span>
+          </div>
+        </div>
+
+        {/* Progress Bar */}
+        <div className="space-y-1">
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${statusBadge.progressBg}`}
+              style={{ width: `${Math.min(100, loadFactor)}%` }}
+            />
+          </div>
+        </div>
+
+        {/* 3-Column Stats Ribbon */}
+        <div className="grid grid-cols-3 gap-2 rounded-lg border border-slate-100 bg-slate-50/70 p-2 text-center text-xs">
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Seats Open</div>
+            <div className={`mt-0.5 font-mono font-bold ${seatsOpen <= 5 ? "text-rose-600" : "text-teal-700"}`}>
+              {formatNumber(seatsOpen)}
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Capacity</div>
+            <div className="mt-0.5 font-mono font-bold text-slate-800">
+              {formatNumber(totalSeats)}
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Load Factor</div>
+            <div className="mt-0.5 font-mono font-bold text-slate-800">
+              {formatPercent(loadFactor)}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )

@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useEffect, useMemo, useState } from "react"
+import { useDebounce } from "@/hooks/use-debounce"
 import { api } from "@/lib/api"
 
 import {
@@ -53,8 +54,14 @@ export default function UsersPage() {
 
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState("")
+  const debouncedSearchQuery = useDebounce(searchQuery, 300)
   const [roleFilter, setRoleFilter] = useState("ALL")
   const [page, setPage] = useState(1)
+
+  // Reset page when debounced search query or role filter changes
+  useEffect(() => {
+    setPage(1)
+  }, [debouncedSearchQuery, roleFilter])
 
   // Modals
   const [open, setOpen] = useState(false)
@@ -76,6 +83,7 @@ export default function UsersPage() {
   const [newRoleName, setNewRoleName] = useState("")
   const [permForm, setPermForm] = useState({ key: "", name: "" })
   const [permSearch, setPermSearch] = useState("")
+  const debouncedPermSearch = useDebounce(permSearch, 300)
 
   const fetchUsers = async () => {
     try {
@@ -253,10 +261,10 @@ export default function UsersPage() {
   const filteredUsers = useMemo(() => {
     return users.filter((u) => {
       const matchesSearch =
-        !searchQuery ||
-        u.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        u.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        String(u.id).includes(searchQuery)
+        !debouncedSearchQuery ||
+        u.name?.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
+        u.email?.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
+        String(u.id).includes(debouncedSearchQuery)
 
       const matchesRole =
         roleFilter === "ALL" ||
@@ -265,7 +273,7 @@ export default function UsersPage() {
 
       return matchesSearch && matchesRole
     })
-  }, [users, searchQuery, roleFilter])
+  }, [users, debouncedSearchQuery, roleFilter])
 
   const totalPages = Math.max(1, Math.ceil(filteredUsers.length / USERS_PER_PAGE))
   const paginatedUsers = useMemo(() => {
@@ -300,19 +308,19 @@ export default function UsersPage() {
     const assigned = activeRole.permissions ?? []
     const available = permissions.filter((p) => !rolePermissionIds.has(p.id))
 
-    const filteredAssigned = permSearch
+    const filteredAssigned = debouncedPermSearch
       ? assigned.filter(
           (rp) =>
-            rp.permission?.name?.toLowerCase().includes(permSearch.toLowerCase()) ||
-            rp.permission?.key?.toLowerCase().includes(permSearch.toLowerCase())
+            rp.permission?.name?.toLowerCase().includes(debouncedPermSearch.toLowerCase()) ||
+            rp.permission?.key?.toLowerCase().includes(debouncedPermSearch.toLowerCase())
         )
       : assigned
 
-    const filteredAvailable = permSearch
+    const filteredAvailable = debouncedPermSearch
       ? available.filter(
           (p) =>
-            p.name?.toLowerCase().includes(permSearch.toLowerCase()) ||
-            p.key?.toLowerCase().includes(permSearch.toLowerCase())
+            p.name?.toLowerCase().includes(debouncedPermSearch.toLowerCase()) ||
+            p.key?.toLowerCase().includes(debouncedPermSearch.toLowerCase())
         )
       : available
 
@@ -592,9 +600,12 @@ export default function UsersPage() {
     <div className="w-full min-h-screen bg-slate-50/50 px-3 sm:px-6 py-5 space-y-5">
       {/* ── Top Hero Banner ─────────────────────────────────────────────────── */}
       <div className="relative overflow-hidden rounded-2xl border border-teal-200/80 bg-gradient-to-r from-teal-500/10 via-sky-500/5 to-teal-500/10 p-5 sm:p-6 shadow-xs">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
+        <div className="pointer-events-none absolute -right-12 -top-12 h-48 w-48 rounded-full bg-teal-500/10 blur-3xl" />
+        <div className="pointer-events-none absolute -left-12 -bottom-12 h-48 w-48 rounded-full bg-sky-500/10 blur-3xl" />
+
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
           <div className="space-y-1.5 max-w-2xl">
-            <div className="inline-flex items-center gap-2 rounded-md border border-teal-200/80 bg-white px-2.5 py-0.5 text-[11px] font-bold text-teal-800 shadow-2xs">
+            <div className="inline-flex items-center gap-2 rounded-full border border-teal-200/80 bg-white/90 backdrop-blur-xs px-3 py-0.5 text-[11px] font-bold text-teal-800 shadow-2xs">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-teal-600"></span>

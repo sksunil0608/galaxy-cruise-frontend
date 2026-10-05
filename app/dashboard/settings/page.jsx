@@ -553,27 +553,30 @@ export default function SettingsPage() {
   const envKeyCount = Object.keys(envData).length
 
   return (
-    <div className="w-full min-h-screen bg-slate-50/50 px-3 sm:px-6 py-5 space-y-6">
+    <div className="w-full min-h-screen bg-slate-50/50 px-3 sm:px-6 py-5 space-y-6 max-w-full overflow-x-hidden min-w-0">
       {/* ── Top Header Banner ──────────────────────────────────────────────── */}
       <div className="relative overflow-hidden rounded-2xl border border-teal-200/80 bg-gradient-to-r from-teal-500/10 via-sky-500/5 to-teal-500/10 p-5 sm:p-6 shadow-xs">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
-          <div className="space-y-1.5 max-w-2xl">
-            <div className="inline-flex items-center gap-2 rounded-md border border-teal-200/80 bg-white px-2.5 py-0.5 text-[11px] font-bold text-teal-800 shadow-2xs">
+        <div className="pointer-events-none absolute -right-12 -top-12 h-48 w-48 rounded-full bg-teal-500/10 blur-3xl" />
+        <div className="pointer-events-none absolute -left-12 -bottom-12 h-48 w-48 rounded-full bg-sky-500/10 blur-3xl" />
+
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          <div className="space-y-1.5 max-w-2xl min-w-0">
+            <div className="inline-flex items-center gap-2 rounded-full border border-teal-200/80 bg-white/90 backdrop-blur-xs px-3 py-0.5 text-[11px] font-bold text-teal-800 shadow-2xs">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-teal-600"></span>
               </span>
               <span>Frontend Runtime & .env Configuration</span>
             </div>
-            <h1 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900">
+            <h1 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 break-words">
               System Settings & .env Management
             </h1>
-            <p className="text-xs sm:text-sm font-medium text-slate-600 leading-relaxed">
+            <p className="text-xs sm:text-sm font-medium text-slate-600 leading-relaxed break-words">
               Manage your frontend environment variables (<code className="font-mono bg-teal-50 text-teal-900 px-1.5 py-0.5 rounded text-xs font-bold">.env</code>) directly from this dashboard. Changes can be written straight to disk and applied to the active runtime without redeploying.
             </p>
           </div>
 
-          <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 bg-white shadow-2xs text-xs font-bold text-slate-700">
               <HardDrive className="size-3.5 text-teal-700" />
               <span>File: {envFilePath}</span>
@@ -597,16 +600,16 @@ export default function SettingsPage() {
 
       {/* ── Alerts ──────────────────────────────────────────────────────────── */}
       {error && (
-        <div className="flex items-center gap-2.5 p-3.5 rounded-xl border border-rose-200 bg-rose-50 text-rose-800 text-xs font-semibold shadow-2xs">
+        <div className="flex items-center gap-2.5 p-3.5 rounded-xl border border-rose-200 bg-rose-50 text-rose-800 text-xs font-semibold shadow-2xs break-words">
           <XCircle className="size-4 shrink-0 text-rose-600" />
-          <span>{error}</span>
+          <span className="min-w-0">{error}</span>
         </div>
       )}
 
       {notice && (
-        <div className="flex items-center gap-2.5 p-3.5 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-800 text-xs font-semibold shadow-2xs">
+        <div className="flex items-center gap-2.5 p-3.5 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-800 text-xs font-semibold shadow-2xs break-words">
           <CheckCircle2 className="size-4 shrink-0 text-emerald-600" />
-          <span>{notice}</span>
+          <span className="min-w-0">{notice}</span>
         </div>
       )}
 
@@ -616,40 +619,40 @@ export default function SettingsPage() {
           <span>Loading configuration & .env...</span>
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-6 min-w-0">
           {/* ── Section 1: Microservice Endpoint Cards ─────────────────────── */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 min-w-0">
             {/* ── Card 1: Core Backend API URL ─────────────────────────────────── */}
-            <div className="rounded-2xl border border-slate-200/90 bg-white p-5 sm:p-7 shadow-2xs space-y-5">
-              <div className="flex items-start justify-between gap-3 pb-4 border-b border-slate-100">
-                <div className="flex items-center gap-3">
+            <div className="rounded-2xl border border-slate-200/90 bg-white p-4 sm:p-7 shadow-2xs space-y-4 sm:space-y-5 min-w-0">
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 pb-4 border-b border-slate-100">
+                <div className="flex items-start sm:items-center gap-3 min-w-0">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-50 border border-teal-200 text-teal-800">
                     <Database className="size-5" />
                   </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-base font-bold text-slate-900">Backend API URL</h2>
-                      <span className="font-mono text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-semibold">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h2 className="text-base font-bold text-slate-900 break-words">Backend API URL</h2>
+                      <span className="font-mono text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-semibold break-all">
                         NEXT_PUBLIC_API_URL
                       </span>
                     </div>
-                    <p className="text-xs text-slate-500 font-medium">Core database, cruise inventory, users & RBAC</p>
+                    <p className="text-xs text-slate-500 font-medium break-words">Core database, cruise inventory, users & RBAC</p>
                   </div>
                 </div>
 
-                <span className="text-[10px] font-bold px-2.5 py-1 rounded-md bg-teal-50 text-teal-800 border border-teal-200 shrink-0">
+                <span className="text-[10px] font-bold px-2.5 py-1 rounded-md bg-teal-50 text-teal-800 border border-teal-200 shrink-0 self-start sm:self-auto">
                   Primary API
                 </span>
               </div>
 
-              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed break-words">
                 Base URL where the core Cruise Saga backend is hosted. Saving will update the active runtime and automatically persist to the frontend <code className="px-1 py-0.5 bg-slate-100 rounded font-mono text-xs">.env</code> file.
               </p>
 
               <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                   <span>Backend API Endpoint URL</span>
-                  <span className="text-[11px] font-mono text-slate-400 font-normal">Default: {DEFAULT_API_URL}</span>
+                  <span className="text-[11px] font-mono text-slate-400 font-normal break-all">Default: {DEFAULT_API_URL}</span>
                 </label>
                 <input
                   type="text"
@@ -665,12 +668,12 @@ export default function SettingsPage() {
               </div>
 
               {/* Test & Action Controls */}
-              <div className="flex items-center justify-between gap-3 pt-1 flex-wrap">
-                <div className="flex items-center gap-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-1">
+                <div className="flex items-center gap-2 w-full sm:w-auto">
                   <button
                     onClick={handleTestApi}
                     disabled={testingApi || !apiUrl.trim()}
-                    className="inline-flex items-center gap-1.5 h-8.5 px-3.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-2xs cursor-pointer"
+                    className="inline-flex items-center justify-center gap-1.5 h-8.5 px-3.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-2xs cursor-pointer flex-1 sm:flex-initial"
                   >
                     {testingApi ? <Loader2 className="size-3.5 animate-spin" /> : <PlugZap className="size-3.5 text-teal-700" />}
                     <span>Test Connection</span>
@@ -678,7 +681,7 @@ export default function SettingsPage() {
 
                   <button
                     onClick={handleResetApi}
-                    className="inline-flex items-center gap-1.5 h-8.5 px-3 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition shadow-2xs cursor-pointer"
+                    className="inline-flex items-center justify-center gap-1.5 h-8.5 px-3 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition shadow-2xs cursor-pointer flex-1 sm:flex-initial"
                     title="Reset to default URL"
                   >
                     <RotateCcw className="size-3.5" />
@@ -689,7 +692,7 @@ export default function SettingsPage() {
                 <button
                   onClick={handleSaveApi}
                   disabled={savingApi || !isApiDirty || !apiUrl.trim()}
-                  className="inline-flex items-center gap-1.5 h-8.5 px-5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed transition shadow-xs cursor-pointer"
+                  className="inline-flex items-center justify-center gap-1.5 h-8.5 px-5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed transition shadow-xs cursor-pointer w-full sm:w-auto"
                 >
                   {savingApi ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
                   <span>Save to .env</span>
@@ -699,7 +702,7 @@ export default function SettingsPage() {
               {/* Test Results Output */}
               {apiTestResult && (
                 <div
-                  className={`flex items-start gap-2.5 p-3.5 rounded-xl text-xs font-medium border ${
+                  className={`flex items-start gap-2.5 p-3.5 rounded-xl text-xs font-medium border break-words ${
                     apiTestResult.ok
                       ? "bg-emerald-50 border-emerald-200 text-emerald-800"
                       : "bg-rose-50 border-rose-200 text-rose-800"
@@ -710,30 +713,30 @@ export default function SettingsPage() {
                   ) : (
                     <XCircle className="size-4 shrink-0 text-rose-600 mt-0.5" />
                   )}
-                  <div>
+                  <div className="min-w-0">
                     <span className="font-bold">{apiTestResult.ok ? "Reachable" : "Connection Failed"}: </span>
-                    <span>{apiTestResult.detail}</span>
+                    <span className="break-all">{apiTestResult.detail}</span>
                     <span className="font-mono text-[11px] ml-1.5 opacity-80">({apiTestResult.ms}ms)</span>
                   </div>
                 </div>
               )}
 
               {/* Footer Status Metadata */}
-              <div className="pt-4 border-t border-slate-100 text-xs text-slate-500 space-y-1.5">
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-slate-400">Currently in use:</span>
-                    <code className="px-2 py-0.5 rounded bg-slate-100 font-mono text-slate-800 font-bold text-xs">
+              <div className="pt-4 border-t border-slate-100 text-xs text-slate-500 space-y-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 flex-wrap min-w-0">
+                    <span className="font-medium text-slate-400 shrink-0">Currently in use:</span>
+                    <code className="px-2 py-0.5 rounded bg-slate-100 font-mono text-slate-800 font-bold text-xs break-all">
                       {savedApiUrl || getApiBaseUrl()}
                     </code>
                   </div>
                   {envData.NEXT_PUBLIC_API_URL === (savedApiUrl || getApiBaseUrl()) ? (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 self-start sm:self-auto shrink-0">
                       <Check className="size-3" /> In sync with .env
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                      <AlertCircle className="size-3" /> Differs from .env ({envData.NEXT_PUBLIC_API_URL || "not set"})
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 self-start sm:self-auto break-all">
+                      <AlertCircle className="size-3 shrink-0" /> Differs from .env ({envData.NEXT_PUBLIC_API_URL || "not set"})
                     </span>
                   )}
                 </div>
@@ -746,36 +749,36 @@ export default function SettingsPage() {
             </div>
 
             {/* ── Card 2: Scraper Backend URL ─────────────────────────────────── */}
-            <div className="rounded-2xl border border-slate-200/90 bg-white p-5 sm:p-7 shadow-2xs space-y-5">
-              <div className="flex items-start justify-between gap-3 pb-4 border-b border-slate-100">
-                <div className="flex items-center gap-3">
+            <div className="rounded-2xl border border-slate-200/90 bg-white p-4 sm:p-7 shadow-2xs space-y-4 sm:space-y-5 min-w-0">
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 pb-4 border-b border-slate-100">
+                <div className="flex items-start sm:items-center gap-3 min-w-0">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-50 border border-teal-200 text-teal-800">
                     <Server className="size-5" />
                   </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-base font-bold text-slate-900">Scraper Backend URL</h2>
-                      <span className="font-mono text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-semibold">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h2 className="text-base font-bold text-slate-900 break-words">Scraper Backend URL</h2>
+                      <span className="font-mono text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-semibold break-all">
                         NEXT_PUBLIC_SCRAPER_URL
                       </span>
                     </div>
-                    <p className="text-xs text-slate-500 font-medium">Scraping worker, session management & cabin pricing refresher</p>
+                    <p className="text-xs text-slate-500 font-medium break-words">Scraping worker, session management & cabin pricing refresher</p>
                   </div>
                 </div>
 
-                <span className="text-[10px] font-bold px-2.5 py-1 rounded-md bg-teal-50 text-teal-800 border border-teal-200 shrink-0">
+                <span className="text-[10px] font-bold px-2.5 py-1 rounded-md bg-teal-50 text-teal-800 border border-teal-200 shrink-0 self-start sm:self-auto">
                   Worker Endpoint
                 </span>
               </div>
 
-              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed break-words">
                 Base URL where the scraper worker service (<code className="px-1.5 py-0.5 rounded bg-slate-100 font-mono text-slate-800 font-semibold text-xs">scrapper-backend</code>) is hosted. Saving persists to the <code className="px-1 py-0.5 bg-slate-100 rounded font-mono text-xs">.env</code> file directly.
               </p>
 
               <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                   <span>Scraper Base Endpoint URL</span>
-                  <span className="text-[11px] font-mono text-slate-400 font-normal">Default: {DEFAULT_SCRAPER_URL}</span>
+                  <span className="text-[11px] font-mono text-slate-400 font-normal break-all">Default: {DEFAULT_SCRAPER_URL}</span>
                 </label>
                 <input
                   type="text"
@@ -791,12 +794,12 @@ export default function SettingsPage() {
               </div>
 
               {/* Test & Action Controls */}
-              <div className="flex items-center justify-between gap-3 pt-1 flex-wrap">
-                <div className="flex items-center gap-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-1">
+                <div className="flex items-center gap-2 w-full sm:w-auto">
                   <button
                     onClick={handleTestScraper}
                     disabled={testingScraper || !scraperUrl.trim()}
-                    className="inline-flex items-center gap-1.5 h-8.5 px-3.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-2xs cursor-pointer"
+                    className="inline-flex items-center justify-center gap-1.5 h-8.5 px-3.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-2xs cursor-pointer flex-1 sm:flex-initial"
                   >
                     {testingScraper ? <Loader2 className="size-3.5 animate-spin" /> : <PlugZap className="size-3.5 text-teal-700" />}
                     <span>Test Connection</span>
@@ -804,7 +807,7 @@ export default function SettingsPage() {
 
                   <button
                     onClick={handleResetScraper}
-                    className="inline-flex items-center gap-1.5 h-8.5 px-3 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition shadow-2xs cursor-pointer"
+                    className="inline-flex items-center justify-center gap-1.5 h-8.5 px-3 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition shadow-2xs cursor-pointer flex-1 sm:flex-initial"
                     title="Reset to default URL"
                   >
                     <RotateCcw className="size-3.5" />
@@ -815,7 +818,7 @@ export default function SettingsPage() {
                 <button
                   onClick={handleSaveScraper}
                   disabled={savingScraper || !isScraperDirty || !scraperUrl.trim()}
-                  className="inline-flex items-center gap-1.5 h-8.5 px-5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed transition shadow-xs cursor-pointer"
+                  className="inline-flex items-center justify-center gap-1.5 h-8.5 px-5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed transition shadow-xs cursor-pointer w-full sm:w-auto"
                 >
                   {savingScraper ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
                   <span>Save to .env</span>
@@ -825,7 +828,7 @@ export default function SettingsPage() {
               {/* Test Results Output */}
               {scraperTestResult && (
                 <div
-                  className={`flex items-start gap-2.5 p-3.5 rounded-xl text-xs font-medium border ${
+                  className={`flex items-start gap-2.5 p-3.5 rounded-xl text-xs font-medium border break-words ${
                     scraperTestResult.ok
                       ? "bg-emerald-50 border-emerald-200 text-emerald-800"
                       : "bg-rose-50 border-rose-200 text-rose-800"
@@ -836,30 +839,30 @@ export default function SettingsPage() {
                   ) : (
                     <XCircle className="size-4 shrink-0 text-rose-600 mt-0.5" />
                   )}
-                  <div>
+                  <div className="min-w-0">
                     <span className="font-bold">{scraperTestResult.ok ? "Reachable" : "Connection Failed"}: </span>
-                    <span>{scraperTestResult.detail}</span>
+                    <span className="break-all">{scraperTestResult.detail}</span>
                     <span className="font-mono text-[11px] ml-1.5 opacity-80">({scraperTestResult.ms}ms)</span>
                   </div>
                 </div>
               )}
 
               {/* Footer Status Metadata */}
-              <div className="pt-4 border-t border-slate-100 text-xs text-slate-500 space-y-1.5">
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-slate-400">Currently in use:</span>
-                    <code className="px-2 py-0.5 rounded bg-slate-100 font-mono text-slate-800 font-bold text-xs">
+              <div className="pt-4 border-t border-slate-100 text-xs text-slate-500 space-y-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 flex-wrap min-w-0">
+                    <span className="font-medium text-slate-400 shrink-0">Currently in use:</span>
+                    <code className="px-2 py-0.5 rounded bg-slate-100 font-mono text-slate-800 font-bold text-xs break-all">
                       {savedScraperUrl || getScraperBaseUrl()}
                     </code>
                   </div>
                   {envData.NEXT_PUBLIC_SCRAPER_URL === (savedScraperUrl || getScraperBaseUrl()) ? (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 self-start sm:self-auto shrink-0">
                       <Check className="size-3" /> In sync with .env
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                      <AlertCircle className="size-3" /> Differs from .env ({envData.NEXT_PUBLIC_SCRAPER_URL || "not set"})
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 self-start sm:self-auto break-all">
+                      <AlertCircle className="size-3 shrink-0" /> Differs from .env ({envData.NEXT_PUBLIC_SCRAPER_URL || "not set"})
                     </span>
                   )}
                 </div>
@@ -873,24 +876,27 @@ export default function SettingsPage() {
           </div>
 
           {/* ── Section 2: Dedicated Frontend .env Manager ─────────────────── */}
-          <div className="rounded-2xl border border-slate-200/90 bg-white p-5 sm:p-7 shadow-2xs space-y-6">
+          <div className="rounded-2xl border border-slate-200/90 bg-white p-4 sm:p-7 shadow-2xs space-y-5 sm:space-y-6 min-w-0">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-100">
-              <div className="flex items-center gap-3">
+              <div className="flex items-start sm:items-center gap-3 min-w-0">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-50 border border-teal-200 text-teal-800">
                   <FileCode className="size-5" />
                 </div>
-                <div>
-                  <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                    <span>Frontend Environment File (<code className="font-mono text-sm text-teal-800">{envFilePath}</code>)</span>
+                <div className="min-w-0">
+                  <h2 className="text-base font-bold text-slate-900 break-words flex items-center gap-2 flex-wrap">
+                    <span>Frontend Environment File</span>
+                    <code className="font-mono text-xs text-teal-800 bg-teal-50 px-1.5 py-0.5 rounded border border-teal-200 break-all">
+                      {envFilePath}
+                    </code>
                   </h2>
-                  <p className="text-xs text-slate-500 font-medium">
+                  <p className="text-xs text-slate-500 font-medium break-words">
                     View, edit, add, or remove key-value variables directly stored in the root <code className="font-mono text-slate-700">.env</code> file
                   </p>
                 </div>
               </div>
 
               {/* View Mode Toggle & Reload */}
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-2 shrink-0 flex-wrap">
                 <div className="inline-flex items-center p-0.5 rounded-lg bg-slate-100 border border-slate-200 text-xs font-semibold">
                   <button
                     onClick={() => setEnvMode("visual")}
@@ -901,7 +907,8 @@ export default function SettingsPage() {
                     }`}
                   >
                     <Sliders className="size-3.5 text-teal-700" />
-                    <span>Table View</span>
+                    <span className="hidden sm:inline">Table View</span>
+                    <span className="sm:hidden">List View</span>
                   </button>
                   <button
                     onClick={() => {
@@ -974,8 +981,8 @@ export default function SettingsPage() {
                   </div>
                 </div>
 
-                {/* Table of variables */}
-                <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+                {/* Desktop & Tablet Table View (sm: and up) */}
+                <div className="hidden sm:block overflow-x-auto rounded-xl border border-slate-200 bg-white">
                   <table className="w-full text-left text-xs border-collapse">
                     <thead>
                       <tr className="border-b border-slate-200 bg-slate-50/80 text-[11px] font-bold text-slate-600 uppercase tracking-wider">
@@ -1058,25 +1065,113 @@ export default function SettingsPage() {
                   </table>
                 </div>
 
+                {/* Mobile List View (< sm:) */}
+                <div className="sm:hidden space-y-3">
+                  {Object.keys(editedEnv).length === 0 ? (
+                    <div className="py-8 text-center text-slate-400 font-medium rounded-xl border border-slate-200 bg-white p-4 text-xs">
+                      No variables defined in .env
+                    </div>
+                  ) : (
+                    Object.entries(editedEnv).map(([key, value]) => {
+                      const isKnownApi = key === "NEXT_PUBLIC_API_URL"
+                      const isKnownScraper = key === "NEXT_PUBLIC_SCRAPER_URL"
+                      const isCustom = !isKnownApi && !isKnownScraper
+
+                      return (
+                        <div
+                          key={key}
+                          className="p-3.5 rounded-xl border border-slate-200 bg-white shadow-2xs space-y-3"
+                        >
+                          {/* Top Row: Key Name & Badges + Action Buttons */}
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="space-y-1.5 min-w-0">
+                              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                Variable Key
+                              </div>
+                              <div className="font-mono font-bold text-xs text-slate-900 break-all leading-tight">
+                                {key}
+                              </div>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {isKnownApi && (
+                                  <span className="inline-block text-[9px] font-sans px-1.5 py-0.5 rounded bg-teal-50 text-teal-800 border border-teal-200 font-bold">
+                                    Core API
+                                  </span>
+                                )}
+                                {isKnownScraper && (
+                                  <span className="inline-block text-[9px] font-sans px-1.5 py-0.5 rounded bg-sky-50 text-sky-800 border border-sky-200 font-bold">
+                                    Scraper Worker
+                                  </span>
+                                )}
+                                {isCustom && (
+                                  <span className="inline-block text-[9px] font-sans px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-semibold">
+                                    Custom
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-1 shrink-0 pt-0.5">
+                              <button
+                                type="button"
+                                onClick={() => handleCopy(value, key)}
+                                className="p-2 rounded-lg border border-slate-200 bg-slate-50 text-slate-600 hover:text-slate-900 hover:bg-slate-100 active:scale-95 transition cursor-pointer"
+                                title="Copy Value"
+                              >
+                                {copiedKey === key ? (
+                                  <Check className="size-3.5 text-emerald-600" />
+                                ) : (
+                                  <Copy className="size-3.5" />
+                                )}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteVariable(key)}
+                                className="p-2 rounded-lg border border-rose-200 bg-rose-50/60 text-rose-600 hover:text-rose-700 hover:bg-rose-100 active:scale-95 transition cursor-pointer"
+                                title="Delete Key"
+                              >
+                                <Trash2 className="size-3.5" />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Value Input */}
+                          <div className="space-y-1">
+                            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                              Value
+                            </label>
+                            <input
+                              type="text"
+                              value={value ?? ""}
+                              onChange={(e) => handleEnvValueChange(key, e.target.value)}
+                              placeholder="value"
+                              className="w-full h-9 px-3 rounded-lg border border-slate-200 bg-slate-50/40 text-xs font-mono font-medium text-slate-800 outline-none focus:bg-white focus:border-teal-600 transition shadow-2xs"
+                            />
+                          </div>
+                        </div>
+                      )
+                    })
+                  )}
+                </div>
+
                 {/* Save Bar */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
                   <div className="text-[11px] text-slate-400 flex items-center gap-1.5">
-                    <Info className="size-3.5 text-slate-400" />
+                    <Info className="size-3.5 text-slate-400 shrink-0" />
                     <span>Saving will directly update the <code className="font-mono text-slate-700">{envFilePath}</code> file on disk.</span>
                   </div>
 
-                  <div className="flex items-center gap-2 justify-end">
+                  <div className="flex items-center gap-2 justify-end w-full sm:w-auto">
                     <button
                       onClick={() => setEditedEnv({ ...envData })}
                       disabled={!isVisualEnvDirty || savingEnv}
-                      className="h-8.5 px-3 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-2xs cursor-pointer"
+                      className="h-8.5 px-3 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-2xs cursor-pointer flex-1 sm:flex-initial"
                     >
                       Discard Changes
                     </button>
                     <button
                       onClick={handleSaveVisualEnv}
                       disabled={!isVisualEnvDirty || savingEnv}
-                      className="h-8.5 px-5 inline-flex items-center gap-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold transition disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-xs"
+                      className="h-8.5 px-5 inline-flex items-center justify-center gap-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold transition disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-xs flex-1 sm:flex-initial"
                     >
                       {savingEnv ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
                       <span>Save Changes to .env</span>
@@ -1108,24 +1203,24 @@ export default function SettingsPage() {
 
                 {/* Save Raw Bar */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
-                  <div className="text-[11px] text-slate-400">
+                  <div className="text-[11px] text-slate-400 min-w-0 break-words">
                     {envLastModified && (
                       <span>Last modified on disk: {new Date(envLastModified).toLocaleString()}</span>
                     )}
                   </div>
 
-                  <div className="flex items-center gap-2 justify-end">
+                  <div className="flex items-center gap-2 justify-end w-full sm:w-auto">
                     <button
                       onClick={() => setEditedRaw(envRaw)}
                       disabled={!isRawEnvDirty || savingEnv}
-                      className="h-8.5 px-3 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-2xs cursor-pointer"
+                      className="h-8.5 px-3 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-2xs cursor-pointer flex-1 sm:flex-initial"
                     >
                       Revert
                     </button>
                     <button
                       onClick={handleSaveRawEnv}
                       disabled={!isRawEnvDirty || savingEnv}
-                      className="h-8.5 px-5 inline-flex items-center gap-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold transition disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-xs"
+                      className="h-8.5 px-5 inline-flex items-center justify-center gap-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold transition disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-xs flex-1 sm:flex-initial"
                     >
                       {savingEnv ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
                       <span>Save Raw .env</span>

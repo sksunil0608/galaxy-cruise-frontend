@@ -59,11 +59,11 @@ export default function DashboardLayout({ children }) {
     >
       <AppSidebar variant="sidebar" />
 
-      <SidebarInset className="bg-slate-50/60 min-h-screen flex flex-col m-0 rounded-none shadow-none w-full max-w-full min-w-0 overflow-x-hidden">
+      <SidebarInset className="bg-[#f8fafc] min-h-screen flex flex-col m-0 rounded-none shadow-none w-full max-w-full min-w-0">
         <SiteHeader title={title} />
-        <main className="flex-1 w-full max-w-full min-w-0 overflow-x-hidden">
+        <div className="flex-1 w-full max-w-full min-w-0">
           {children}
-        </main>
+        </div>
       </SidebarInset>
     </SidebarProvider>
   )

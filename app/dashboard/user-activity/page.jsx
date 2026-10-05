@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import { useDebounce } from "@/hooks/use-debounce"
 import {
   Activity,
   Calendar,
@@ -31,8 +32,8 @@ export default function UserActivityPage() {
   const [offset, setOffset]           = useState(0)
   const [loading, setLoading]         = useState(false)
   const [filter, setFilter]           = useState("all")
-  const [search, setSearch]           = useState("")
   const [searchInput, setSearchInput] = useState("")
+  const debouncedSearchInput          = useDebounce(searchInput, 350)
   const bootedRef = useRef(false)
 
   const stats = {
@@ -41,7 +42,7 @@ export default function UserActivityPage() {
     refreshes: items.filter(a => a.action === "refresh_cabin").length,
   }
 
-  async function load({ reset = false, f = filter, s = search } = {}) {
+  async function load({ reset = false, f = filter, s = debouncedSearchInput } = {}) {
     setLoading(true)
     const off = reset ? 0 : offset
     const res = await fetchActivities({
@@ -85,21 +86,24 @@ export default function UserActivityPage() {
     }
   }, [])
 
+  // Auto-trigger search when debounced search input changes
+  useEffect(() => {
+    if (!bootedRef.current) return
+    load({ reset: true, f: filter, s: debouncedSearchInput })
+  }, [debouncedSearchInput])
+
   function applyFilter(f) {
     setFilter(f)
-    load({ reset: true, f, s: search })
+    load({ reset: true, f, s: debouncedSearchInput })
   }
 
   function applySearch(e) {
-    e.preventDefault()
-    setSearch(searchInput)
+    e?.preventDefault()
     load({ reset: true, f: filter, s: searchInput })
   }
 
   function clearSearch() {
     setSearchInput("")
-    setSearch("")
-    load({ reset: true, f: filter, s: "" })
   }
 
   const hasMore = offset < total

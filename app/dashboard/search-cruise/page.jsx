@@ -152,10 +152,17 @@ function SearchableSelect({ placeholder, value, onChange, options, onEnter }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState(value || "");
   const boxRef = useRef(null);
+  const debounceTimerRef = useRef(null);
 
   useEffect(() => {
     setQuery(value || "");
   }, [value]);
+
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     function onClickOutside(event) {
@@ -178,12 +185,18 @@ function SearchableSelect({ placeholder, value, onChange, options, onEnter }) {
   const handleInputChange = (event) => {
     const newVal = event.target.value;
     setQuery(newVal);
-    onChange(newVal);
     if (!open) setOpen(true);
+
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(() => {
+      onChange(newVal);
+    }, 300);
   };
 
   const handleKeyDown = (event) => {
     if (event.key === "Enter") {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+      onChange(query);
       setOpen(false);
       if (onEnter) onEnter();
     }
@@ -193,7 +206,7 @@ function SearchableSelect({ placeholder, value, onChange, options, onEnter }) {
     <div ref={boxRef} className="relative">
       <div className="relative">
         <input
-          className="w-full h-9.5 rounded-lg border border-slate-200 bg-white px-3 pr-8 text-sm font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition shadow-2xs"
+          className="w-full h-10 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white px-3.5 pr-8 text-sm font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition-all shadow-2xs"
           placeholder={placeholder}
           value={query}
           onFocus={() => setOpen(true)}
@@ -205,10 +218,11 @@ function SearchableSelect({ placeholder, value, onChange, options, onEnter }) {
             type="button"
             onClick={(e) => {
               e.stopPropagation();
+              if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
               setQuery("");
               onChange("");
             }}
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer p-0.5"
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer p-0.5 rounded-full hover:bg-slate-100 transition"
             title="Clear"
           >
             <X size={14} />
@@ -218,30 +232,32 @@ function SearchableSelect({ placeholder, value, onChange, options, onEnter }) {
         )}
       </div>
       {open && (
-        <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-40 max-h-64 overflow-y-auto bg-white rounded-lg border border-slate-200 shadow-lg py-1">
+        <div className="absolute top-[calc(100%+6px)] left-0 right-0 z-40 max-h-64 overflow-y-auto bg-white rounded-xl border border-slate-200 shadow-xl py-1.5 backdrop-blur-md">
           <div
             onMouseDown={(event) => {
               event.preventDefault();
+              if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
               setQuery("");
               onChange("");
               setOpen(false);
             }}
-            className="px-3.5 py-2 text-xs font-bold text-slate-500 hover:bg-slate-50 cursor-pointer border-b border-slate-100 flex items-center justify-between"
+            className="px-3.5 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-50 hover:text-slate-800 cursor-pointer border-b border-slate-100 flex items-center justify-between transition-colors"
           >
             <span>{placeholder} (All)</span>
-            <span className="text-[10px] text-slate-400 font-normal">Clear</span>
+            <span className="text-[10px] text-slate-400 font-medium">Reset</span>
           </div>
           {query.trim() && !uniqueOptions.some((opt) => opt.toLowerCase() === query.trim().toLowerCase()) && (
             <div
               onMouseDown={(event) => {
                 event.preventDefault();
+                if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
                 onChange(query.trim());
                 setOpen(false);
               }}
-              className="px-3.5 py-2 text-xs cursor-pointer bg-teal-50/70 hover:bg-teal-100/70 text-teal-900 font-semibold border-b border-teal-100 flex items-center justify-between"
+              className="px-3.5 py-2 text-xs cursor-pointer bg-teal-50/80 hover:bg-teal-100/80 text-teal-900 font-semibold border-b border-teal-100 flex items-center justify-between transition-colors"
             >
               <span>Search ship containing <strong className="font-bold">"{query.trim()}"</strong></span>
-              <span className="text-[10px] bg-teal-200/80 px-1.5 py-0.5 rounded text-teal-800 font-bold">Apply</span>
+              <span className="text-[10px] bg-teal-200/80 px-2 py-0.5 rounded-md text-teal-800 font-bold">Apply</span>
             </div>
           )}
           {filtered.length === 0 && !query.trim() && (
@@ -252,6 +268,7 @@ function SearchableSelect({ placeholder, value, onChange, options, onEnter }) {
               key={`${opt}-${idx}`}
               onMouseDown={(event) => {
                 event.preventDefault();
+                if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
                 setQuery(opt);
                 onChange(opt);
                 setOpen(false);
@@ -999,97 +1016,110 @@ function PricingModal({ row, onClose, onRefreshComplete }) {
   }
 
   return (
-    <Modal onClose={onClose} width="min(96vw, 680px)">
-      {/* Header + tabs */}
-      <div style={{ padding: "20px 24px 0", borderBottom: `1px solid ${T.border}` }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
-          <div>
-            <div style={{ fontSize: 11, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1 }}>Cabin Selection</div>
-            <h2 style={{ margin: "4px 0 0", fontSize: 19, fontWeight: 700 }}>{row.package}</h2>
-            <div style={{ marginTop: 4, fontSize: 12, color: T.textSlate, display: "flex", gap: 8, alignItems: "center" }}>
-              <span style={{ fontWeight: 500 }}>{row.ship}</span>
-              {row.vendor?.name && <span style={{ color: T.textMuted }}>· {row.vendor.name}</span>}
-              {row.cruiseLine && <span style={{ color: T.textMuted }}>· {CRUISE_LINE_LABELS[row.cruiseLine] ?? row.cruiseLine}</span>}
-            </div>
-          </div>
-          <button onClick={onClose} style={{ border: "none", background: T.muted, borderRadius: 6, width: 32, height: 32, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            <X size={15} />
-          </button>
-        </div>
-        <div style={{ display: "flex", gap: 2, overflowX: "auto" }}>
-          {cabinGroups.map(({ group, minPrice }) => {
-            const isActive = group === activeGroup;
-            const tc = typeColor(group);
-            return (
-              <button
-                key={group}
-                onClick={() => handleGroupChange(group)}
-                style={{
-                  display: "flex", flexDirection: "column", alignItems: "flex-start",
-                  padding: "10px 16px", border: "none", cursor: "pointer",
-                  borderBottom: isActive ? `2px solid ${tc.color}` : "2px solid transparent",
-                  background: isActive ? tc.bg : "transparent",
-                  borderRadius: "6px 6px 0 0", minWidth: 84,
-                }}
-              >
-                <span style={{ fontWeight: 700, fontSize: 13, color: isActive ? tc.color : T.textSlate }}>{group}</span>
-                {minPrice != null && (
-                  <span style={{ fontSize: 11, fontFamily: T.fontMono, color: isActive ? tc.color : T.textMuted, marginTop: 1 }}>
-                    from {safeCurrency(minPrice, row.currency)}
+    <Modal onClose={onClose} width="min(96vw, 780px)">
+      <div className="flex flex-col h-[650px] max-h-[88vh] w-full bg-white overflow-hidden rounded-2xl">
+        {/* Header + tabs */}
+        <div className="p-5 sm:p-6 pb-3.5 border-b border-slate-200/80 bg-gradient-to-b from-slate-50/80 to-white shrink-0">
+          <div className="flex items-start justify-between gap-4 mb-3.5">
+            <div className="space-y-1.5">
+              <div className="inline-flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-wider text-teal-800 bg-teal-50 border border-teal-200/80 px-2.5 py-0.5 rounded-full shadow-2xs">
+                <Sparkles size={11} className="text-teal-600" />
+                <span>Cabin Selection · Live Staterooms</span>
+              </div>
+              <h2 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight leading-snug">
+                {row.package || "Cruise Stateroom Inventory"}
+              </h2>
+              <div className="flex items-center gap-2 flex-wrap text-xs text-slate-600 pt-0.5">
+                <span className="font-bold text-slate-900 bg-slate-100 px-2.5 py-0.5 rounded-md border border-slate-200/70">
+                  {row.ship}
+                </span>
+                {row.vendor?.name && (
+                  <span className="font-medium text-slate-500 bg-slate-50 px-2 py-0.5 rounded-md border border-slate-200/60">
+                    {row.vendor.name}
                   </span>
                 )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Deck plan lightbox */}
-      {deckImageUrl !== null && (
-        <div
-          onClick={() => setDeckImageUrl(null)}
-          style={{
-            position: "fixed", inset: 0, zIndex: 9999,
-            background: "rgba(0,0,0,0.88)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}
-        >
-          <button
-            onClick={() => setDeckImageUrl(null)}
-            style={{
-              position: "absolute", top: 18, right: 18,
-              background: "rgba(255,255,255,0.15)", border: "none",
-              borderRadius: "50%", width: 36, height: 36,
-              cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-            }}
-          >
-            <X size={18} color="#fff" />
-          </button>
-          {deckImageUrl ? (
-            <img
-              src={deckImageUrl}
-              alt="Deck plan"
-              onClick={e => e.stopPropagation()}
-              style={{ maxWidth: "90vw", maxHeight: "90vh", borderRadius: 8, objectFit: "contain" }}
-            />
-          ) : (
-            <div
-              onClick={e => e.stopPropagation()}
-              style={{
-                background: "#1e293b", borderRadius: 12, padding: "48px 64px",
-                display: "flex", flexDirection: "column", alignItems: "center", gap: 16,
-              }}
-            >
-              <ImageIcon size={48} color="#475569" />
-              <p style={{ color: "#94a3b8", fontSize: 15, margin: 0, fontWeight: 500 }}>No deck image available</p>
-              <p style={{ color: "#64748b", fontSize: 12, margin: 0 }}>Upload a deck plan via Ship Decks management</p>
+                {row.cruiseLine && (
+                  <span className="font-medium text-slate-500 bg-slate-50 px-2 py-0.5 rounded-md border border-slate-200/60">
+                    {CRUISE_LINE_LABELS[row.cruiseLine] ?? row.cruiseLine}
+                  </span>
+                )}
+              </div>
             </div>
-          )}
-        </div>
-      )}
 
-      {/* Category + cabin list */}
-      <div style={{ overflowY: "auto", maxHeight: "62vh" }}>
+            <button
+              onClick={onClose}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 transition cursor-pointer"
+            >
+              <X size={16} />
+            </button>
+          </div>
+
+          {/* Category Tab Pills with Equal Size & Uniform Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-1">
+            {cabinGroups.map(({ group, minPrice }) => {
+              const isActive = group === activeGroup;
+              return (
+                <button
+                  key={group}
+                  onClick={() => handleGroupChange(group)}
+                  className={`flex flex-col items-start justify-center px-3 py-2 rounded-xl text-left transition-all cursor-pointer shadow-2xs ${
+                    isActive
+                      ? "bg-teal-800 text-white shadow-sm shadow-teal-900/20 ring-1 ring-teal-700"
+                      : "bg-slate-50/90 hover:bg-slate-100/90 text-slate-700 border border-slate-200/80"
+                  }`}
+                >
+                  <span className="font-bold text-xs leading-tight truncate w-full">{group}</span>
+                  {minPrice != null ? (
+                    <span
+                      className={`text-[10.5px] font-mono mt-0.5 truncate w-full ${
+                        isActive ? "text-teal-200 font-semibold" : "text-slate-500 font-medium"
+                      }`}
+                    >
+                      from {safeCurrency(minPrice, row.currency)}
+                    </span>
+                  ) : (
+                    <span className="text-[10.5px] text-slate-400 mt-0.5">--</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Deck plan lightbox */}
+        {deckImageUrl !== null && (
+          <div
+            onClick={() => setDeckImageUrl(null)}
+            className="fixed inset-0 z-9999 bg-black/90 backdrop-blur-sm flex items-center justify-center p-4"
+          >
+            <button
+              onClick={() => setDeckImageUrl(null)}
+              className="absolute top-5 right-5 bg-white/20 hover:bg-white/30 text-white rounded-full p-2 transition cursor-pointer"
+            >
+              <X size={20} />
+            </button>
+            {deckImageUrl ? (
+              <img
+                src={deckImageUrl}
+                alt="Deck plan"
+                onClick={(e) => e.stopPropagation()}
+                className="max-w-[92vw] max-h-[88vh] rounded-xl object-contain shadow-2xl border border-white/10"
+              />
+            ) : (
+              <div
+                onClick={(e) => e.stopPropagation()}
+                className="bg-slate-900 border border-slate-800 rounded-2xl p-10 flex flex-col items-center gap-3 text-center"
+              >
+                <ImageIcon size={44} className="text-slate-600" />
+                <p className="text-white font-bold text-sm">No deck image available</p>
+                <p className="text-slate-400 text-xs">Upload a deck plan via Ship Decks management</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Category + cabin list (fixed flex-1 scrollable area) */}
+        <div className="flex-1 overflow-y-auto divide-y divide-slate-100 min-h-0 bg-white">
         {cabinGroups.length === 0 && (
           <LeadInDetailsPanel
             job={refreshJob}
@@ -1110,19 +1140,9 @@ function PricingModal({ row, onClose, onRefreshComplete }) {
           const isExpanded = expandedCategory === cat.code;
           const isGTY = cat.avlResult === "GTY" || cat.status === "Guarantee";
           const cache = cabinCache[cat.code];
-          // Prefer the real per-cabin count once it's been fetched — the
-          // list-level `avail`/`available` field is a summary number from the
-          // vendor's search API that's captured before detail-fetch and never
-          // reconciled afterward, so it can disagree with the real cabin rows
-          // (e.g. showing "1 avail" when 24 real cabins were actually found).
           const hasRealCabinData = (cat.cabins ?? []).length > 0;
           const realCabinCount = (cat.cabins ?? []).length;
           const avail = hasRealCabinData ? realCabinCount : (cat.avail ?? cat.available ?? 0);
-          // The vendor's `status` field (e.g. GoHal) can say "Available" even
-          // when the real fetched cabin list is empty for that specific
-          // sailing — a stale/disconnected summary flag, same class of issue
-          // as the avail-count mismatch above. Once real cabin data exists,
-          // let the actual count be the source of truth for the pill too.
           const effectiveStatus = hasRealCabinData
             ? (realCabinCount > 0 ? "Available" : "Sold Out")
             : (cat.status && cat.status !== "Unknown"
@@ -1139,118 +1159,130 @@ function PricingModal({ row, onClose, onRefreshComplete }) {
           ].find(p => p != null && Number.isFinite(Number(p)) && Number(p) > 0);
 
           return (
-            <div key={cat.code} style={{ borderBottom: `1px solid ${T.border}` }}>
+            <div key={cat.code} className="transition-colors">
               {/* Category row */}
               <button
                 onClick={() => handleCategoryClick(cat)}
-                style={{
-                  width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
-                  padding: "12px 20px", border: "none", background: isExpanded ? T.muted : T.surface,
-                  cursor: "pointer", textAlign: "left", gap: 12,
-                }}
+                className={`w-full flex items-center justify-between p-4 px-5 text-left gap-3 transition-colors cursor-pointer ${
+                  isExpanded ? "bg-slate-50/90" : "bg-white hover:bg-slate-50/60"
+                }`}
               >
-                <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                  <span style={{ fontFamily: T.fontMono, fontWeight: 700, fontSize: 14, color: T.textPrimary, flexShrink: 0 }}>
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="font-mono font-bold text-xs bg-slate-100 text-slate-800 border border-slate-200/80 px-2.5 py-1 rounded-lg shrink-0">
                     {cat.code}
                   </span>
-                  <span style={{ fontSize: 13, color: T.textSlate, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <span className="text-xs font-semibold text-slate-800 truncate">
                     {cat.name ?? cat.description}
                   </span>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+
+                <div className="flex items-center gap-3 shrink-0">
                   {categoryPrice != null && Number(categoryPrice) > 0 && (
-                    <span style={{ fontFamily: T.fontMono, fontWeight: 700, fontSize: 13, color: T.textPrimary }}>
+                    <span className="font-mono font-black text-xs text-slate-900 bg-slate-100/80 px-2 py-0.5 rounded-md border border-slate-200/60">
                       {safeCurrency(categoryPrice, row.currency)}
                     </span>
                   )}
-                  <span style={{ fontSize: 12, color: T.textMuted }}>{avail} avail</span>
+                  <span className="text-[11px] font-semibold text-slate-500 bg-slate-50 px-2 py-0.5 rounded border border-slate-200/60">
+                    {avail} avail
+                  </span>
                   <StatusPill status={effectiveStatus} />
-                  {isExpanded ? <ChevronUp size={15} color={T.textSlate} /> : <ChevronDown size={15} color={T.textSlate} />}
+                  {isExpanded ? (
+                    <ChevronUp size={15} className="text-slate-500" />
+                  ) : (
+                    <ChevronDown size={15} className="text-slate-500" />
+                  )}
                 </div>
               </button>
 
               {/* Expanded: deck list */}
               {isExpanded && (
-                <div style={{ background: "#f8fafc", borderTop: `1px solid ${T.border}` }}>
+                <div className="bg-slate-50/50 border-t border-slate-200/70 p-3 sm:p-4 space-y-3">
                   {isGTY ? (
-                    <div style={{ padding: "14px 24px", fontSize: 13, color: T.textSlate, fontStyle: "italic" }}>
+                    <div className="p-4 rounded-xl bg-white border border-slate-200/80 text-xs text-slate-600 italic">
                       Guarantee — specific cabin assigned at time of sailing.
                     </div>
                   ) : cache?.loading ? (
-                    <div style={{ padding: "14px 24px", fontSize: 13, color: T.textMuted }}>Loading cabins…</div>
+                    <div className="p-5 text-center text-xs font-semibold text-slate-500 flex items-center justify-center gap-2">
+                      <RefreshCw size={14} className="animate-spin text-teal-700" />
+                      <span>Loading stateroom deck inventory…</span>
+                    </div>
                   ) : cache?.error ? (
-                    <div style={{ padding: "14px 24px", fontSize: 13, color: T.red }}>
-                      Failed to load cabin data.
-                      <div style={{ marginTop: 10 }}>
-                        <RefreshBanner
-                          job={refreshJob}
-                          onRefresh={() => handleRefresh(cat.code)}
-                        />
-                      </div>
+                    <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 space-y-2">
+                      <p className="font-bold">Failed to load cabin inventory.</p>
+                      <RefreshBanner
+                        job={refreshJob}
+                        onRefresh={() => handleRefresh(cat.code)}
+                      />
                     </div>
                   ) : !cache || cache.decks.length === 0 ? (
-                    <RefreshBanner
-                      job={refreshJob}
-                      onRefresh={() => handleRefresh(cat.code)}
-                    />
+                    <div className="rounded-xl bg-white border border-slate-200/80 p-3">
+                      <RefreshBanner
+                        job={refreshJob}
+                        onRefresh={() => handleRefresh(cat.code)}
+                      />
+                    </div>
                   ) : (
                     <>
                       {cache.decks.map((deck) => {
                         const deckKey = String(deck.deckNumber ?? deck.deckName);
                         const isDeckOpen = expandedDecks.has(deckKey);
                         return (
-                          <div key={deckKey} style={{ borderBottom: `1px solid ${T.border}` }}>
+                          <div
+                            key={deckKey}
+                            className="rounded-2xl border border-slate-200/90 bg-white overflow-hidden shadow-2xs"
+                          >
                             {/* Deck header */}
-                            <div style={{ display: "flex", alignItems: "center", width: "100%" }}>
+                            <div className="flex items-center justify-between p-3 px-4 bg-slate-50/80 border-b border-slate-100">
                               <button
                                 onClick={() => toggleDeck(deckKey)}
-                                style={{
-                                  flex: 1, display: "flex", alignItems: "center", gap: 8,
-                                  padding: "10px 24px", border: "none", background: "transparent",
-                                  cursor: "pointer", textAlign: "left",
-                                }}
+                                className="flex-1 flex items-center gap-2 text-left cursor-pointer"
                               >
-                                {isDeckOpen
-                                  ? <ChevronDown size={13} color={T.textSlate} />
-                                  : <ChevronRight size={13} color={T.textSlate} />}
-                                <span style={{ fontWeight: 700, fontSize: 13, color: T.textPrimary }}>{deck.deckName}</span>
-                                <span style={{ fontSize: 12, color: T.textMuted }}>({deck.cabins.length} cabin{deck.cabins.length !== 1 ? "s" : ""})</span>
+                                {isDeckOpen ? (
+                                  <ChevronDown size={14} className="text-slate-600 shrink-0" />
+                                ) : (
+                                  <ChevronRight size={14} className="text-slate-600 shrink-0" />
+                                )}
+                                <span className="font-bold text-xs text-slate-900">
+                                  {deck.deckName}
+                                </span>
+                                <span className="text-[11px] font-semibold text-teal-800 bg-teal-50 border border-teal-200/60 px-2 py-0.2 rounded-md">
+                                  {deck.cabins.length} cabin{deck.cabins.length !== 1 ? "s" : ""}
+                                </span>
                               </button>
+
                               <button
                                 onClick={() => setDeckImageUrl(deck.deckImage || "")}
                                 title={deck.deckImage ? "View deck plan" : "No deck image uploaded"}
-                                style={{
-                                  display: "flex", alignItems: "center", gap: 4,
-                                  padding: "6px 14px", marginRight: 8,
-                                  border: `1px solid ${T.border}`, borderRadius: 6,
-                                  background: T.surface, cursor: "pointer",
-                                  fontSize: 11,
-                                  color: deck.deckImage ? T.textSlate : T.textMuted,
-                                  opacity: deck.deckImage ? 1 : 0.6,
-                                }}
+                                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-[11px] font-bold text-slate-700 shadow-2xs transition cursor-pointer"
                               >
-                                <ImageIcon size={12} />
+                                <ImageIcon size={12} className="text-teal-700" />
                                 <span>Deck Plan</span>
                               </button>
                             </div>
 
-                            {/* Cabin rows */}
+                            {/* Multi-column Stateroom Cards Grid */}
                             {isDeckOpen && (
-                              <div style={{ paddingBottom: 6 }}>
-                                {deck.cabins.map((cabin) => (
-                                  <div
-                                    key={cabin.cabinNumber}
-                                    style={{ display: "flex", alignItems: "center", gap: 16, padding: "7px 40px", borderTop: `1px solid ${T.border}` }}
-                                  >
-                                    <span style={{ fontFamily: T.fontMono, fontWeight: 700, fontSize: 13, color: T.textPrimary, minWidth: 48 }}>
-                                      {cabin.cabinNumber}
-                                    </span>
-                                    <span style={{ fontSize: 12, color: T.textSlate }}>
-                                      {cabin.capacity ? `${cabin.capacity} pax` : "—"}
-                                    </span>
-                                    <StatusPill status={cabin.status} />
-                                  </div>
-                                ))}
+                              <div className="p-3 bg-slate-50/30">
+                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                                  {deck.cabins.map((cabin) => (
+                                    <div
+                                      key={cabin.cabinNumber}
+                                      className="flex items-center justify-between p-2 px-2.5 rounded-xl bg-white border border-slate-200/80 shadow-2xs hover:border-teal-400 hover:bg-teal-50/20 transition-all duration-150"
+                                    >
+                                      <div className="flex flex-col">
+                                        <span className="font-mono font-black text-slate-900 text-xs">
+                                          {cabin.cabinNumber}
+                                        </span>
+                                        {cabin.capacity && (
+                                          <span className="text-[9.5px] text-slate-400 font-medium">
+                                            {cabin.capacity}p
+                                          </span>
+                                        )}
+                                      </div>
+                                      <StatusPill status={cabin.status} />
+                                    </div>
+                                  ))}
+                                </div>
                               </div>
                             )}
                           </div>
@@ -1268,6 +1300,7 @@ function PricingModal({ row, onClose, onRefreshComplete }) {
             </div>
           );
         })}
+        </div>
       </div>
     </Modal>
   );
@@ -1868,14 +1901,14 @@ export default function CruiseSearchPage() {
 
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
           <div className="space-y-2 max-w-3xl">
-            <div className="inline-flex items-center gap-2 rounded-full border border-teal-200/80 bg-white/80 backdrop-blur-xs px-3.5 py-1 text-[11px] font-bold text-teal-800 shadow-2xs">
+            <div className="inline-flex items-center gap-2 rounded-full border border-teal-200/80 bg-white/90 backdrop-blur-xs px-3.5 py-1 text-[11px] font-bold text-teal-800 shadow-2xs">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-teal-600"></span>
               </span>
               <span>Inventory Manager · Live Database</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
+            <h1 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900">
               Cruise Search & Inventory Explorer
             </h1>
             <p className="text-xs sm:text-sm font-medium text-slate-600 leading-relaxed max-w-2xl">
@@ -1885,18 +1918,18 @@ export default function CruiseSearchPage() {
 
           {/* Stat Counter Chips */}
           <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-3 rounded-xl border border-slate-200/90 bg-white px-4 py-2.5 shadow-2xs min-w-[120px] transition-all hover:border-slate-300">
-              <div className="p-1.5 rounded-lg bg-teal-50 text-teal-700">
-                <Ship size={16} />
+            <div className="flex items-center gap-3 rounded-xl border border-teal-200/70 bg-white/90 hover:bg-white px-4 py-2.5 shadow-2xs min-w-[125px] transition-all hover:border-teal-300">
+              <div className="p-2 rounded-lg bg-teal-100/70 text-teal-700">
+                <Ship size={17} />
               </div>
               <div>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Cruises</span>
                 <span className="text-xl font-black text-slate-900 font-mono tracking-tight">{overview.cruises?.toLocaleString() ?? 0}</span>
               </div>
             </div>
-            <div className="flex items-center gap-3 rounded-xl border border-slate-200/90 bg-white px-4 py-2.5 shadow-2xs min-w-[120px] transition-all hover:border-slate-300">
-              <div className="p-1.5 rounded-lg bg-sky-50 text-sky-700">
-                <Compass size={16} />
+            <div className="flex items-center gap-3 rounded-xl border border-teal-200/70 bg-white/90 hover:bg-white px-4 py-2.5 shadow-2xs min-w-[125px] transition-all hover:border-teal-300">
+              <div className="p-2 rounded-lg bg-sky-100/70 text-sky-700">
+                <Compass size={17} />
               </div>
               <div>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Ships</span>
@@ -1904,9 +1937,9 @@ export default function CruiseSearchPage() {
               </div>
             </div>
             {opts.ports?.length > 0 && (
-              <div className="hidden sm:flex items-center gap-3 rounded-xl border border-slate-200/90 bg-white px-4 py-2.5 shadow-2xs min-w-[120px] transition-all hover:border-slate-300">
-                <div className="p-1.5 rounded-lg bg-emerald-50 text-emerald-700">
-                  <MapPin size={16} />
+              <div className="hidden sm:flex items-center gap-3 rounded-xl border border-teal-200/70 bg-white/90 hover:bg-white px-4 py-2.5 shadow-2xs min-w-[125px] transition-all hover:border-teal-300">
+                <div className="p-2 rounded-lg bg-emerald-100/70 text-emerald-700">
+                  <MapPin size={17} />
                 </div>
                 <div>
                   <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Ports</span>
@@ -1919,39 +1952,41 @@ export default function CruiseSearchPage() {
       </div>
 
       {/* ── Separate Targeted Individual Ship Search & Live Scraper Card ── */}
-      <div className="rounded-2xl border border-teal-200/90 bg-gradient-to-br from-teal-50/50 via-white to-sky-50/30 p-5 sm:p-6 shadow-xs space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-teal-100">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-teal-700 text-white shadow-xs">
-              <Ship size={18} />
+      <div className="rounded-2xl border border-slate-200/90 bg-white p-5 sm:p-6 shadow-xs hover:shadow-md transition-shadow duration-300 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-slate-100">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-teal-600 to-teal-800 text-white flex items-center justify-center shadow-sm shadow-teal-700/20 ring-4 ring-teal-50 shrink-0">
+              <Ship size={19} className="stroke-[2.2]" />
             </div>
             <div>
-              <h3 className="text-sm sm:text-base font-black text-slate-900 flex items-center gap-2 flex-wrap">
+              <h3 className="text-sm sm:text-base font-bold text-slate-900 flex items-center gap-2 flex-wrap">
                 <span>Targeted Individual Ship Search</span>
-                <span className="text-[10px] uppercase font-bold text-teal-700 bg-teal-100/90 border border-teal-200 px-2 py-0.5 rounded-md">
+                <span className="inline-flex items-center gap-1 text-[10px] uppercase font-bold text-teal-800 bg-teal-50 border border-teal-200/80 px-2.5 py-0.5 rounded-full">
+                  <Sparkles size={11} className="text-teal-600" />
                   Ship + Dates + Horizon
                 </span>
               </h3>
               <p className="text-xs font-medium text-slate-500 mt-0.5">
-                Quickly search specific ship sailings by start date & horizon, or trigger live scraper worker runs.
+                Quickly query specific ship sailings by start date & horizon window, or dispatch on-demand live scraper workers.
               </p>
             </div>
           </div>
 
           {/* Active Query JSON preview badge */}
-          <div className="hidden lg:flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-900 text-slate-200 font-mono text-[11px] shadow-2xs">
+          <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900 text-slate-200 font-mono text-[11px] shadow-sm border border-slate-800">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-teal-400 animate-pulse"></span>
             <span className="text-teal-400 font-bold">query:</span>
-            <span>{`{ startDate: "${targetStartDate}", horizonDays: ${targetHorizonDays}${targetShipName ? `, shipName: "${targetShipName}"` : ""} }`}</span>
+            <span className="text-slate-300">{`{ startDate: "${targetStartDate}", horizonDays: ${targetHorizonDays}${targetShipName ? `, shipName: "${targetShipName}"` : ""} }`}</span>
           </div>
         </div>
 
         {/* 3 Main Inputs Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3.5 items-end">
           {/* Ship Name Input */}
-          <div className="sm:col-span-1 lg:col-span-4 space-y-1">
+          <div className="sm:col-span-1 lg:col-span-4 space-y-1.5">
             <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-700 uppercase tracking-wider">
               <Ship size={13} className="text-teal-600" />
-              <span>Ship Name (shipName: "{targetShipName || "..."}")</span>
+              <span>Ship Name</span>
             </label>
             <div className="relative">
               <input
@@ -1959,14 +1994,14 @@ export default function CruiseSearchPage() {
                 value={targetShipName}
                 onChange={(e) => setTargetShipName(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") handleTargetedSearch(); }}
-                placeholder="Type ship name (e.g. as, Seaside, Arvia...)"
-                className="w-full h-10 px-3 pr-8 rounded-lg border border-teal-200 bg-white text-sm font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 shadow-2xs transition"
+                placeholder="Type ship name (e.g. Seaside, Arvia, Iona...)"
+                className="w-full h-10 px-3.5 pr-8 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white text-sm font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 shadow-2xs transition-all"
               />
               {targetShipName && (
                 <button
                   type="button"
                   onClick={() => setTargetShipName("")}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100 cursor-pointer transition"
                   title="Clear"
                 >
                   <X size={14} />
@@ -1976,26 +2011,29 @@ export default function CruiseSearchPage() {
           </div>
 
           {/* Start Date */}
-          <div className="sm:col-span-1 lg:col-span-3 space-y-1">
+          <div className="sm:col-span-1 lg:col-span-3 space-y-1.5">
             <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-700 uppercase tracking-wider">
               <CalendarDays size={13} className="text-teal-600" />
-              <span>Start Date (startDate)</span>
+              <span>Start Date</span>
             </label>
             <input
               type="date"
               value={targetStartDate}
               onChange={(e) => setTargetStartDate(e.target.value)}
-              className="w-full h-10 px-3 rounded-lg border border-teal-200 bg-white text-sm font-semibold text-slate-900 shadow-2xs focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition"
+              className="w-full h-10 px-3.5 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white text-sm font-semibold text-slate-900 shadow-2xs focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition-all cursor-pointer"
             />
           </div>
 
           {/* Horizon Days Selector */}
-          <div className="sm:col-span-2 lg:col-span-5 space-y-1">
-            <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-700 uppercase tracking-wider">
-              <Compass size={13} className="text-teal-600" />
-              <span>Search Horizon (horizonDays: {targetHorizonDays}d)</span>
-            </label>
-            <div className="flex items-center gap-1.5 flex-wrap">
+          <div className="sm:col-span-2 lg:col-span-5 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                <Compass size={13} className="text-teal-600" />
+                <span>Search Horizon</span>
+              </label>
+              <span className="text-[11px] font-semibold text-slate-500">{targetHorizonDays} Days Horizon</span>
+            </div>
+            <div className="flex items-center p-1 bg-slate-100/90 rounded-xl border border-slate-200/70 gap-1">
               {[
                 { label: "1 Day", days: 1 },
                 { label: "7 Days", days: 7 },
@@ -2007,10 +2045,10 @@ export default function CruiseSearchPage() {
                   type="button"
                   key={opt.days}
                   onClick={() => setTargetHorizonDays(opt.days)}
-                  className={`h-10 px-3 rounded-lg text-xs font-bold transition cursor-pointer flex-1 min-w-[65px] ${
+                  className={`h-8 px-2.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex-1 min-w-[58px] ${
                     targetHorizonDays === opt.days
-                      ? "bg-teal-700 text-white shadow-xs border border-teal-700"
-                      : "bg-white text-slate-700 hover:bg-teal-50 hover:text-teal-900 border border-teal-200/80 shadow-2xs"
+                      ? "bg-white text-teal-800 font-bold shadow-xs border border-slate-200/90"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
                   }`}
                 >
                   {opt.label}
@@ -2021,14 +2059,14 @@ export default function CruiseSearchPage() {
         </div>
 
         {/* Action Row & Live Scraper Trigger */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-3 border-t border-slate-100">
           {/* Vendor selector optional */}
-          <div className="flex items-center gap-2 flex-1 max-w-md">
-            <span className="text-xs font-bold text-slate-600 whitespace-nowrap">Vendor (Optional):</span>
+          <div className="flex items-center gap-2 flex-1 max-w-sm">
+            <span className="text-xs font-semibold text-slate-600 whitespace-nowrap">Vendor (Optional):</span>
             <select
               value={targetVendor}
               onChange={(e) => setTargetVendor(e.target.value)}
-              className="h-9.5 rounded-lg border border-teal-200 bg-white px-2.5 text-xs font-semibold text-slate-800 shadow-2xs focus:outline-none focus:border-teal-600 flex-1"
+              className="h-10 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white px-3 text-xs font-semibold text-slate-800 shadow-2xs focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 flex-1 transition-all cursor-pointer"
             >
               <option value="">All / Auto-detect Provider</option>
               {opts.vendors.map((v) => (
@@ -2037,11 +2075,11 @@ export default function CruiseSearchPage() {
             </select>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+          <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
             <button
               type="button"
               onClick={handleTargetedSearch}
-              className="inline-flex items-center justify-center gap-2 h-9.5 px-5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white text-xs sm:text-sm font-bold shadow-xs active:scale-95 transition cursor-pointer flex-1 sm:flex-initial"
+              className="inline-flex items-center justify-center gap-2 h-10 px-5 rounded-xl bg-teal-700 hover:bg-teal-800 text-white text-xs sm:text-sm font-bold shadow-xs hover:shadow-sm active:scale-95 transition-all cursor-pointer flex-1 sm:flex-initial"
             >
               <Search size={15} />
               <span>Search Ship Inventory</span>
@@ -2051,13 +2089,13 @@ export default function CruiseSearchPage() {
               type="button"
               onClick={handleTriggerScraper}
               disabled={scraperLoading}
-              className="inline-flex items-center justify-center gap-2 h-9.5 px-4 rounded-lg bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white text-xs sm:text-sm font-bold shadow-xs active:scale-95 transition cursor-pointer flex-1 sm:flex-initial"
+              className="inline-flex items-center justify-center gap-2 h-10 px-5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 disabled:opacity-50 text-white text-xs sm:text-sm font-bold shadow-xs hover:shadow-sm active:scale-95 transition-all cursor-pointer flex-1 sm:flex-initial"
               title="Dispatch scraper worker with { startDate, horizonDays, shipName }"
             >
               {scraperLoading ? (
-                <RefreshCw size={14} className="animate-spin" />
+                <RefreshCw size={15} className="animate-spin" />
               ) : (
-                <Zap size={15} className="text-emerald-300" />
+                <Zap size={15} className="text-emerald-200" />
               )}
               <span>{scraperLoading ? "Triggering Scraper…" : "Run Live Scraper"}</span>
             </button>
@@ -2066,10 +2104,10 @@ export default function CruiseSearchPage() {
 
         {/* Live Scraper feedback alert if triggered */}
         {scraperStatus && (
-          <div className={`p-3 rounded-xl text-xs font-semibold flex items-center justify-between gap-2 ${
+          <div className={`p-3 rounded-xl text-xs font-semibold flex items-center justify-between gap-2 shadow-2xs ${
             scraperStatus.ok
-              ? "bg-emerald-50 text-emerald-900 border border-emerald-200"
-              : "bg-rose-50 text-rose-900 border border-rose-200"
+              ? "bg-emerald-50 text-emerald-900 border border-emerald-200/80"
+              : "bg-rose-50 text-rose-900 border border-rose-200/80"
           }`}>
             <div className="flex items-center gap-2">
               {scraperStatus.ok ? <CheckCircle2 size={16} className="text-emerald-600 shrink-0" /> : <AlertCircle size={16} className="text-rose-600 shrink-0" />}
@@ -2078,7 +2116,7 @@ export default function CruiseSearchPage() {
             <button
               type="button"
               onClick={() => setScraperStatus(null)}
-              className="text-slate-400 hover:text-slate-600 text-xs font-bold cursor-pointer"
+              className="text-slate-400 hover:text-slate-700 text-xs font-bold cursor-pointer transition-colors"
             >
               Dismiss
             </button>
@@ -2087,130 +2125,153 @@ export default function CruiseSearchPage() {
       </div>
 
       {/* ── Filter Form Card ───────────────────────────────────────────── */}
-      <div className="rounded-2xl border border-slate-200/90 bg-white p-5 sm:p-6 shadow-xs space-y-5">
-          {/* Cruise Code Input */}
-          <div>
-            <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-              <Search size={13} className="text-teal-600" />
+      <div className="rounded-2xl border border-slate-200/90 bg-white p-5 sm:p-6 shadow-xs hover:shadow-md transition-shadow duration-300 space-y-5">
+        {/* Cruise Code or Keyword Search */}
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+              <Search size={14} className="text-teal-600" />
               <span>Cruise Code or Keyword</span>
             </label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
-              <input
-                type="text"
-                placeholder="Search by cruise code, ship name, package title or route (e.g. CJ07260801)"
-                value={filters.code}
-                onChange={(event) => setF("code", event.target.value)}
-                onKeyDown={(event) => { if (event.key === "Enter") applyFilters(); }}
-                className="w-full h-10 pl-9 pr-4 rounded-lg border border-slate-200 bg-white text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition shadow-2xs"
-              />
-              {filters.code && (
-                <button
-                  type="button"
-                  onClick={() => setF("code", "")}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 hover:text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md transition cursor-pointer"
-                >
-                  Clear
-                </button>
-              )}
-            </div>
+            <span className="text-[11px] text-slate-400 font-normal">e.g. CJ07260801, Seaside, Mediterranean</span>
           </div>
+          <div className="relative">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
+            <input
+              type="text"
+              placeholder="Search by cruise code, ship name, package title or route..."
+              value={filters.code}
+              onChange={(event) => setF("code", event.target.value)}
+              onKeyDown={(event) => { if (event.key === "Enter") applyFilters(); }}
+              className="w-full h-11 pl-10 pr-16 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition-all shadow-2xs"
+            />
+            {filters.code && (
+              <button
+                type="button"
+                onClick={() => setF("code", "")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-lg transition cursor-pointer"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        </div>
 
-          {/* Vendor Filter Buttons */}
-          <div>
-            <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-              <Layers size={13} className="text-teal-600" />
+        {/* Cruise Line Provider Tabs */}
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+              <Layers size={14} className="text-teal-600" />
               <span>Cruise Line Provider</span>
             </label>
-            <div className="flex items-center gap-2 overflow-x-auto pb-1.5 flex-nowrap scroll-smooth">
+            {filters.vendor && (
               <button
                 type="button"
                 onClick={() => selectVendor("")}
-                className={`h-8 px-3.5 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 whitespace-nowrap ${
-                  filters.vendor === ""
-                    ? "bg-teal-700 text-white shadow-xs border border-teal-700"
-                    : "bg-slate-50 text-slate-700 hover:bg-slate-100 hover:text-slate-900 border border-slate-200/80 shadow-2xs"
-                }`}
+                className="text-[11px] text-teal-700 hover:text-teal-900 font-semibold cursor-pointer transition-colors"
               >
-                All Providers
+                Reset Provider
               </button>
-              {opts.vendors.map((value) => {
-                const isSelected = filters.vendor === value;
-                const vStyle = getVendorStyle(value);
-                return (
-                  <button
-                    type="button"
-                    key={value}
-                    onClick={() => selectVendor(value)}
-                    className={`h-8 px-3.5 rounded-lg text-xs font-semibold transition cursor-pointer shrink-0 whitespace-nowrap ${
-                      isSelected
-                        ? "bg-teal-700 text-white font-bold shadow-xs border border-teal-700"
-                        : "bg-white text-slate-700 hover:bg-slate-50 hover:text-slate-900 border border-slate-200/80 shadow-2xs"
-                    }`}
-                  >
-                    <span className="inline-flex items-center gap-1.5">
-                      <span className={`w-1.5 h-1.5 rounded-full ${isSelected ? "bg-white" : vStyle.dot}`} />
-                      <span>{value}</span>
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+            )}
           </div>
-
-          {/* 4 Multi-Select Options Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-            {[
-              { key: "ship", ph: "Select Ship", mode: "input", values: opts.ships, icon: Ship, iconColor: "text-sky-600" },
-              { key: "cruiseLine", ph: "Select Cruise Line", mode: "select", values: opts.cruiseLines, icon: Compass, iconColor: "text-teal-600" },
-              { key: "portFrom", ph: "Departure Port (From)", mode: "select", values: opts.ports, icon: MapPin, iconColor: "text-emerald-600" },
-              { key: "portTo", ph: "Destination Port (To)", mode: "select", values: opts.ports, icon: MapPin, iconColor: "text-indigo-600" },
-            ].map((field) => {
-              const Icon = field.icon;
-              return field.mode === "input" ? (
-                <div key={field.key}>
-                  <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">
-                    <Icon size={12} className={field.iconColor} />
-                    <span>{field.ph}</span>
-                  </label>
-                  <SearchableSelect
-                    placeholder={field.ph}
-                    value={filters[field.key]}
-                    onChange={(value) => setF(field.key, value)}
-                    options={field.values}
-                    onEnter={applyFilters}
-                  />
-                </div>
-              ) : (
-                <div key={field.key}>
-                  <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">
-                    <Icon size={12} className={field.iconColor} />
-                    <span>{field.ph}</span>
-                  </label>
-                  <select
-                    className="w-full h-9.5 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition shadow-2xs"
-                    value={filters[field.key]}
-                    onChange={(event) => setF(field.key, event.target.value)}
-                  >
-                    <option value="">{field.ph} (All)</option>
-                    {field.values.map((value) => (
-                      <option key={value} value={value}>
-                        {field.key === "cruiseLine" ? (CRUISE_LINE_LABELS[value] ?? value) : value}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 flex-nowrap scroll-smooth no-scrollbar">
+            <button
+              type="button"
+              onClick={() => selectVendor("")}
+              className={`h-9 px-4 rounded-xl text-xs font-semibold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
+                filters.vendor === ""
+                  ? "bg-teal-700 text-white font-bold shadow-xs border border-teal-700"
+                  : "bg-slate-50 hover:bg-slate-100 text-slate-700 hover:text-slate-900 border border-slate-200/80 shadow-2xs"
+              }`}
+            >
+              All Providers
+            </button>
+            {opts.vendors.map((value) => {
+              const isSelected = filters.vendor === value;
+              const vStyle = getVendorStyle(value);
+              return (
+                <button
+                  type="button"
+                  key={value}
+                  onClick={() => selectVendor(value)}
+                  className={`h-9 px-3.5 rounded-xl text-xs font-semibold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
+                    isSelected
+                      ? "bg-teal-700 text-white font-bold shadow-xs border border-teal-700 scale-[1.01]"
+                      : "bg-white text-slate-700 hover:bg-slate-50 hover:text-slate-900 border border-slate-200/80 shadow-2xs"
+                  }`}
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <span className={`w-2 h-2 rounded-full ${isSelected ? "bg-white ring-2 ring-teal-400" : vStyle.dot}`} />
+                    <span>{value}</span>
+                  </span>
+                </button>
               );
             })}
           </div>
+        </div>
 
-          {/* Departure Window */}
-          <div>
-            <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-              <CalendarDays size={13} className="text-teal-600" />
+        {/* 4 Multi-Select Options Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3.5">
+          {[
+            { key: "ship", label: "Ship", ph: "Select Ship", mode: "input", values: opts.ships, icon: Ship, iconColor: "text-sky-600" },
+            { key: "cruiseLine", label: "Cruise Line", ph: "Select Cruise Line (All)", mode: "select", values: opts.cruiseLines, icon: Compass, iconColor: "text-teal-600" },
+            { key: "portFrom", label: "Departure Port (Origin)", ph: "Departure Port (From)", mode: "select", values: opts.ports, icon: MapPin, iconColor: "text-emerald-600" },
+            { key: "portTo", label: "Destination Port", ph: "Destination Port (To)", mode: "select", values: opts.ports, icon: MapPin, iconColor: "text-indigo-600" },
+          ].map((field) => {
+            const Icon = field.icon;
+            return field.mode === "input" ? (
+              <div key={field.key} className="space-y-1.5">
+                <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                  <Icon size={14} className={field.iconColor} />
+                  <span>{field.label}</span>
+                </label>
+                <SearchableSelect
+                  placeholder={field.ph}
+                  value={filters[field.key]}
+                  onChange={(value) => setF(field.key, value)}
+                  options={field.values}
+                  onEnter={applyFilters}
+                />
+              </div>
+            ) : (
+              <div key={field.key} className="space-y-1.5">
+                <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                  <Icon size={14} className={field.iconColor} />
+                  <span>{field.label}</span>
+                </label>
+                <select
+                  className="w-full h-10 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white px-3.5 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition-all shadow-2xs cursor-pointer"
+                  value={filters[field.key]}
+                  onChange={(event) => setF(field.key, event.target.value)}
+                >
+                  <option value="">{field.ph}</option>
+                  {field.values.map((value) => (
+                    <option key={value} value={value}>
+                      {field.key === "cruiseLine" ? (CRUISE_LINE_LABELS[value] ?? value) : value}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Departure Window */}
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+              <CalendarDays size={14} className="text-teal-600" />
               <span>Departure Window</span>
             </label>
-            <div className="flex flex-wrap items-center gap-1.5">
+            {(filters.startDate || filters.endDate || (datePreset && datePreset !== "All Dates")) && (
+              <span className="text-[11px] text-teal-700 font-semibold">
+                {datePreset && datePreset !== "All Dates" ? datePreset : `${filters.startDate || "Any"} → ${filters.endDate || "Any"}`}
+              </span>
+            )}
+          </div>
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5">
+            {/* Presets */}
+            <div className="flex items-center p-1 bg-slate-100/90 rounded-xl border border-slate-200/70 gap-1 overflow-x-auto no-scrollbar">
               {[
                 { label: "All Dates", days: null },
                 { label: "Next 7 Days", days: 7 },
@@ -2226,52 +2287,63 @@ export default function CruiseSearchPage() {
                     type="button"
                     key={preset.label}
                     onClick={() => applyDatePreset(preset)}
-                    className={`h-8 px-3 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                    className={`h-8 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
                       isActive
-                        ? "bg-teal-700 text-white font-bold shadow-xs border border-teal-700"
-                        : "bg-slate-50 text-slate-700 hover:bg-slate-100 hover:text-slate-900 border border-slate-200/80 shadow-2xs"
+                        ? "bg-white text-teal-800 font-bold shadow-xs border border-slate-200/90"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
                     }`}
                   >
                     {preset.label}
                   </button>
                 );
               })}
-              <div className="flex flex-wrap items-center gap-1.5 mt-1 sm:mt-0">
-                <input
-                  type="date"
-                  className="h-8 rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 font-semibold shadow-2xs focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-500/20"
-                  value={filters.startDate}
-                  onChange={(event) => { setF("startDate", event.target.value); setDatePreset(null); }}
-                />
-                <span className="text-xs font-medium text-slate-400">to</span>
-                <input
-                  type="date"
-                  className="h-8 rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 font-semibold shadow-2xs focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-500/20"
-                  value={filters.endDate}
-                  onChange={(event) => { setF("endDate", event.target.value); setDatePreset(null); }}
-                />
-              </div>
+            </div>
+
+            {/* Custom Date Range Picker */}
+            <div className="flex items-center gap-2 self-start lg:self-auto">
+              <input
+                type="date"
+                className="h-10 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white px-3 text-xs font-semibold text-slate-800 shadow-2xs focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition-all cursor-pointer"
+                value={filters.startDate}
+                onChange={(event) => { setF("startDate", event.target.value); setDatePreset(null); }}
+              />
+              <span className="text-xs font-medium text-slate-400">to</span>
+              <input
+                type="date"
+                className="h-10 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white px-3 text-xs font-semibold text-slate-800 shadow-2xs focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition-all cursor-pointer"
+                value={filters.endDate}
+                onChange={(event) => { setF("endDate", event.target.value); setDatePreset(null); }}
+              />
             </div>
           </div>
+        </div>
 
-          {/* Action Buttons Row */}
-          <div className="flex items-center gap-2.5 pt-3 border-t border-slate-100">
+        {/* Action Buttons Row */}
+        <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-100 flex-wrap">
+          <div className="flex items-center gap-2.5">
             <button
               onClick={applyFilters}
-              className="inline-flex items-center gap-2 h-9.5 px-5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white text-xs sm:text-sm font-bold shadow-xs active:scale-95 transition cursor-pointer"
+              className="inline-flex items-center gap-2 h-10 px-5 rounded-xl bg-teal-700 hover:bg-teal-800 text-white text-xs sm:text-sm font-bold shadow-xs hover:shadow active:scale-95 transition-all cursor-pointer"
             >
               <Search size={15} />
               <span>Search Inventory</span>
             </button>
             <button
               onClick={reset}
-              className="inline-flex items-center gap-1.5 h-9.5 px-4 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs sm:text-sm font-semibold shadow-2xs active:scale-95 transition cursor-pointer"
+              className="inline-flex items-center gap-1.5 h-10 px-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs sm:text-sm font-semibold shadow-2xs active:scale-95 transition-all cursor-pointer"
             >
-              <RotateCcw size={13} className="text-slate-500" />
+              <RotateCcw size={14} className="text-slate-500" />
               <span>Reset Filters</span>
             </button>
           </div>
+          {Object.values(filters).filter(Boolean).length > 0 && (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-teal-50 border border-teal-200/60 text-teal-800 text-xs font-semibold">
+              <span className="w-1.5 h-1.5 rounded-full bg-teal-600" />
+              {Object.values(filters).filter(Boolean).length} filter{Object.values(filters).filter(Boolean).length > 1 ? "s" : ""} active
+            </span>
+          )}
         </div>
+      </div>
 
         {/* ── Results Status Toolbar ──────────────────────────────────────── */}
         <div className="rounded-xl border border-slate-200/90 bg-slate-50/80 px-4 py-2.5 flex items-center justify-between shadow-2xs">

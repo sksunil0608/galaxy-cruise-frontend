@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useDebounce } from "@/hooks/use-debounce"
 import {
   CalendarDays,
   ChevronDown,
@@ -79,6 +80,7 @@ export default function TaggedCruisesPage() {
     startDateFrom: "",
     endDateTo: ""
   })
+  const debouncedTag = useDebounce(filters.tag, 350)
   const [appliedFilters, setAppliedFilters] = useState({
     tag: "",
     assignedTo: "",
@@ -87,6 +89,15 @@ export default function TaggedCruisesPage() {
     startDateFrom: "",
     endDateTo: ""
   })
+
+  // Debounce tag input changes so typing doesn't spam fetchCruises requests
+  useEffect(() => {
+    setAppliedFilters(current => {
+      if (current.tag === debouncedTag) return current
+      return { ...current, tag: debouncedTag }
+    })
+    setPage(1)
+  }, [debouncedTag])
 
   // Ref to track notified price drops to prevent duplicate toasts
   const notifiedDropsRef = useRef(new Set())
@@ -299,12 +310,11 @@ export default function TaggedCruisesPage() {
   )
 
   const setF = (key, value) => {
-    setFilters(current => {
-      const next = { ...current, [key]: value }
-      setAppliedFilters(next)
+    setFilters(current => ({ ...current, [key]: value }))
+    if (key !== "tag") {
+      setAppliedFilters(current => ({ ...current, [key]: value }))
       setPage(1)
-      return next
-    })
+    }
   }
 
   const applyFilters = () => {
@@ -514,13 +524,12 @@ export default function TaggedCruisesPage() {
           </button>
           <button
             onClick={togglePriceDropFilter}
-            className={`inline-flex items-center gap-1.5 h-10 px-4 rounded-xl border text-xs sm:text-sm font-bold active:scale-95 transition cursor-pointer ${
-              priceDropOnly
+            className={`inline-flex items-center gap-1.5 h-10 px-4 rounded-xl border text-xs sm:text-sm font-bold active:scale-95 transition cursor-pointer ${priceDropOnly
                 ? "bg-emerald-700 text-white border-emerald-800 shadow-sm"
                 : summary.drops > 0
                   ? "bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100"
                   : "bg-slate-50 text-slate-400 border-slate-200 opacity-60"
-            }`}
+              }`}
           >
             <Flame size={14} className={summary.drops > 0 ? "text-amber-500" : ""} />
             <span>{priceDropOnly ? "Showing Drops Only" : `Price Drops (${summary.drops})`}</span>
@@ -866,23 +875,21 @@ export default function TaggedCruisesPage() {
                                     return (
                                       <div
                                         key={cat.code}
-                                        className={`grid grid-cols-12 items-center text-xs py-2 px-1.5 border-b border-slate-50 last:border-0 rounded-lg transition-colors ${
-                                          isCruiseDroppedPrice
+                                        className={`grid grid-cols-12 items-center text-xs py-2 px-1.5 border-b border-slate-50 last:border-0 rounded-lg transition-colors ${isCruiseDroppedPrice
                                             ? "bg-emerald-100/90 border-emerald-400 shadow-xs ring-1 ring-emerald-400/60"
                                             : isLowestInGroup
                                               ? "bg-emerald-50/70 border-emerald-200/80 shadow-2xs"
                                               : "hover:bg-slate-50/70"
-                                        }`}
+                                          }`}
                                       >
                                         {/* Col 1: Category */}
                                         <div className="col-span-4 flex items-center gap-1.5 min-w-0">
-                                          <span className={`font-bold truncate ${
-                                            isCruiseDroppedPrice
+                                          <span className={`font-bold truncate ${isCruiseDroppedPrice
                                               ? "text-emerald-950 font-black"
                                               : isLowestInGroup
                                                 ? "text-emerald-950 font-black"
                                                 : "text-slate-900"
-                                          }`}>
+                                            }`}>
                                             {cat.code}
                                           </span>
                                           {isCruiseDroppedPrice ? (
@@ -899,13 +906,12 @@ export default function TaggedCruisesPage() {
                                         {/* Col 2: Dedicated New Price Column */}
                                         <div className="col-span-4 text-right pr-2">
                                           {catPrice > 0 ? (
-                                            <span className={`text-xs ${
-                                              isCruiseDroppedPrice
+                                            <span className={`text-xs ${isCruiseDroppedPrice
                                                 ? "font-black text-emerald-950 bg-emerald-200/90 px-1.5 py-0.5 rounded border border-emerald-400"
                                                 : isLowestInGroup
                                                   ? "font-black text-emerald-800"
                                                   : "font-bold text-slate-900"
-                                            }`}>
+                                              }`}>
                                               {formatCurrency(catPrice, row.currency)}
                                             </span>
                                           ) : (
@@ -981,15 +987,13 @@ function StatCard({ label, value, highlight = false, active = false, onClick, su
   return (
     <div
       onClick={onClick}
-      className={`rounded-2xl border backdrop-blur-xs p-4 sm:p-5 shadow-2xs transition-all ${
-        onClick ? "cursor-pointer active:scale-98" : ""
-      } ${
-        active
+      className={`rounded-2xl border backdrop-blur-xs p-4 sm:p-5 shadow-2xs transition-all ${onClick ? "cursor-pointer active:scale-98" : ""
+        } ${active
           ? "border-emerald-500 bg-emerald-50/90 ring-2 ring-emerald-500/40 shadow-xs"
           : highlight
             ? "border-emerald-300 bg-gradient-to-br from-emerald-50/70 via-white to-teal-50/50 hover:border-emerald-400 hover:shadow-xs"
             : "border-teal-200/80 bg-gradient-to-br from-white via-teal-50/40 to-teal-100/30 hover:border-teal-300 hover:shadow-xs"
-      }`}
+        }`}
     >
       <div className="flex items-center justify-between">
         <div className="text-[10px] font-extrabold uppercase tracking-wider text-teal-700/80">{label}</div>

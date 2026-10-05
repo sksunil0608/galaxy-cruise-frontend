@@ -79,8 +79,8 @@ export function getCruiseRouteLabel(cruise) {
 export function getLoadFactor(cruise) {
   const total = Number(cruise?.totalCapacity ?? 0)
   const avail = Number(cruise?.seatsAvailable ?? 0)
-  if (!total) return 0
-  const used = total - avail
+  if (!total || total <= 0) return 0
+  const used = Math.max(0, total - avail)
   return Math.max(0, Math.min(100, Math.round((used / total) * 100)))
 }
 
