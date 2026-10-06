@@ -12,6 +12,9 @@ import {
   XCircle
 } from "lucide-react"
 import { fetchActivities } from "../api"
+import { ActivityStreamSkeleton } from "@/components/ui/skeleton-patterns"
+import { Skeleton } from "@/components/ui/skeleton"
+
 
 const fmtDT = v =>
   v
@@ -206,8 +209,9 @@ export default function UserActivityPage() {
       {/* Activity List Stream */}
       <div className="rounded-xl border border-slate-200/90 bg-white shadow-2xs overflow-hidden">
         {loading && items.length === 0 ? (
-          <div className="py-20 text-center text-xs text-slate-400">Loading activity stream…</div>
+          <ActivityStreamSkeleton count={6} />
         ) : items.length === 0 ? (
+
           <div className="py-20 text-center text-xs text-slate-400">No activity events recorded yet.</div>
         ) : (
           <div className="divide-y divide-slate-100">

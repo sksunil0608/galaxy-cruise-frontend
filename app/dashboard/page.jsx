@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import Link from "next/link"
 import {
   Activity,
   AlertCircle,
@@ -23,6 +24,7 @@ import {
   MapPin,
   Moon,
   Percent,
+  Pin,
   RefreshCcw,
   Sailboat,
   Search,
@@ -30,6 +32,7 @@ import {
   ShieldCheck,
   Ship,
   Sparkles,
+  Tag,
   TrendingDown,
   TrendingUp,
   Users,
@@ -47,8 +50,10 @@ import {
   Cell
 } from "recharts"
 
-import { fetchCapacityInsightsData, fetchCruisePriceAlerts, fetchDashboardOverview, markCruisePriceAlertRead } from "./api"
+import { fetchCapacityInsightsData, fetchCruises, fetchCruisePriceAlerts, fetchDashboardOverview, markCruisePriceAlertRead } from "./api"
 import { getCruiseRouteLabel, getLoadFactor, getSafeSeatsAvailable } from "./cruise-helpers"
+import { DashboardOverviewSkeleton } from "@/components/ui/skeleton-patterns"
+import { Skeleton } from "@/components/ui/skeleton"
 
 const formatNumber = value => new Intl.NumberFormat("en-GB").format(value ?? 0)
 const formatPercent = value => `${Math.round(value ?? 0)}%`
@@ -109,7 +114,7 @@ export default function DashboardPage() {
       setCapacityCruises(response.cruises?.data ?? [])
       setCapacityVendorFleet(response.dashboard?.vendor_fleet ?? [])
     } catch (err) {
-      console.error(err)
+      console.warn("Unable to load full capacity insights:", err?.message || err)
     } finally {
       setCapacityLoading(false)
     }
@@ -124,23 +129,98 @@ export default function DashboardPage() {
       setLoading(true)
       setRefreshState("refreshing")
 
-      const [res, alertsRes] = await Promise.all([
+      const [resResult, alertsResult, taggedResult] = await Promise.allSettled([
         fetchDashboardOverview(),
-        fetchCruisePriceAlerts({ status: "unread", limit: 8 })
+        fetchCruisePriceAlerts({ status: "unread", limit: 12 }),
+        fetchCruises({ tagged: true, limit: 50, detail: "full" })
       ])
 
-      if (res?.success) {
+      const res = resResult.status === "fulfilled" ? resResult.value : null
+      const alertsRes = alertsResult.status === "fulfilled" ? alertsResult.value : null
+      const formalAlerts = Array.isArray(alertsRes?.data)
+        ? alertsRes.data
+        : Array.isArray(alertsRes)
+          ? alertsRes
+          : alertsRes?.alerts || []
+
+      const taggedCruises = taggedResult.status === "fulfilled" ? (taggedResult.value?.data || []) : []
+
+      // Generate alerts from tagged cruises with active drops
+      const detectedDrops = []
+      taggedCruises.forEach((row) => {
+        const availPrices = (row.cabinCategories || [])
+          .filter(c => c.avlResult === "OK" || c.status === "Available" || (Number(c.avail ?? c.available ?? 0) > 0) || !c.avlResult)
+          .map(c => Number(c.cabinPrice ?? c.price ?? 0))
+          .filter(p => Number.isFinite(p) && p > 0)
+        const currentLowest = availPrices.length > 0 ? Math.min(...availPrices) : (row.lowestPrice ? Number(row.lowestPrice) : (row.price ? Number(row.price) : null))
+
+        const tags = row.tags || []
+        tags.forEach((tag) => {
+          const trackedLow = Number(tag.trackedLowestPrice)
+          const lastSeen = Number(tag.lastSeenPrice)
+          const isDrop = Boolean(tag.lastPriceDropAt) ||
+            (Number.isFinite(trackedLow) && trackedLow > 0 && currentLowest && currentLowest < trackedLow) ||
+            (Number.isFinite(lastSeen) && lastSeen > 0 && currentLowest && currentLowest < lastSeen)
+
+          if (isDrop && currentLowest) {
+            const basePrice = (Number.isFinite(trackedLow) && trackedLow > 0) ? trackedLow : (lastSeen || currentLowest + 200)
+            detectedDrops.push({
+              id: `tag-drop-${row.id}-${tag.id}`,
+              cruiseId: row.id,
+              cruiseCode: row.code || row.id,
+              cruisePackage: row.package || row.name || row.code,
+              ship: row.ship || row.shipName || "--",
+              vendor: row.vendor || { name: row.source || "Vendor" },
+              tag: { label: tag.label || "Priority", assignedTo: tag.assignedTo },
+              previousPrice: basePrice,
+              currentPrice: currentLowest,
+              currency: row.currency || "GBP",
+              lastPriceDropAt: tag.lastPriceDropAt || new Date().toISOString()
+            })
+          }
+        })
+      })
+
+      // Combine formal alerts and detected drops without duplicates
+      const alertMap = new Map()
+      formalAlerts.forEach((a) => {
+        const key = a.id || `${a.cruiseCode}-${a.currentPrice}`
+        alertMap.set(key, a)
+      })
+      detectedDrops.forEach((d) => {
+        const key = d.id || `${d.cruiseCode}-${d.currentPrice}`
+        if (!alertMap.has(key)) {
+          alertMap.set(key, d)
+        }
+      })
+
+      const combinedAlerts = Array.from(alertMap.values())
+
+      if (res?.success || res?.overview) {
         setOverview(res.overview)
         setVendorFleet(res.vendor_fleet || [])
-        setPriceAlerts(alertsRes.data || [])
+        setPriceAlerts(combinedAlerts)
         setLastSyncedAt(new Date())
         setRefreshState("success")
+      } else if (combinedAlerts.length > 0) {
+        setPriceAlerts(combinedAlerts)
       }
     } catch (err) {
       console.error(err)
       setRefreshState("error")
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleMarkAlertRead = async (alertId) => {
+    setPriceAlerts(prev => prev.filter(a => a.id !== alertId))
+    try {
+      if (typeof alertId === "number" || (!String(alertId).startsWith("tag-drop-") && !isNaN(Number(alertId)))) {
+        await markCruisePriceAlertRead(alertId)
+      }
+    } catch (err) {
+      console.warn("Failed to mark alert read:", err)
     }
   }
 
@@ -153,54 +233,98 @@ export default function DashboardPage() {
       return []
     }
 
+    const healthScore = Number(overview.fleet_health_score ?? 0)
+    const isHealthCritical = healthScore < 65
+    const isHealthAttention = healthScore >= 65 && healthScore < 85
+
     return [
       {
         title: "Active Vendors",
         value: overview.active_vendors,
-        hint: "Vendors with live runs or inventory",
+        hint: "Connected & monitored lines",
+        badge: "Live Portals",
+        badgeStyle: "bg-teal-50 text-teal-700 border-teal-200/80",
         icon: Activity,
-        accent: "border-slate-200/80 bg-white hover:border-slate-300",
-        iconBg: "bg-teal-50 text-teal-700 border border-teal-100",
-        textVal: "text-slate-900"
+        accent: "border-teal-200/80 bg-gradient-to-br from-white via-teal-50/25 to-teal-50/50 hover:border-teal-400 hover:shadow-teal-500/10",
+        iconBg: "bg-gradient-to-br from-teal-600 to-teal-800 text-white shadow-sm shadow-teal-700/25",
+        textVal: "text-teal-950",
+        progress: 100,
+        progressColor: "bg-teal-600",
+        glow: "bg-teal-500/15"
       },
       {
         title: "Fleet Health",
-        value: `${overview.fleet_health_score}%`,
-        hint: overview.fleet_health_label,
+        value: `${healthScore}%`,
+        hint: overview.fleet_health_label || "Fleet Status",
+        badge: overview.fleet_health_label || "Integrity",
+        badgeStyle: isHealthCritical
+          ? "bg-rose-50 text-rose-700 border-rose-200/80"
+          : isHealthAttention
+            ? "bg-amber-50 text-amber-700 border-amber-200/80"
+            : "bg-emerald-50 text-emerald-700 border-emerald-200/80",
         icon: ShieldCheck,
-        accent: "border-slate-200/80 bg-white hover:border-slate-300",
-        iconBg: "bg-emerald-50 text-emerald-700 border border-emerald-100",
-        textVal: "text-slate-900"
+        accent: isHealthCritical
+          ? "border-rose-200/80 bg-gradient-to-br from-white via-rose-50/25 to-rose-50/50 hover:border-rose-400 hover:shadow-rose-500/10"
+          : isHealthAttention
+            ? "border-amber-200/80 bg-gradient-to-br from-white via-amber-50/25 to-amber-50/50 hover:border-amber-400 hover:shadow-amber-500/10"
+            : "border-emerald-200/80 bg-gradient-to-br from-white via-emerald-50/25 to-emerald-50/50 hover:border-emerald-400 hover:shadow-emerald-500/10",
+        iconBg: isHealthCritical
+          ? "bg-gradient-to-br from-rose-500 to-rose-700 text-white shadow-sm shadow-rose-700/25"
+          : isHealthAttention
+            ? "bg-gradient-to-br from-amber-500 to-amber-700 text-white shadow-sm shadow-amber-700/25"
+            : "bg-gradient-to-br from-emerald-500 to-emerald-700 text-white shadow-sm shadow-emerald-700/25",
+        textVal: isHealthCritical ? "text-rose-950" : isHealthAttention ? "text-amber-950" : "text-emerald-950",
+        progress: Math.min(100, Math.max(5, healthScore)),
+        progressColor: isHealthCritical ? "bg-rose-500" : isHealthAttention ? "bg-amber-500" : "bg-emerald-500",
+        glow: isHealthCritical ? "bg-rose-500/15" : "bg-emerald-500/15"
       },
       {
         title: "Total Runs",
-        value: overview.total_runs,
-        hint: "Historical extraction cycles stored",
+        value: formatNumber(overview.total_runs),
+        hint: "Historical extraction cycles",
+        badge: "Ingestion",
+        badgeStyle: "bg-sky-50 text-sky-700 border-sky-200/80",
         icon: RefreshCcw,
-        accent: "border-slate-200/80 bg-white hover:border-slate-300",
-        iconBg: "bg-sky-50 text-sky-700 border border-sky-100",
-        textVal: "text-slate-900"
+        accent: "border-sky-200/80 bg-gradient-to-br from-white via-sky-50/25 to-sky-50/50 hover:border-sky-400 hover:shadow-sky-500/10",
+        iconBg: "bg-gradient-to-br from-sky-600 to-indigo-700 text-white shadow-sm shadow-sky-700/25",
+        textVal: "text-sky-950",
+        progress: Math.min(100, Math.max(10, ((overview.total_runs ?? 0) / 1000) * 100)),
+        progressColor: "bg-sky-600",
+        glow: "bg-sky-500/15"
       },
       {
-        title: "Avg Response Time",
+        title: "Avg Response",
         value: formatResponseTime(overview.average_response_time_ms),
         hint: "Average runtime across vendors",
+        badge: "Speed Metric",
+        badgeStyle: "bg-amber-50 text-amber-700 border-amber-200/80",
         icon: Clock3,
-        accent: "border-slate-200/80 bg-white hover:border-slate-300",
-        iconBg: "bg-amber-50 text-amber-700 border border-amber-100",
-        textVal: "text-slate-900"
+        accent: "border-amber-200/80 bg-gradient-to-br from-white via-amber-50/25 to-amber-50/50 hover:border-amber-400 hover:shadow-amber-500/10",
+        iconBg: "bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-sm shadow-amber-600/25",
+        textVal: "text-amber-950",
+        progress: 85,
+        progressColor: "bg-amber-500",
+        glow: "bg-amber-500/15"
       },
       {
         title: "Price Alerts",
         value: priceAlerts.length,
-        hint: "New lowest fares detected",
+        hint: priceAlerts.length > 0 ? "Fares dropped on pinned cruises" : "No unread fare drops",
+        badge: priceAlerts.length > 0 ? `${priceAlerts.length} Unread` : "Radar Active",
+        badgeStyle: priceAlerts.length > 0
+          ? "bg-rose-50 text-rose-700 border-rose-200/80 animate-pulse"
+          : "bg-rose-50 text-rose-700 border-rose-200/80",
         icon: BellRing,
-        accent: "border-slate-200/80 bg-white hover:border-slate-300",
-        iconBg: "bg-rose-50 text-rose-700 border border-rose-100",
-        textVal: "text-slate-900"
+        accent: "border-rose-200/80 bg-gradient-to-br from-white via-rose-50/25 to-rose-50/50 hover:border-rose-400 hover:shadow-rose-500/10",
+        iconBg: "bg-gradient-to-br from-rose-500 to-pink-600 text-white shadow-sm shadow-rose-600/25",
+        textVal: "text-rose-950",
+        progress: priceAlerts.length > 0 ? 100 : 20,
+        progressColor: priceAlerts.length > 0 ? "bg-rose-500" : "bg-slate-300",
+        glow: "bg-rose-500/15"
       }
     ]
   }, [overview, priceAlerts])
+
 
   const [capacityMetricView, setCapacityMetricView] = useState("volume") // 'volume' | 'loadFactor'
   const [highDemandQuery, setHighDemandQuery] = useState("")
@@ -378,24 +502,8 @@ export default function DashboardPage() {
     }
   }, [demandDistribution])
 
-  const handleMarkAlertRead = async alertId => {
-    try {
-      await markCruisePriceAlertRead(alertId)
-      setPriceAlerts(current => current.filter(alert => alert.id !== alertId))
-    } catch (error) {
-      console.error(error)
-    }
-  }
-
   if (loading && !overview) {
-    return (
-      <div className="flex h-96 w-full items-center justify-center">
-        <div className="flex items-center gap-3 text-sm font-semibold text-slate-500">
-          <RefreshCcw size={16} className="animate-spin text-teal-600" />
-          <span>Loading Cruise Saga Dashboard…</span>
-        </div>
-      </div>
-    )
+    return <DashboardOverviewSkeleton />
   }
 
   return (
@@ -455,36 +563,56 @@ export default function DashboardPage() {
       </div>
 
       {overview && (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           {cards.map(card => {
             const Icon = card.icon
 
             return (
               <div
                 key={card.title}
-                className={`rounded-xl border p-4 shadow-2xs transition-all hover:shadow-xs ${card.accent}`}
+                className={`group relative overflow-hidden rounded-2xl border p-4 shadow-2xs transition-all duration-300 hover:-translate-y-1 hover:shadow-md ${card.accent}`}
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                {/* Decorative ambient subtle glow */}
+                <div className={`pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full blur-2xl ${card.glow}`} />
+
+                <div className="relative z-10 flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 truncate">
                       {card.title}
                     </p>
                     <p className={`mt-1 text-2xl font-black font-mono tracking-tight ${card.textVal}`}>
                       {card.value}
                     </p>
                   </div>
-                  <div className={`rounded-lg p-2 shadow-2xs ${card.iconBg}`}>
+                  <div className={`rounded-xl p-2.5 shadow-2xs transition-all duration-300 group-hover:scale-110 group-hover:shadow-md ${card.iconBg}`}>
                     <Icon size={16} />
                   </div>
                 </div>
-                <p className="mt-2 text-[11px] font-medium text-slate-500 line-clamp-1">
-                  {card.hint}
-                </p>
+
+                {/* Progress bar track */}
+                {card.progress !== undefined && (
+                  <div className="relative z-10 mt-3">
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200/60">
+                      <div
+                        className={`h-full rounded-full transition-all duration-700 ${card.progressColor}`}
+                        style={{ width: `${card.progress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div className="relative z-10 mt-2.5 flex items-center justify-between text-[11px] font-medium text-slate-500 gap-2">
+                  <span className="line-clamp-1 truncate">{card.hint}</span>
+                  <span className={`rounded-md border px-1.5 py-0.5 text-[10px] font-bold shrink-0 shadow-2xs ${card.badgeStyle}`}>
+                    {card.badge}
+                  </span>
+                </div>
               </div>
             )
           })}
         </div>
       )}
+
 
       {/* ── Main Fleet & Alerts Grid ───────────────────────────────────────── */}
       <div className="grid gap-4 xl:grid-cols-[1.35fr_0.95fr]">
@@ -619,10 +747,34 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            <div className="mt-3.5 space-y-2.5 max-h-[300px] overflow-y-auto pr-1">
+            <div className="mt-3.5 space-y-2.5 max-h-[320px] overflow-y-auto pr-1">
               {priceAlerts.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/50 px-4 py-8 text-center text-xs font-medium text-slate-500">
-                  No unread price alerts at this moment.
+                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/50 p-5 text-center space-y-3">
+                  <div className="w-10 h-10 mx-auto rounded-full bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600 shadow-2xs">
+                    <BellRing size={18} />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-xs font-bold text-slate-800">No Active Price Drops Detected</div>
+                    <p className="text-[11px] text-slate-500 max-w-xs mx-auto leading-relaxed">
+                      Price alerts trigger automatically when fares drop below the tracked baseline on your pinned/tagged cruises.
+                    </p>
+                  </div>
+                  <div className="flex items-center justify-center gap-2 pt-1 flex-wrap">
+                    <Link
+                      href="/dashboard/tagged-cruises"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold shadow-2xs transition active:scale-95 cursor-pointer"
+                    >
+                      <Tag size={12} />
+                      <span>View Tagged Cruises</span>
+                    </Link>
+                    <Link
+                      href="/dashboard/search-cruise"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold shadow-2xs transition active:scale-95 cursor-pointer"
+                    >
+                      <Pin size={12} className="text-amber-500" />
+                      <span>Pin a Cruise</span>
+                    </Link>
+                  </div>
                 </div>
               ) : (
                 priceAlerts.map(alert => (
@@ -774,49 +926,71 @@ export default function DashboardPage() {
         </div>
 
         {/* ── 5 Executive KPI Metric Cards ─────────────────────────────────── */}
-        <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-          {capacityOverviewCards.map(card => {
-            const Icon = card.icon
-
-            return (
-              <div
-                key={card.title}
-                className={`group relative overflow-hidden rounded-xl border p-4 shadow-2xs transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md ${card.accent}`}
-              >
+        {capacityLoading && capacityCruises.length === 0 ? (
+          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            {Array.from({ length: 5 }).map((_, idx) => (
+              <div key={idx} className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-2xs space-y-3">
                 <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                      {card.title}
-                    </div>
-                    <div className={`mt-1 text-2xl font-black font-mono tracking-tight ${card.textVal}`}>
-                      {card.value}
-                    </div>
+                  <div className="space-y-2 flex-1">
+                    <Skeleton className="h-3 w-20 bg-slate-200" />
+                    <Skeleton className="h-7 w-24 bg-slate-300" />
                   </div>
-                  <div className={`rounded-lg p-2.5 shadow-2xs transition-transform group-hover:scale-105 ${card.iconBg}`}>
-                    <Icon size={16} />
-                  </div>
+                  <Skeleton className="h-9 w-9 rounded-lg bg-teal-100/60" />
                 </div>
-
-                {/* Progress Visual Track */}
-                <div className="mt-3">
-                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200/60">
-                    <div
-                      className={`h-full rounded-full transition-all duration-700 ${card.progressColor}`}
-                      style={{ width: `${card.progress}%` }}
-                    />
-                  </div>
-                </div>
-
-                <div className="mt-2.5 flex items-center justify-between text-[11px] font-medium text-slate-500">
-                  <span className="line-clamp-1">{card.hint}</span>
-                  <span className={`rounded-md border px-1.5 py-0.2 text-[10px] font-bold shrink-0 ${card.badgeStyle}`}>
-                    {card.badge}
-                  </span>
+                <Skeleton className="h-1.5 w-full rounded-full bg-slate-200" />
+                <div className="flex justify-between items-center pt-1">
+                  <Skeleton className="h-3 w-28 bg-slate-100" />
+                  <Skeleton className="h-4 w-16 rounded bg-slate-100" />
                 </div>
               </div>
-            )
-          })}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            {capacityOverviewCards.map(card => {
+              const Icon = card.icon
+
+              return (
+                <div
+                  key={card.title}
+                  className={`group relative overflow-hidden rounded-xl border p-4 shadow-2xs transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md ${card.accent}`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                        {card.title}
+                      </div>
+                      <div className={`mt-1 text-2xl font-black font-mono tracking-tight ${card.textVal}`}>
+                        {card.value}
+                      </div>
+                    </div>
+                    <div className={`rounded-lg p-2.5 shadow-2xs transition-transform group-hover:scale-105 ${card.iconBg}`}>
+                      <Icon size={16} />
+                    </div>
+                  </div>
+
+                  {/* Progress Visual Track */}
+                  <div className="mt-3">
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200/60">
+                      <div
+                        className={`h-full rounded-full transition-all duration-700 ${card.progressColor}`}
+                        style={{ width: `${card.progress}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-2.5 flex items-center justify-between text-[11px] font-medium text-slate-500">
+                    <span className="line-clamp-1">{card.hint}</span>
+                    <span className={`rounded-md border px-1.5 py-0.2 text-[10px] font-bold shrink-0 ${card.badgeStyle}`}>
+                      {card.badge}
+                    </span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
 
         {/* ── Vendor Demand Distribution Chart ────────────────────────────── */}
         <div className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-2xs space-y-4">

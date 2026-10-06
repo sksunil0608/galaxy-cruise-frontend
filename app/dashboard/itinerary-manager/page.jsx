@@ -24,6 +24,8 @@ import {
   updatePortAlias,
   deletePortAlias
 } from "../api"
+import { Skeleton } from "@/components/ui/skeleton"
+
 
 function Modal({ children, onClose, maxWidth = "max-w-xl" }) {
   useEffect(() => {
@@ -561,15 +563,36 @@ export default function ItineraryManagerPage() {
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
                 {itinLoading ? (
-                  <tr>
-                    <td colSpan={6} className="px-4 py-16 text-center text-slate-400">
-                      <div className="flex items-center justify-center gap-2">
-                        <RefreshCw size={15} className="animate-spin text-teal-600" />
-                        <span>Loading itineraries…</span>
-                      </div>
-                    </td>
-                  </tr>
+                  Array.from({ length: 6 }).map((_, i) => (
+                    <tr key={i}>
+                      <td className="px-4 py-4">
+                        <div className="flex items-center gap-2.5">
+                          <Skeleton className="h-8 w-8 rounded-lg bg-teal-100/70 shrink-0" />
+                          <Skeleton className="h-4 w-32 bg-slate-300" />
+                        </div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <Skeleton className="h-4 w-40 bg-slate-200" />
+                      </td>
+                      <td className="px-4 py-4 text-center">
+                        <Skeleton className="h-5 w-12 mx-auto rounded bg-slate-200" />
+                      </td>
+                      <td className="px-4 py-4">
+                        <Skeleton className="h-4 w-48 bg-slate-200" />
+                      </td>
+                      <td className="px-4 py-4 text-right">
+                        <Skeleton className="h-4.5 w-16 ml-auto bg-slate-300" />
+                      </td>
+                      <td className="px-4 py-4 text-right">
+                        <div className="inline-flex gap-1.5 justify-end">
+                          <Skeleton className="h-7 w-7 rounded-lg bg-slate-200" />
+                          <Skeleton className="h-7 w-7 rounded-lg bg-slate-200" />
+                        </div>
+                      </td>
+                    </tr>
+                  ))
                 ) : itineraries.length === 0 ? (
+
                   <tr>
                     <td colSpan={6} className="px-4 py-16 text-center text-slate-400">
                       No itineraries found matching your search.
@@ -697,11 +720,23 @@ export default function ItineraryManagerPage() {
           {/* Port Aliases Mobile List View */}
           <div className="block md:hidden divide-y divide-slate-100">
             {aliasLoading ? (
-              <div className="flex items-center justify-center py-12 text-xs text-slate-400 font-medium gap-2">
-                <RefreshCw size={14} className="animate-spin text-teal-600" />
-                <span>Loading port aliases…</span>
-              </div>
+              Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="p-4 bg-white space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Skeleton className="h-5 w-16 rounded bg-teal-100/80" />
+                      <Skeleton className="h-4 w-32 bg-slate-300" />
+                    </div>
+                    <div className="flex gap-1.5">
+                      <Skeleton className="h-7 w-7 rounded-lg bg-slate-200" />
+                      <Skeleton className="h-7 w-7 rounded-lg bg-slate-200" />
+                    </div>
+                  </div>
+                  <Skeleton className="h-3.5 w-48 bg-slate-200" />
+                </div>
+              ))
             ) : aliases.length === 0 ? (
+
               <div className="px-4 py-12 text-center text-xs text-slate-400 font-medium">
                 No port aliases found.
               </div>
@@ -760,15 +795,27 @@ export default function ItineraryManagerPage() {
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
                 {aliasLoading ? (
-                  <tr>
-                    <td colSpan={4} className="px-4 py-16 text-center text-slate-400">
-                      <div className="flex items-center justify-center gap-2">
-                        <RefreshCw size={15} className="animate-spin text-teal-600" />
-                        <span>Loading port aliases…</span>
-                      </div>
-                    </td>
-                  </tr>
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <tr key={i}>
+                      <td className="px-4 py-4">
+                        <Skeleton className="h-5 w-20 rounded bg-teal-100/80" />
+                      </td>
+                      <td className="px-4 py-4">
+                        <Skeleton className="h-4 w-36 bg-slate-300" />
+                      </td>
+                      <td className="px-4 py-4">
+                        <Skeleton className="h-4 w-48 bg-slate-200" />
+                      </td>
+                      <td className="px-4 py-4 text-right">
+                        <div className="inline-flex gap-1.5 justify-end">
+                          <Skeleton className="h-7 w-7 rounded-lg bg-slate-200" />
+                          <Skeleton className="h-7 w-7 rounded-lg bg-slate-200" />
+                        </div>
+                      </td>
+                    </tr>
+                  ))
                 ) : aliases.length === 0 ? (
+
                   <tr>
                     <td colSpan={4} className="px-4 py-16 text-center text-slate-400">
                       No port aliases found.

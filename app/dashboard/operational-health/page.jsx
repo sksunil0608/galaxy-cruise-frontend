@@ -27,6 +27,8 @@ import {
   fetchOperationalHealthData,
   fetchVendorRuns
 } from "../api"
+import { Skeleton } from "@/components/ui/skeleton"
+
 
 const fmtRunDT = v =>
   v
@@ -326,11 +328,26 @@ export default function OperationalHealthPage() {
         </div>
 
         {vendorLoading ? (
-          <div className="flex items-center justify-center py-12 text-xs text-slate-400 gap-2 font-medium">
-            <RefreshCcw size={14} className="animate-spin text-teal-600" />
-            <span>Loading carrier freshness metrics…</span>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="rounded-xl border border-slate-200/80 bg-slate-50/40 p-4 space-y-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="space-y-1.5 flex-1">
+                    <Skeleton className="h-4 w-32 bg-slate-300" />
+                    <Skeleton className="h-3 w-24 bg-slate-200" />
+                  </div>
+                  <Skeleton className="h-5 w-16 rounded bg-slate-200" />
+                </div>
+                <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200/60">
+                  <Skeleton className="h-3.5 w-20 bg-slate-200" />
+                  <Skeleton className="h-3.5 w-16 bg-slate-200" />
+                </div>
+                <Skeleton className="h-1.5 w-full rounded-full bg-slate-200" />
+              </div>
+            ))}
           </div>
         ) : (
+
           <>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {vendorStatus.map(vendor => (
@@ -470,11 +487,23 @@ export default function OperationalHealthPage() {
 
         {/* Run Log Table / Card List */}
         {runsLoading ? (
-          <div className="flex items-center justify-center py-16 text-xs text-slate-400 gap-2 font-medium">
-            <RefreshCcw size={15} className="animate-spin text-teal-600" />
-            <span>Loading execution run history…</span>
+          <div className="divide-y divide-slate-100">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="flex items-center justify-between p-4 gap-4">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <Skeleton className="h-5 w-20 rounded-md bg-slate-200" />
+                  <Skeleton className="h-4 w-28 bg-slate-300" />
+                  <Skeleton className="h-3.5 w-64 bg-slate-200" />
+                </div>
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-5 w-16 rounded bg-slate-100" />
+                  <Skeleton className="h-3.5 w-24 bg-slate-200" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : filteredRuns.length === 0 ? (
+
           <div className="py-16 text-center text-xs text-slate-400 font-medium">
             No execution runs found matching your filter.
           </div>

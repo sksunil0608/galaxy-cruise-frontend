@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { ChevronDown, ChevronRight, ChevronUp, ChevronLeft, ChevronsLeft, ChevronsRight, Pin, Minus, Tag, TrendingDown, TrendingUp, X, ImageIcon, Search, RotateCcw, RefreshCw, Compass, Sparkles, AlertCircle, Ship, MapPin, CalendarDays, Layers, Zap, CheckCircle2, Play } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronUp, ChevronLeft, ChevronsLeft, ChevronsRight, Pin, Minus, Tag, TrendingDown, TrendingUp, X, ImageIcon, Search, RotateCcw, RefreshCw, Compass, Sparkles, AlertCircle, Ship, MapPin, CalendarDays, Layers, Zap, CheckCircle2, Play, Check, ArrowDown, ArrowDownNarrowWide, ArrowUpNarrowWide, Building2 } from "lucide-react";
 
 import {
   createCruiseTag,
@@ -22,6 +22,8 @@ import {
   normalizeCabinCategory
 } from "../cruise-helpers";
 import { fetchCategoryDecks, refreshCruiseCabins, getCruiseRefreshStatus, logActivity, fetchCruise, triggerVendorScrapeFetch } from "../api";
+import { CruiseSearchSkeleton } from "@/components/ui/skeleton-patterns";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const PAGE_SIZE = 20;
 
@@ -273,15 +275,85 @@ function SearchableSelect({ placeholder, value, onChange, options, onEnter }) {
                 onChange(opt);
                 setOpen(false);
               }}
-              className={`px-3.5 py-2 text-xs cursor-pointer transition ${
-                opt.toLowerCase() === (value || "").toLowerCase()
-                  ? "bg-teal-50 text-teal-800 font-bold"
-                  : "text-slate-800 hover:bg-slate-50 font-medium"
-              }`}
+              className={`px-3.5 py-2 text-xs cursor-pointer transition ${opt.toLowerCase() === (value || "").toLowerCase()
+                ? "bg-teal-50 text-teal-800 font-bold"
+                : "text-slate-800 hover:bg-slate-50 font-medium"
+                }`}
             >
               {opt}
             </div>
           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Icon-powered Sort Dropdown — replaces native select emoji options with rich Lucide icons
+function SortDropdown({ value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  const SORT_OPTIONS = [
+    { value: "refreshed", label: "Recently Refreshed", icon: Zap, iconColor: "text-amber-500" },
+    { value: "departure", label: "Departure Date (Soonest)", icon: CalendarDays, iconColor: "text-teal-600" },
+    { value: "price_asc", label: "Price (Low to High)", icon: ArrowDownNarrowWide, iconColor: "text-emerald-600" },
+    { value: "price_desc", label: "Price (High to Low)", icon: ArrowUpNarrowWide, iconColor: "text-indigo-600" },
+    { value: "avail", label: "Availability (Most Avail)", icon: CheckCircle2, iconColor: "text-cyan-600" },
+  ];
+
+  const current = SORT_OPTIONS.find((opt) => opt.value === value) || SORT_OPTIONS[0];
+  const CurrentIcon = current.icon;
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (ref.current && !ref.current.contains(event.target)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative inline-block text-left">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="inline-flex items-center gap-2 h-8 px-2.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/20 shadow-2xs cursor-pointer transition"
+      >
+        <CurrentIcon size={14} className={`${current.iconColor} shrink-0`} />
+        <span>{current.label}</span>
+        <ChevronDown size={13} className={`text-slate-400 transition-transform duration-200 shrink-0 ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 mt-1.5 w-60 rounded-xl border border-slate-200 bg-white shadow-xl py-1 z-50 animate-in fade-in zoom-in-95 duration-100">
+          <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100">
+            Sort inventory by
+          </div>
+          {SORT_OPTIONS.map((opt) => {
+            const Icon = opt.icon;
+            const isSelected = opt.value === value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => {
+                  onChange(opt.value);
+                  setOpen(false);
+                }}
+                className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold text-left transition-colors cursor-pointer ${isSelected ? "bg-teal-50 text-teal-900 font-bold" : "text-slate-700 hover:bg-slate-50 hover:text-slate-900"
+                  }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Icon size={14} className={`${opt.iconColor} shrink-0`} />
+                  <span>{opt.label}</span>
+                </div>
+                {isSelected && <Check size={13} className="text-teal-600 shrink-0" />}
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
@@ -294,8 +366,8 @@ const typeColor = (type) =>
   ({
     Interior: { bg: "#f1f5f9", color: "#475569" },
     Exterior: { bg: "#f0f9ff", color: "#0284c7" },
-    Balcony:  { bg: "#ecfeff", color: "#0f766e" },
-    Suite:    { bg: "#ede9fe", color: "#6d28d9" },
+    Balcony: { bg: "#ecfeff", color: "#0f766e" },
+    Suite: { bg: "#ede9fe", color: "#6d28d9" },
   })[type] || { bg: "#f1f5f9", color: "#475569" };
 
 const getVisiblePages = (currentPage, totalPages) => {
@@ -320,7 +392,7 @@ const getVisiblePages = (currentPage, totalPages) => {
     .sort((a, b) => a - b);
 };
 
-function Modal({ children, onClose, width = "min(96vw, 920px)" }) {
+function Modal({ children, onClose, width = "min(96vw, 920px)", className = "" }) {
   useEffect(() => {
     const handle = (event) => event.key === "Escape" && onClose();
     window.addEventListener("keydown", handle);
@@ -329,11 +401,12 @@ function Modal({ children, onClose, width = "min(96vw, 920px)" }) {
 
   return (
     <div
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}
+      className="fixed inset-0 bg-black/65 backdrop-blur-xs flex items-center justify-center z-50 p-2 sm:p-4 md:p-6 overflow-y-auto"
       onClick={onClose}
     >
       <div
-        style={{ width, maxHeight: "94vh", overflowY: "auto", background: T.surface, borderRadius: 12, boxShadow: T.shadowModal }}
+        className={`w-full max-h-[92vh] flex flex-col bg-white rounded-2xl shadow-2xl overflow-hidden border border-slate-200/90 relative ${className}`}
+        style={{ maxWidth: width }}
         onClick={(event) => event.stopPropagation()}
       >
         {children}
@@ -411,18 +484,22 @@ function ShipModal({ row, onClose }) {
 
   return (
     <Modal onClose={onClose} width="min(96vw, 1080px)">
-      <div style={{ padding: 24, borderBottom: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between" }}>
-        <div>
-          <div style={{ fontSize: 12, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1 }}>Ship Details</div>
-          <h2 style={{ margin: "6px 0 0", fontSize: 24 }}>{ship.name || row.ship}</h2>
-          <div style={{ marginTop: 6, fontSize: 12, color: T.textMuted, fontFamily: T.fontMono }}>{shipCode || "--"}</div>
+      <div className="p-4 sm:p-6 border-b border-slate-200 flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Ship Details</div>
+          <h2 className="mt-1 text-lg sm:text-2xl font-bold text-slate-900 leading-snug break-words">{ship.name || row.ship}</h2>
+          <div className="mt-1 text-xs text-slate-500 font-mono">{shipCode || "--"}</div>
         </div>
-        <button onClick={onClose} style={{ border: "none", background: T.muted, borderRadius: 6, width: 32, height: 32, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <X size={15} />
+        <button
+          onClick={onClose}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 transition cursor-pointer"
+          aria-label="Close"
+        >
+          <X size={16} />
         </button>
       </div>
 
-      <div style={{ padding: "18px 24px 0", display: "flex", gap: 8, flexWrap: "wrap" }}>
+      <div className="p-3.5 sm:p-5 pt-3 pb-0 flex gap-2 flex-wrap border-b border-slate-100">
         {[
           { key: "overview", label: "Overview" },
           { key: "decks", label: `Deck Plans (${decks.length})` }
@@ -430,49 +507,57 @@ function ShipModal({ row, onClose }) {
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
-            style={{
-              border: `1px solid ${activeTab === tab.key ? T.blue : T.border}`,
-              background: activeTab === tab.key ? T.blueBg : "#fff",
-              color: activeTab === tab.key ? T.blue : T.textSlate,
-              borderRadius: 6,
-              padding: "7px 12px",
-              fontSize: 12,
-              fontWeight: 600,
-              cursor: "pointer"
-            }}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${activeTab === tab.key
+              ? "bg-teal-700 text-white shadow-2xs"
+              : "bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200/80"
+              }`}
           >
             {tab.label}
           </button>
         ))}
       </div>
 
-      <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 18 }}>
+      <div className="p-4 sm:p-6 flex flex-col gap-4 overflow-y-auto max-h-[75vh]">
         {loadingShip ? (
-          <div style={{ padding: 32, textAlign: "center", color: T.textMuted }}>Loading ship details...</div>
+          <div className="space-y-4 py-2">
+            <Skeleton className="h-64 w-full rounded-2xl bg-slate-200" />
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="p-3 rounded-xl border border-slate-200/80 bg-slate-50 space-y-2">
+                  <Skeleton className="h-3 w-16 bg-slate-200" />
+                  <Skeleton className="h-5 w-24 bg-slate-300" />
+                </div>
+              ))}
+            </div>
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-36 bg-slate-300" />
+              <Skeleton className="h-20 w-full rounded-xl bg-slate-100" />
+            </div>
+          </div>
         ) : shipError ? (
-          <div style={{ padding: 20, borderRadius: 14, background: "#fef2f2", color: T.red }}>{shipError}</div>
+          <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium">{shipError}</div>
         ) : null}
 
         {activeTab === "overview" ? (
           <>
             {imageSrc && (
-              <div style={{ border: `1px solid ${T.border}`, borderRadius: 16, overflow: "hidden", background: T.muted, height: 260, position: "relative" }}>
+              <div className="border border-slate-200/90 rounded-2xl overflow-hidden bg-slate-100 h-52 sm:h-64 relative">
                 <Image
                   src={imageSrc}
                   alt={ship.name || row.ship}
                   fill
                   sizes="(max-width: 768px) 96vw, 1080px"
-                  style={{ objectFit: "cover" }}
+                  className="object-cover"
                   onError={() => setImageSrc(null)}
                 />
               </div>
             )}
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12 }}>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 sm:gap-3">
               {stats.map(([label, value]) => (
-                <div key={label} style={{ border: `1px solid ${T.border}`, borderRadius: 12, padding: 14, background: T.muted }}>
-                  <div style={{ fontSize: 11, color: T.textMuted, textTransform: "uppercase" }}>{label}</div>
-                  <div style={{ marginTop: 4, fontWeight: 700, color: T.textPrimary }}>{value}</div>
+                <div key={label} className="border border-slate-200/80 rounded-xl p-3 sm:p-3.5 bg-slate-50">
+                  <div className="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider">{label}</div>
+                  <div className="mt-1 font-bold text-sm sm:text-base text-slate-900">{value}</div>
                 </div>
               ))}
             </div>
@@ -591,20 +676,30 @@ function fmtSeconds(sec) {
 }
 
 const fmtFetchedAt = (ts) => {
-  if (!ts) return null;
-  const d = new Date(ts);
-  const diffMin = Math.round((Date.now() - ts) / 60000);
-  if (diffMin < 1) return "just now";
+  if (!ts) return "—";
+  const num = typeof ts === "number" ? ts : new Date(ts).getTime();
+  if (isNaN(num) || num <= 0) return "—";
+  const diffSec = Math.round((Date.now() - num) / 1000);
+  if (diffSec < 30) return "Just now";
+  const diffMin = Math.round(diffSec / 60);
   if (diffMin < 60) return `${diffMin}m ago`;
-  return d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) +
-    " " + d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
+  const diffHours = Math.round(diffMin / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.round(diffHours / 24);
+  if (diffDays <= 7) return `${diffDays}d ago`;
+  const d = new Date(num);
+  return (
+    d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" }) +
+    " " +
+    d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })
+  );
 };
 
 function DataRefreshStrip({ job, row, onRefresh }) {
-  const status       = job?.status;
-  const isRunning    = status === "in_progress" || status === "started";
-  const isCooldown   = status === "cooldown";
-  const isBlocked    = isRunning || isCooldown;
+  const status = job?.status;
+  const isRunning = status === "in_progress" || status === "started";
+  const isCooldown = status === "cooldown";
+  const isBlocked = isRunning || isCooldown;
   const remainingSec = isRunning
     ? Math.ceil((job?.remaining ?? 0) / 1000)
     : isCooldown ? (job?.retryAfter ?? 0) : 0;
@@ -615,46 +710,44 @@ function DataRefreshStrip({ job, row, onRefresh }) {
   const fetchedLabel = isRunning ? null : fetchedTs ? `Fetched ${fmtFetchedAt(fetchedTs)}` : "Not available";
 
   return (
-    <div style={{ padding: "8px 20px", display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, borderTop: `1px solid ${T.border}` }}>
-      {isRunning && (
-        <span style={{ fontSize: 12, color: T.textMuted }}>
-          {stillFetching ? "Still fetching, almost done…" : `Refreshing… ~${fmtSeconds(remainingSec)} remaining`}
-        </span>
-      )}
-      {isCooldown && (
-        <span style={{ fontSize: 12, color: T.textMuted }}>
-          Next refresh in {fmtSeconds(remainingSec)}
-        </span>
-      )}
-      {fetchedLabel && (
-        <span style={{ fontSize: 11, color: T.textMuted }}>
-          {fetchedLabel}
-        </span>
-      )}
+    <div className="p-3 px-4 flex flex-wrap items-center justify-between gap-2.5 border-t border-slate-200/80 bg-slate-50/70 rounded-b-xl">
+      <div className="flex items-center gap-2 text-xs">
+        {isRunning && (
+          <span className="inline-flex items-center gap-1.5 text-teal-800 font-semibold">
+            <RefreshCw size={12} className="animate-spin text-teal-600" />
+            <span>{stillFetching ? "Almost done…" : `Refreshing live… ~${fmtSeconds(remainingSec)} left`}</span>
+          </span>
+        )}
+        {isCooldown && (
+          <span className="text-slate-500 font-medium">
+            Next refresh in {fmtSeconds(remainingSec)}
+          </span>
+        )}
+        {fetchedLabel && (
+          <span className="text-slate-500 font-medium">
+            {fetchedLabel}
+          </span>
+        )}
+      </div>
+
       <button
         onClick={onRefresh}
         disabled={isBlocked}
-        style={{
-          padding: "4px 12px", border: `1px solid ${T.border}`, borderRadius: 6,
-          background: isBlocked ? T.muted : T.surface,
-          color: isBlocked ? T.textMuted : T.textSlate,
-          fontSize: 11, fontWeight: 600,
-          cursor: isBlocked ? "not-allowed" : "pointer",
-          opacity: isBlocked ? 0.6 : 1,
-        }}
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-bold text-slate-700 hover:text-slate-900 shadow-2xs active:scale-95 transition cursor-pointer"
       >
-        Refresh Data
+        <RefreshCw size={12} className={`text-slate-500 ${isRunning ? "animate-spin" : ""}`} />
+        <span>{isRunning ? "Refreshing…" : "Refresh Data"}</span>
       </button>
     </div>
   );
 }
 
 function RefreshBanner({ job, onRefresh }) {
-  const status     = job?.status;
-  const isRunning  = status === "in_progress" || status === "started";
+  const status = job?.status;
+  const isRunning = status === "in_progress" || status === "started";
   const isCooldown = status === "cooldown";
-  const isError    = status === "error" || status === "rate_limited";
-  const isBlocked  = isRunning || isCooldown;
+  const isError = status === "error" || status === "rate_limited";
+  const isBlocked = isRunning || isCooldown;
 
   const remainingSec = isRunning
     ? Math.ceil((job?.remaining ?? 0) / 1000)
@@ -662,33 +755,49 @@ function RefreshBanner({ job, onRefresh }) {
   const stillFetching = isRunning && remainingSec <= 0;
 
   return (
-    <div style={{ padding: "12px 24px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", borderTop: "1px solid #f1f5f9" }}>
-      <span style={{ fontSize: 13, color: "#64748b" }}>
-        {isRunning
-          ? stillFetching
-            ? "Still fetching, almost done…"
-            : `Fetching live data… ~${fmtSeconds(remainingSec)} remaining`
-          : isCooldown  ? `Data fetched — next refresh in ${fmtSeconds(remainingSec)}`
-          : job?.success ? "No cabin-level data available for this vendor."
-          : isError     ? null
-          : "No detailed cabin data yet."}
-      </span>
-      {isError && (
-        <span style={{ fontSize: 12, color: "#ef4444" }}>
-          {job.error ?? "Too many requests."}{job.retryAfter ? ` Retry in ${fmtSeconds(job.retryAfter)}.` : ""}
-        </span>
-      )}
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 p-4 rounded-xl bg-gradient-to-r from-slate-50 via-teal-50/20 to-slate-50 border border-slate-200/90 shadow-2xs">
+      <div className="flex items-center gap-3 min-w-0">
+        <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-2xs ${isRunning ? "bg-teal-100 text-teal-700" : isError ? "bg-rose-100 text-rose-700" : "bg-teal-50 border border-teal-100 text-teal-700"
+          }`}>
+          {isRunning ? (
+            <RefreshCw size={16} className="animate-spin text-teal-700" />
+          ) : isError ? (
+            <AlertCircle size={16} className="text-rose-600" />
+          ) : (
+            <Sparkles size={16} className="text-teal-600" />
+          )}
+        </div>
+        <div className="text-xs space-y-0.5">
+          <div className="font-bold text-slate-900">
+            {isRunning
+              ? stillFetching
+                ? "Finalizing live carrier staterooms…"
+                : `Fetching live staterooms… ~${fmtSeconds(remainingSec)} remaining`
+              : isCooldown
+                ? `Data fetched — next refresh in ${fmtSeconds(remainingSec)}`
+                : job?.success
+                  ? "No cabin-level data available for this vendor."
+                  : isError
+                    ? job.error ?? "Failed to fetch live data."
+                    : "No detailed cabin data loaded yet."}
+          </div>
+          <div className="text-[11px] text-slate-500 font-medium">
+            {isRunning
+              ? "Querying carrier booking portal for open cabin numbers..."
+              : isError
+                ? (job?.retryAfter ? `Retry available in ${fmtSeconds(job.retryAfter)}` : "Click below to retry scraper worker.")
+                : "Fetch real-time cabin numbers, deck locations, and availability."}
+          </div>
+        </div>
+      </div>
+
       {!isBlocked && (
         <button
           onClick={onRefresh}
-          style={{
-            display: "flex", alignItems: "center", gap: 6,
-            padding: "5px 14px", border: "1px solid #1d4ed8",
-            borderRadius: 6, background: "#eff6ff",
-            color: "#1d4ed8", fontSize: 12, fontWeight: 600, cursor: "pointer"
-          }}
+          className="inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-xl bg-teal-700 hover:bg-teal-800 active:scale-95 text-white text-xs font-bold shadow-xs hover:shadow transition-all cursor-pointer shrink-0"
         >
-          Get Full Details
+          <Sparkles size={13} />
+          <span>Get Full Details</span>
         </button>
       )}
     </div>
@@ -705,10 +814,10 @@ function StatusPill({ status }) {
 }
 
 const ACTIVITY_COLOR = {
-  DEPART:         { bg: "#fee2e2", color: "#b91c1c" },
-  "ARRIVE-DOCK":  { bg: "#dcfce7", color: "#15803d" },
-  "ARRIVE-TENDER":{ bg: "#d1fae5", color: "#065f46" },
-  "AT SEA":       { bg: "#e0f2fe", color: "#0369a1" },
+  DEPART: { bg: "#fee2e2", color: "#b91c1c" },
+  "ARRIVE-DOCK": { bg: "#dcfce7", color: "#15803d" },
+  "ARRIVE-TENDER": { bg: "#d1fae5", color: "#065f46" },
+  "AT SEA": { bg: "#e0f2fe", color: "#0369a1" },
 };
 
 function activityStyle(activity = "") {
@@ -722,22 +831,26 @@ function ItineraryModal({ row, onClose }) {
   return (
     <Modal onClose={onClose} width="min(96vw, 780px)">
       {/* Header */}
-      <div style={{ padding: "18px 24px", borderBottom: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div>
-          <div style={{ fontSize: 11, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1 }}>Itinerary</div>
-          <h2 style={{ margin: "4px 0 2px", fontSize: 19, fontWeight: 700 }}>{row.package}</h2>
-          <div style={{ fontSize: 13, color: T.textSlate }}>
-            {row.ship && <span style={{ fontWeight: 600 }}>{row.ship}</span>}
-            {row.nights && <span style={{ color: T.textMuted }}> &middot; {row.nights} nights</span>}
+      <div className="p-4 sm:p-6 border-b border-slate-200 flex items-start justify-between gap-3 bg-gradient-to-b from-slate-50/80 to-white">
+        <div className="min-w-0 flex-1 space-y-1">
+          <div className="text-[11px] font-bold text-teal-800 uppercase tracking-wider bg-teal-50 border border-teal-200/80 px-2.5 py-0.5 rounded-full inline-block">Itinerary Schedule</div>
+          <h2 className="text-base sm:text-xl font-black text-slate-900 leading-snug break-words">{row.package || "Cruise Itinerary"}</h2>
+          <div className="text-xs text-slate-600 flex items-center gap-2 flex-wrap pt-0.5">
+            {row.ship && <span className="font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200/70">{row.ship}</span>}
+            {row.nights && <span className="font-medium text-slate-500">· {row.nights} nights</span>}
           </div>
         </div>
-        <button onClick={onClose} style={{ border: "none", background: T.muted, borderRadius: 6, width: 32, height: 32, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-          <X size={15} />
+        <button
+          onClick={onClose}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 transition cursor-pointer"
+          aria-label="Close"
+        >
+          <X size={16} />
         </button>
       </div>
 
       {/* Table & Mobile List View */}
-      <div style={{ overflowY: "auto", maxHeight: "65vh" }}>
+      <div className="overflow-y-auto max-h-[70vh] divide-y divide-slate-100">
         {stops.length === 0 ? (
           <div className="py-12 px-6 text-center text-slate-500">
             <div className="w-10 h-10 mx-auto mb-3 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-500">
@@ -748,18 +861,18 @@ function ItineraryModal({ row, onClose }) {
           </div>
         ) : (
           <>
-            {/* Mobile List View (block md:hidden) */}
-            <div className="block md:hidden divide-y divide-slate-100">
+            {/* Mobile List View (block sm:hidden) */}
+            <div className="block sm:hidden divide-y divide-slate-100">
               {stops.map((stop, i) => {
                 const as = activityStyle(stop.activity ?? "");
                 return (
                   <div key={i} className="p-3.5 space-y-2 bg-white hover:bg-slate-50 transition">
                     <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="font-bold text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded shrink-0">
                           Day {stop.day}
                         </span>
-                        <span className="font-bold text-slate-900 text-sm">{stop.port}</span>
+                        <span className="font-bold text-slate-900 text-sm truncate">{stop.port}</span>
                       </div>
                       <span style={{ background: as.bg, color: as.color }} className="rounded-full px-2.5 py-0.5 text-[10px] font-bold shrink-0">
                         {stop.activity}
@@ -767,8 +880,8 @@ function ItineraryModal({ row, onClose }) {
                     </div>
 
                     <div className="flex items-center justify-between text-xs text-slate-500 pt-1">
-                      <span className="font-medium text-slate-600">{stop.country || "Port of call"}</span>
-                      <span className="font-mono text-[11px] text-slate-400">
+                      <span className="font-medium text-slate-600 truncate">{stop.country || "Port of call"}</span>
+                      <span className="font-mono text-[11px] text-slate-400 shrink-0">
                         {stop.date} {stop.time ? `· ${stop.time}` : ""}
                       </span>
                     </div>
@@ -777,34 +890,39 @@ function ItineraryModal({ row, onClose }) {
               })}
             </div>
 
-            {/* Desktop Grid / Table View (hidden md:block) */}
-            <div className="hidden md:block">
-              {/* Column headers */}
-              <div style={{ display: "grid", gridTemplateColumns: "44px 96px 76px 1fr 1fr 100px", gap: "0 12px", padding: "8px 20px", background: T.muted, borderBottom: `1px solid ${T.border}`, position: "sticky", top: 0 }}>
-                {["Day", "Date", "Time", "Activity", "Port of Call", "Country"].map(h => (
-                  <span key={h} style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>{h}</span>
-                ))}
-              </div>
-              {stops.map((stop, i) => {
-                const as = activityStyle(stop.activity ?? "");
-                return (
-                  <div
-                    key={i}
-                    style={{ display: "grid", gridTemplateColumns: "44px 96px 76px 1fr 1fr 100px", gap: "0 12px", padding: "11px 20px", borderBottom: `1px solid ${T.border}`, alignItems: "center", background: i % 2 === 0 ? "#fff" : T.muted }}
-                  >
-                    <span style={{ fontSize: 12, fontWeight: 700, color: T.textSlate }}>{stop.day}</span>
-                    <span style={{ fontSize: 12, color: T.textPrimary, fontFamily: T.fontMono }}>{stop.date}</span>
-                    <span style={{ fontSize: 12, color: T.textSlate, fontFamily: T.fontMono }}>{stop.time}</span>
-                    <span>
-                      <span style={{ background: as.bg, color: as.color, borderRadius: 999, padding: "3px 9px", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>
-                        {stop.activity}
-                      </span>
-                    </span>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: T.textPrimary }}>{stop.port}</span>
-                    <span style={{ fontSize: 12, color: T.textSlate }}>{stop.country}</span>
-                  </div>
-                );
-              })}
+            {/* Desktop / Tablet View (hidden sm:block) */}
+            <div className="hidden sm:block overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10.5px]">
+                  <tr>
+                    <th className="px-4 py-2.5">Day</th>
+                    <th className="px-4 py-2.5">Date</th>
+                    <th className="px-4 py-2.5">Time</th>
+                    <th className="px-4 py-2.5">Activity</th>
+                    <th className="px-4 py-2.5">Port of Call</th>
+                    <th className="px-4 py-2.5">Country</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-slate-800">
+                  {stops.map((stop, i) => {
+                    const as = activityStyle(stop.activity ?? "");
+                    return (
+                      <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/40"}>
+                        <td className="px-4 py-3 font-bold text-slate-600">{stop.day}</td>
+                        <td className="px-4 py-3 font-mono text-slate-800 whitespace-nowrap">{stop.date}</td>
+                        <td className="px-4 py-3 font-mono text-slate-500 whitespace-nowrap">{stop.time || "--"}</td>
+                        <td className="px-4 py-3">
+                          <span style={{ background: as.bg, color: as.color }} className="rounded-full px-2.5 py-0.5 text-[10.5px] font-bold whitespace-nowrap inline-block">
+                            {stop.activity}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 font-bold text-slate-900">{stop.port}</td>
+                        <td className="px-4 py-3 text-slate-500">{stop.country || "--"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           </>
         )}
@@ -813,19 +931,55 @@ function ItineraryModal({ row, onClose }) {
   );
 }
 
-function LeadInDetailsPanel({ job, minPrice, currency, onGetDetails }) {
-  const isRunning  = job?.status === "in_progress" || job?.status === "started";
+function LeadInDetailsPanel({ job, minPrice, currency, onGetDetails, hasAttemptedFetch, onForceCheck }) {
+  const isRunning = job?.status === "in_progress" || job?.status === "started";
   const isCooldown = job?.status === "cooldown";
-  const isError    = job?.status === "error" || job?.status === "rate_limited";
+  const isError = job?.status === "error" || job?.status === "rate_limited";
   const remainingSec = isRunning ? Math.ceil((job.remaining ?? 0) / 1000) : isCooldown ? (job.retryAfter ?? 0) : 0;
+  const isFinalizing = isRunning && remainingSec <= 0;
+
+  if (hasAttemptedFetch && !isRunning && !isCooldown && !isError) {
+    return (
+      <div className="py-14 px-8 flex flex-col items-center gap-5 text-center max-w-md mx-auto">
+        <div className="w-14 h-14 rounded-2xl bg-amber-50 border border-amber-200/80 flex items-center justify-center text-amber-600 shadow-2xs">
+          <AlertCircle size={26} strokeWidth={2.2} />
+        </div>
+        <div className="space-y-1.5">
+          <div className="font-bold text-base text-slate-900">No Live Cabin Inventory Found</div>
+          <div className="text-xs text-slate-500 leading-relaxed">
+            The carrier returned no open stateroom categories for this sailing. It may be currently fully booked (waitlist only), restricted to phone bookings, or not yet published by the cruise line.
+          </div>
+          {minPrice != null && Number.isFinite(minPrice) && (
+            <div className="pt-2 text-xs text-slate-600">
+              Published lead-in rate was&nbsp;
+              <span className="font-bold font-mono text-slate-900">{safeCurrency(minPrice, currency)}</span>
+            </div>
+          )}
+        </div>
+        <button
+          onClick={onGetDetails}
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-xs hover:shadow-sm transition-all cursor-pointer active:scale-[0.98]"
+        >
+          <RefreshCw size={14} />
+          <span>Check Live Vendor Again</span>
+        </button>
+      </div>
+    );
+  }
 
   return (
-    <div className="py-12 px-8 flex flex-col items-center gap-5 text-center">
-      <div className="w-12 h-12 rounded-xl bg-sky-50 border border-sky-100 flex items-center justify-center text-sky-600 shadow-2xs">
-        <Search size={22} strokeWidth={2.2} />
+    <div className="py-12 px-8 flex flex-col items-center gap-5 text-center max-w-md mx-auto">
+      <div className="w-12 h-12 rounded-2xl bg-teal-50 border border-teal-100 flex items-center justify-center text-teal-700 shadow-2xs">
+        {isRunning ? (
+          <RefreshCw size={22} strokeWidth={2.2} className="animate-spin text-teal-600" />
+        ) : (
+          <Search size={22} strokeWidth={2.2} />
+        )}
       </div>
       <div>
-        <div className="font-bold text-base text-slate-900">Live cabin data not yet fetched</div>
+        <div className="font-bold text-base text-slate-900">
+          {isRunning ? "Fetching Live Stateroom Data" : "Live cabin data not yet fetched"}
+        </div>
         {minPrice != null && Number.isFinite(minPrice) && (
           <div className="mt-2 text-sm text-slate-600">
             Estimated lead-in price from&nbsp;
@@ -833,28 +987,52 @@ function LeadInDetailsPanel({ job, minPrice, currency, onGetDetails }) {
           </div>
         )}
         <div className="mt-1.5 text-xs text-slate-500 max-w-sm">
-          Fetch real-time cabin categories, availability, and deck data from the vendor.
+          {isRunning
+            ? "Querying carrier booking engines for live category availability and deck plans..."
+            : "Fetch real-time cabin categories, availability, and deck data from the vendor."}
         </div>
       </div>
 
       {isError && (
-        <div className="flex items-center gap-2 text-xs font-semibold text-rose-700 bg-rose-50 border border-rose-200/80 rounded-lg px-3.5 py-2 max-w-md">
+        <div className="flex items-center gap-2 text-xs font-semibold text-rose-700 bg-rose-50 border border-rose-200/80 rounded-lg px-3.5 py-2 max-w-md text-left">
           <AlertCircle size={14} className="shrink-0 text-rose-600" />
           <span>{job?.error ?? "Request failed."}{job?.retryAfter ? ` Retry in ${fmtSeconds(job.retryAfter)}.` : ""}</span>
         </div>
       )}
 
       {isRunning ? (
-        <div className="flex flex-col items-center gap-1.5">
-          <div className="text-xs font-medium text-slate-600">Fetching live data… ~{fmtSeconds(remainingSec)} remaining</div>
-          <div className="text-[11px] text-slate-400 font-mono">Est. {fmtSeconds(Math.ceil((job.estimatedMs ?? 180000) / 1000))} total</div>
+        <div className="flex flex-col items-center gap-2.5 p-4 rounded-xl bg-teal-50/60 border border-teal-200/80 w-full shadow-2xs">
+          <div className="text-xs font-bold text-teal-900 flex items-center gap-2">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-teal-600"></span>
+            </span>
+            {isFinalizing
+              ? "Finalizing data from vendor… Almost ready"
+              : `Scraper active in background (~${fmtSeconds(remainingSec)} remaining)`}
+          </div>
+          <div className="text-[11px] text-slate-500 font-mono">
+            {job?.elapsed ? `Elapsed: ${fmtSeconds(Math.ceil(job.elapsed / 1000))} · ` : ""}Est. {fmtSeconds(Math.ceil((job?.estimatedMs ?? 90000) / 1000))} total
+          </div>
+          {onForceCheck && (
+            <button
+              onClick={onForceCheck}
+              className="mt-1 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white hover:bg-slate-50 text-teal-900 font-bold text-xs border border-teal-200/90 shadow-2xs cursor-pointer transition hover:border-teal-300 active:scale-95"
+            >
+              <RefreshCw size={13} className="text-teal-700" />
+              <span>Check & Display Staterooms Now</span>
+            </button>
+          )}
         </div>
       ) : isCooldown ? (
-        <div className="text-xs font-medium text-slate-600">Data fetched — reloading…</div>
+        <div className="text-xs font-medium text-slate-600 flex items-center gap-2">
+          <RefreshCw size={13} className="animate-spin text-teal-600" />
+          <span>Data fetched — reloading staterooms…</span>
+        </div>
       ) : (
         <button
           onClick={onGetDetails}
-          className="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white font-bold text-sm shadow-xs transition-all cursor-pointer active:scale-[0.98]"
+          className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-bold text-sm shadow-xs transition-all cursor-pointer active:scale-[0.98]"
         >
           <Sparkles size={15} />
           <span>Get Full Details</span>
@@ -864,7 +1042,14 @@ function LeadInDetailsPanel({ job, minPrice, currency, onGetDetails }) {
   );
 }
 
-function PricingModal({ row, onClose, onRefreshComplete }) {
+function PricingModal({ row: initialRow, onClose, onRefreshComplete }) {
+  const [row, setRow] = useState(initialRow);
+  const [hasAttemptedFetch, setHasAttemptedFetch] = useState(false);
+
+  useEffect(() => {
+    setRow(initialRow);
+  }, [initialRow]);
+
   const cabinCategories = useMemo(
     () => (row.cabinCategories || []).map(normalizeCabinCategory),
     [row.cabinCategories]
@@ -880,6 +1065,13 @@ function PricingModal({ row, onClose, onRefreshComplete }) {
     : null;
 
   const [activeGroup, setActiveGroup] = useState(() => cabinGroups[0]?.group ?? null);
+
+  useEffect(() => {
+    if (cabinGroups.length > 0 && (!activeGroup || !cabinGroups.some(g => g.group === activeGroup))) {
+      setActiveGroup(cabinGroups[0]?.group ?? null);
+    }
+  }, [cabinGroups, activeGroup]);
+
   const [expandedCategory, setExpandedCategory] = useState(null);
   const [expandedDecks, setExpandedDecks] = useState(new Set());
   // { [code]: { loading, decks: [{deckNumber, deckName, deckImage, cabins}], error } }
@@ -888,6 +1080,7 @@ function PricingModal({ row, onClose, onRefreshComplete }) {
   // refreshJob: null | { status, estimatedMs, elapsed, remaining, retryAfter, error, count }
   const [refreshJob, setRefreshJob] = useState(null);
   const refreshPollRef = useRef(null);
+  const pollCountRef = useRef(0);
 
   const activeData = cabinGroups.find((g) => g.group === activeGroup) ?? null;
 
@@ -909,17 +1102,51 @@ function PricingModal({ row, onClose, onRefreshComplete }) {
     // Guarantee categories don't have individual cabin selections
     if (cat.avlResult === "GTY" || cat.status === "Guarantee") return;
 
+    // Check if cabins are already present in category object
+    if (Array.isArray(cat.cabins) && cat.cabins.length > 0) {
+      const deckMap = new Map();
+      cat.cabins.forEach((cab) => {
+        const dNum = cab.deckNumber ?? cab.deck ?? "Main";
+        const dName = cab.deckName ?? `Deck ${dNum}`;
+        if (!deckMap.has(dName)) {
+          deckMap.set(dName, { deckNumber: dNum, deckName: dName, deckImage: cab.deckImage, cabins: [] });
+        }
+        deckMap.get(dName).cabins.push(cab);
+      });
+      const embeddedDecks = Array.from(deckMap.values());
+      if (embeddedDecks.length > 0) {
+        setCabinCache(prev => ({ ...prev, [code]: { loading: false, decks: embeddedDecks } }));
+        setExpandedDecks(new Set([String(embeddedDecks[0].deckNumber ?? embeddedDecks[0].deckName)]));
+        return;
+      }
+    }
+
     // Already cached
-    if (cabinCache[code]) return;
+    if (cabinCache[code] && cabinCache[code].decks?.length > 0) return;
 
     const cruiseIdOrCode = row.code ?? row.id;
     setCabinCache(prev => ({ ...prev, [code]: { loading: true, decks: [] } }));
     try {
       const result = await fetchCategoryDecks(cruiseIdOrCode, code);
-      const decks = result?.data?.decks ?? [];
-      setCabinCache(prev => ({ ...prev, [code]: { loading: false, decks } }));
-      if (decks[0]?.deckNumber != null) {
-        setExpandedDecks(new Set([String(decks[0].deckNumber)]));
+      let rawDecks = result?.data?.decks ?? result?.decks ?? (Array.isArray(result?.data) ? result.data : []);
+
+      // If rawDecks is array of flat cabin objects instead of decks, group by deck
+      if (rawDecks.length > 0 && !rawDecks[0].cabins && rawDecks[0].cabinNumber) {
+        const deckMap = new Map();
+        rawDecks.forEach((cab) => {
+          const dNum = cab.deckNumber ?? cab.deck ?? "Main";
+          const dName = cab.deckName ?? `Deck ${dNum}`;
+          if (!deckMap.has(dName)) {
+            deckMap.set(dName, { deckNumber: dNum, deckName: dName, deckImage: cab.deckImage, cabins: [] });
+          }
+          deckMap.get(dName).cabins.push(cab);
+        });
+        rawDecks = Array.from(deckMap.values());
+      }
+
+      setCabinCache(prev => ({ ...prev, [code]: { loading: false, decks: rawDecks } }));
+      if (rawDecks[0]?.deckNumber != null || rawDecks[0]?.deckName != null) {
+        setExpandedDecks(new Set([String(rawDecks[0].deckNumber ?? rawDecks[0].deckName)]));
       }
     } catch {
       setCabinCache(prev => ({ ...prev, [code]: { loading: false, decks: [], error: true } }));
@@ -930,6 +1157,19 @@ function PricingModal({ row, onClose, onRefreshComplete }) {
 
   function stopPolling() {
     if (refreshPollRef.current) { clearInterval(refreshPollRef.current); refreshPollRef.current = null; }
+  }
+
+  async function reloadCruiseData() {
+    try {
+      const updated = await fetchCruise(cruiseCode);
+      if (updated) {
+        setRow(updated);
+        if (onRefreshComplete) onRefreshComplete(updated);
+      }
+      return updated;
+    } catch {
+      return null;
+    }
   }
 
   async function reloadCategoryDecks(catCode) {
@@ -948,62 +1188,167 @@ function PricingModal({ row, onClose, onRefreshComplete }) {
 
   function startPolling(catCode, onComplete = null) {
     stopPolling();
+    pollCountRef.current = 0;
     refreshPollRef.current = setInterval(async () => {
+      pollCountRef.current += 1;
       try {
+        // Check if DB already populated cabin categories
+        const updated = await reloadCruiseData();
+        if (updated && (updated.cabinCategories || []).length > 0) {
+          stopPolling();
+          setHasAttemptedFetch(true);
+          setRefreshJob(null);
+          if (catCode) reloadCategoryDecks(catCode);
+          if (onComplete) onComplete(updated);
+          return;
+        }
+
         const s = await getCruiseRefreshStatus(cruiseCode);
         setRefreshJob(s);
-        if (s.status === "cooldown" || s.status === "idle" || s.status === "offline" || s.status === "error") {
+
+        const isDone = s.status === "cooldown" || s.status === "idle" || s.status === "offline" || s.status === "error";
+        const isExpired = s.status === "in_progress" && (s.remaining == null || s.remaining <= 0);
+
+        if (isDone || isExpired) {
           stopPolling();
-          if (s.success) {
-            if (catCode) reloadCategoryDecks(catCode);
-            if (onComplete) onComplete();
-          }
+          setHasAttemptedFetch(true);
+          setRefreshJob(null);
+          if (s.success && catCode) reloadCategoryDecks(catCode);
+          if (onComplete) onComplete(updated);
         }
       } catch {
         stopPolling();
+        setHasAttemptedFetch(true);
+        setRefreshJob(null);
       }
-    }, 3000);
+    }, 2000);
   }
 
   // Check status on modal mount only if lead-in or checking active job
   useEffect(() => {
-    if (isLeadInOnly) {
-      getCruiseRefreshStatus(cruiseCode).then(s => {
+    if (isLeadInOnly || cabinGroups.length === 0) {
+      getCruiseRefreshStatus(cruiseCode).then(async (s) => {
         if (s && s.status !== "offline") {
-          setRefreshJob(s);
-          if (s.status === "in_progress") startPolling(null);
+          // Only start polling if there is a real, active job with remaining time > 0
+          if (s.status === "in_progress" && s.remaining > 0) {
+            setRefreshJob(s);
+            startPolling(null);
+          } else {
+            // Stale or already completed — immediately check DB
+            const updated = await reloadCruiseData();
+            if (updated && (updated.cabinCategories || []).length > 0) {
+              setRefreshJob(null);
+            } else {
+              setHasAttemptedFetch(true);
+              setRefreshJob(null);
+            }
+          }
+        } else {
+          setHasAttemptedFetch(true);
+          setRefreshJob(null);
         }
-      }).catch(() => {});
+      }).catch(() => {
+        setHasAttemptedFetch(true);
+        setRefreshJob(null);
+      });
     }
     return stopPolling;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cruiseCode, isLeadInOnly]);
 
+  async function handleForceCheck() {
+    stopPolling();
+    await reloadCruiseData();
+    setHasAttemptedFetch(true);
+    setRefreshJob(null);
+  }
+
   async function handleRefresh(catCode) {
-    const vendorKey = row.vendor?.slug ?? row.vendorKey ?? row.source;
-    if (!vendorKey) { setRefreshJob({ status: "error", error: "Vendor unknown — cannot refresh." }); return; }
+    const vendorKey =
+      VENDOR_SCRAPER_MAP[row.vendor?.name] ??
+      row.vendor?.slug ??
+      (row.vendor?.name ? row.vendor.name.toLowerCase().replace(/[^a-z0-9]/g, "") : null) ??
+      row.vendorKey ??
+      row.source ??
+      "msc";
+
     try {
       const result = await refreshCruiseCabins(cruiseCode, vendorKey);
       logActivity("refresh_cabin", { cruiseCode, vendorKey, status: result.status });
-      setRefreshJob({ status: result.status, estimatedMs: result.estimatedMs, remaining: result.estimatedMs });
+      const isCompletedOrStale =
+        result.status === "idle" ||
+        result.status === "cooldown" ||
+        result.success ||
+        result.remaining <= 0 ||
+        (result.elapsed != null && result.estimatedMs != null && result.elapsed >= result.estimatedMs);
+
+      // Check if DB already has categories while job is running in background
+      const current = await reloadCruiseData();
+      if (current && (current.cabinCategories || []).length > 0) {
+        setHasAttemptedFetch(true);
+        setRefreshJob(null);
+        if (catCode) reloadCategoryDecks(catCode);
+        return;
+      }
+
+      if (isCompletedOrStale) {
+        setHasAttemptedFetch(true);
+        setRefreshJob(null);
+        if (catCode) reloadCategoryDecks(catCode);
+        return;
+      }
+      const estMs = result.remaining ?? result.estimatedMs ?? 45000;
+      setRefreshJob({ status: result.status || "in_progress", estimatedMs: result.estimatedMs ?? estMs, remaining: estMs, elapsed: result.elapsed });
       if (result.status === "started" || result.status === "in_progress") startPolling(catCode);
     } catch (err) {
       const offline = err.message?.toLowerCase().includes("fetch") || err.message?.toLowerCase().includes("network");
       setRefreshJob({ status: "error", error: offline ? "Scraper server is offline." : err.message, retryAfter: err.retryAfter });
+      setHasAttemptedFetch(true);
     }
   }
 
   async function handleGetFullDetails() {
-    const vendorKey = row.vendor?.slug ?? row.vendorKey ?? row.source;
-    if (!vendorKey) { setRefreshJob({ status: "error", error: "Vendor unknown — cannot refresh." }); return; }
+    const vendorKey =
+      VENDOR_SCRAPER_MAP[row.vendor?.name] ??
+      row.vendor?.slug ??
+      (row.vendor?.name ? row.vendor.name.toLowerCase().replace(/[^a-z0-9]/g, "") : null) ??
+      row.vendorKey ??
+      row.source ??
+      "msc";
+
     try {
+      setHasAttemptedFetch(false);
       const result = await refreshCruiseCabins(cruiseCode, vendorKey);
       logActivity("refresh_cabin", { cruiseCode, vendorKey, status: result.status });
-      setRefreshJob({ status: result.status, estimatedMs: result.estimatedMs, remaining: result.estimatedMs });
-      if (result.status === "started" || result.status === "in_progress") startPolling(null, onRefreshComplete);
+      const isCompletedOrStale =
+        result.status === "idle" ||
+        result.status === "cooldown" ||
+        result.success ||
+        result.remaining <= 0 ||
+        (result.elapsed != null && result.estimatedMs != null && result.elapsed >= result.estimatedMs);
+
+      // Check if DB already has categories while job is running in background
+      const current = await reloadCruiseData();
+      if (current && (current.cabinCategories || []).length > 0) {
+        setHasAttemptedFetch(true);
+        setRefreshJob(null);
+        if (onRefreshComplete) onRefreshComplete(current);
+        return;
+      }
+
+      if (isCompletedOrStale) {
+        setHasAttemptedFetch(true);
+        setRefreshJob(null);
+        if (onRefreshComplete) onRefreshComplete(current);
+        return;
+      }
+      const estMs = result.remaining ?? result.estimatedMs ?? 45000;
+      setRefreshJob({ status: result.status || "in_progress", estimatedMs: result.estimatedMs ?? estMs, remaining: estMs, elapsed: result.elapsed });
+      startPolling(null, onRefreshComplete);
     } catch (err) {
       const offline = err.message?.toLowerCase().includes("fetch") || err.message?.toLowerCase().includes("network");
       setRefreshJob({ status: "error", error: offline ? "Scraper server is offline." : err.message, retryAfter: err.retryAfter });
+      setHasAttemptedFetch(true);
     }
   }
 
@@ -1016,30 +1361,30 @@ function PricingModal({ row, onClose, onRefreshComplete }) {
   }
 
   return (
-    <Modal onClose={onClose} width="min(96vw, 780px)">
-      <div className="flex flex-col h-[650px] max-h-[88vh] w-full bg-white overflow-hidden rounded-2xl">
+    <Modal onClose={onClose} width="min(96vw, 820px)">
+      <div className="flex flex-col h-[85vh] max-h-[720px] w-full bg-white overflow-hidden min-w-0">
         {/* Header + tabs */}
-        <div className="p-5 sm:p-6 pb-3.5 border-b border-slate-200/80 bg-gradient-to-b from-slate-50/80 to-white shrink-0">
-          <div className="flex items-start justify-between gap-4 mb-3.5">
-            <div className="space-y-1.5">
-              <div className="inline-flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-wider text-teal-800 bg-teal-50 border border-teal-200/80 px-2.5 py-0.5 rounded-full shadow-2xs">
-                <Sparkles size={11} className="text-teal-600" />
-                <span>Cabin Selection · Live Staterooms</span>
+        <div className="p-3.5 sm:p-5 pb-3 border-b border-slate-200/80 bg-gradient-to-b from-slate-50/80 to-white shrink-0">
+          <div className="flex items-start justify-between gap-3 mb-2.5">
+            <div className="space-y-1 min-w-0 flex-1">
+              <div className="inline-flex items-center gap-1.5 text-[10px] sm:text-[10.5px] font-bold uppercase tracking-wider text-teal-800 bg-teal-50 border border-teal-200/80 px-2.5 py-0.5 rounded-full shadow-2xs max-w-full truncate">
+                <Sparkles size={11} className="text-teal-600 shrink-0" />
+                <span className="truncate">Cabin Selection · Live Staterooms</span>
               </div>
-              <h2 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight leading-snug">
+              <h2 className="text-sm sm:text-lg md:text-xl font-black text-slate-900 tracking-tight leading-snug break-words">
                 {row.package || "Cruise Stateroom Inventory"}
               </h2>
-              <div className="flex items-center gap-2 flex-wrap text-xs text-slate-600 pt-0.5">
-                <span className="font-bold text-slate-900 bg-slate-100 px-2.5 py-0.5 rounded-md border border-slate-200/70">
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap text-xs text-slate-600 pt-0.5">
+                <span className="font-bold text-slate-900 bg-slate-100 px-2 sm:px-2.5 py-0.5 rounded-md border border-slate-200/70 text-xs truncate max-w-[180px]">
                   {row.ship}
                 </span>
                 {row.vendor?.name && (
-                  <span className="font-medium text-slate-500 bg-slate-50 px-2 py-0.5 rounded-md border border-slate-200/60">
+                  <span className="font-medium text-slate-500 bg-slate-50 px-2 py-0.5 rounded-md border border-slate-200/60 text-xs truncate max-w-[150px]">
                     {row.vendor.name}
                   </span>
                 )}
                 {row.cruiseLine && (
-                  <span className="font-medium text-slate-500 bg-slate-50 px-2 py-0.5 rounded-md border border-slate-200/60">
+                  <span className="font-medium text-slate-500 bg-slate-50 px-2 py-0.5 rounded-md border border-slate-200/60 text-xs truncate max-w-[150px]">
                     {CRUISE_LINE_LABELS[row.cruiseLine] ?? row.cruiseLine}
                   </span>
                 )}
@@ -1049,36 +1394,38 @@ function PricingModal({ row, onClose, onRefreshComplete }) {
             <button
               onClick={onClose}
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 transition cursor-pointer"
+              aria-label="Close"
             >
               <X size={16} />
             </button>
           </div>
 
-          {/* Category Tab Pills with Equal Size & Uniform Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-1">
+          {/* Category Tab Pills with Responsive Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-1.5 sm:gap-2 pt-1">
             {cabinGroups.map(({ group, minPrice }) => {
               const isActive = group === activeGroup;
               return (
                 <button
                   key={group}
                   onClick={() => handleGroupChange(group)}
-                  className={`flex flex-col items-start justify-center px-3 py-2 rounded-xl text-left transition-all cursor-pointer shadow-2xs ${
-                    isActive
-                      ? "bg-teal-800 text-white shadow-sm shadow-teal-900/20 ring-1 ring-teal-700"
-                      : "bg-slate-50/90 hover:bg-slate-100/90 text-slate-700 border border-slate-200/80"
-                  }`}
+                  className={`flex flex-col items-start justify-center px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl text-left transition-all cursor-pointer min-w-0 active:scale-[0.97] ${isActive
+                    ? "bg-teal-700 text-white shadow-md shadow-teal-700/25 ring-2 ring-teal-600 font-bold"
+                    : "bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 hover:border-slate-300 shadow-2xs"
+                    }`}
                 >
-                  <span className="font-bold text-xs leading-tight truncate w-full">{group}</span>
+                  <div className="flex items-center justify-between w-full">
+                    <span className="font-bold text-xs leading-tight truncate">{group}</span>
+                    {isActive && <span className="w-1.5 h-1.5 rounded-full bg-teal-300 ml-1 shrink-0" />}
+                  </div>
                   {minPrice != null ? (
                     <span
-                      className={`text-[10.5px] font-mono mt-0.5 truncate w-full ${
-                        isActive ? "text-teal-200 font-semibold" : "text-slate-500 font-medium"
-                      }`}
+                      className={`text-[10px] sm:text-[10.5px] font-mono mt-0.5 truncate w-full ${isActive ? "text-teal-100 font-semibold" : "text-slate-500 font-medium"
+                        }`}
                     >
                       from {safeCurrency(minPrice, row.currency)}
                     </span>
                   ) : (
-                    <span className="text-[10.5px] text-slate-400 mt-0.5">--</span>
+                    <span className="text-[10px] text-slate-400 mt-0.5">--</span>
                   )}
                 </button>
               );
@@ -1120,186 +1467,223 @@ function PricingModal({ row, onClose, onRefreshComplete }) {
 
         {/* Category + cabin list (fixed flex-1 scrollable area) */}
         <div className="flex-1 overflow-y-auto divide-y divide-slate-100 min-h-0 bg-white">
-        {cabinGroups.length === 0 && (
-          <LeadInDetailsPanel
-            job={refreshJob}
-            minPrice={null}
-            currency={row.currency}
-            onGetDetails={handleGetFullDetails}
-          />
-        )}
-        {isLeadInOnly && (
-          <LeadInDetailsPanel
-            job={refreshJob}
-            minPrice={leadInMinPrice}
-            currency={row.currency}
-            onGetDetails={handleGetFullDetails}
-          />
-        )}
-        {!isLeadInOnly && activeData?.categories.map((cat) => {
-          const isExpanded = expandedCategory === cat.code;
-          const isGTY = cat.avlResult === "GTY" || cat.status === "Guarantee";
-          const cache = cabinCache[cat.code];
-          const hasRealCabinData = (cat.cabins ?? []).length > 0;
-          const realCabinCount = (cat.cabins ?? []).length;
-          const avail = hasRealCabinData ? realCabinCount : (cat.avail ?? cat.available ?? 0);
-          const effectiveStatus = hasRealCabinData
-            ? (realCabinCount > 0 ? "Available" : "Sold Out")
-            : (cat.status && cat.status !== "Unknown"
+          {cabinGroups.length === 0 && (
+            <LeadInDetailsPanel
+              job={refreshJob}
+              minPrice={null}
+              currency={row.currency}
+              onGetDetails={handleGetFullDetails}
+              hasAttemptedFetch={hasAttemptedFetch}
+              onForceCheck={handleForceCheck}
+            />
+          )}
+          {isLeadInOnly && (
+            <LeadInDetailsPanel
+              job={refreshJob}
+              minPrice={leadInMinPrice}
+              currency={row.currency}
+              onGetDetails={handleGetFullDetails}
+              hasAttemptedFetch={hasAttemptedFetch}
+              onForceCheck={handleForceCheck}
+            />
+          )}
+          {!isLeadInOnly && cabinGroups.length > 0 && (!activeData || (activeData.categories || []).length === 0) && (
+            <div className="py-14 px-8 flex flex-col items-center gap-4 text-center max-w-sm mx-auto text-slate-500">
+              <div className="w-12 h-12 rounded-2xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-500">
+                <Search size={22} />
+              </div>
+              <div>
+                <div className="font-bold text-slate-800 text-sm">No cabins in this category</div>
+                <div className="text-xs text-slate-400 mt-1">
+                  Select another cabin tier tab above or refresh live vendor inventory.
+                </div>
+              </div>
+            </div>
+          )}
+          {!isLeadInOnly && activeData?.categories?.map((cat) => {
+            const isExpanded = expandedCategory === cat.code;
+            const isGTY = cat.avlResult === "GTY" || cat.status === "Guarantee";
+            const cache = cabinCache[cat.code];
+            const hasRealCabinData = (cat.cabins ?? []).length > 0;
+            const realCabinCount = (cat.cabins ?? []).length;
+            const avail = hasRealCabinData ? realCabinCount : (cat.avail ?? cat.available ?? 0);
+            const effectiveStatus = hasRealCabinData
+              ? (realCabinCount > 0 ? "Available" : "Sold Out")
+              : (cat.status && cat.status !== "Unknown"
                 ? cat.status
                 : (avail > 0 ? "Available" : "Unavailable"));
 
-          const categoryPrice = [
-            cat.cabinPrice,
-            cat.price,
-            cat.perPersonPrice,
-            cat.totalPrice,
-            cat.minPrice,
-            activeData?.minPrice
-          ].find(p => p != null && Number.isFinite(Number(p)) && Number(p) > 0);
+            const categoryPrice = [
+              cat.cabinPrice,
+              cat.price,
+              cat.perPersonPrice,
+              cat.totalPrice,
+              cat.minPrice,
+              activeData?.minPrice
+            ].find(p => p != null && Number.isFinite(Number(p)) && Number(p) > 0);
 
-          return (
-            <div key={cat.code} className="transition-colors">
-              {/* Category row */}
-              <button
-                onClick={() => handleCategoryClick(cat)}
-                className={`w-full flex items-center justify-between p-4 px-5 text-left gap-3 transition-colors cursor-pointer ${
-                  isExpanded ? "bg-slate-50/90" : "bg-white hover:bg-slate-50/60"
-                }`}
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <span className="font-mono font-bold text-xs bg-slate-100 text-slate-800 border border-slate-200/80 px-2.5 py-1 rounded-lg shrink-0">
-                    {cat.code}
-                  </span>
-                  <span className="text-xs font-semibold text-slate-800 truncate">
-                    {cat.name ?? cat.description}
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-3 shrink-0">
-                  {categoryPrice != null && Number(categoryPrice) > 0 && (
-                    <span className="font-mono font-black text-xs text-slate-900 bg-slate-100/80 px-2 py-0.5 rounded-md border border-slate-200/60">
-                      {safeCurrency(categoryPrice, row.currency)}
+            return (
+              <div key={cat.code} className="transition-colors">
+                {/* Category row */}
+                <button
+                  onClick={() => handleCategoryClick(cat)}
+                  className={`w-full flex flex-col sm:flex-row sm:items-center justify-between p-3.5 sm:p-4 px-4 sm:px-5 text-left gap-2 sm:gap-3 transition-all cursor-pointer active:scale-[0.995] ${isExpanded
+                      ? "bg-teal-50/60 border-l-4 border-l-teal-600 shadow-xs ring-1 ring-teal-500/10"
+                      : "bg-white hover:bg-slate-50/80 border-l-4 border-l-transparent"
+                    }`}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                    <span
+                      className={`font-mono font-bold text-xs px-2.5 py-1 rounded-lg shrink-0 transition-colors ${isExpanded
+                          ? "bg-teal-700 text-white shadow-2xs"
+                          : "bg-slate-100 text-slate-800 border border-slate-200/80"
+                        }`}
+                    >
+                      {cat.code}
                     </span>
-                  )}
-                  <span className="text-[11px] font-semibold text-slate-500 bg-slate-50 px-2 py-0.5 rounded border border-slate-200/60">
-                    {avail} avail
-                  </span>
-                  <StatusPill status={effectiveStatus} />
-                  {isExpanded ? (
-                    <ChevronUp size={15} className="text-slate-500" />
-                  ) : (
-                    <ChevronDown size={15} className="text-slate-500" />
-                  )}
-                </div>
-              </button>
+                    <span className={`text-xs font-semibold truncate ${isExpanded ? "text-slate-900 font-bold" : "text-slate-800"}`}>
+                      {cat.name ?? cat.description}
+                    </span>
+                  </div>
 
-              {/* Expanded: deck list */}
-              {isExpanded && (
-                <div className="bg-slate-50/50 border-t border-slate-200/70 p-3 sm:p-4 space-y-3">
-                  {isGTY ? (
-                    <div className="p-4 rounded-xl bg-white border border-slate-200/80 text-xs text-slate-600 italic">
-                      Guarantee — specific cabin assigned at time of sailing.
+                  <div className="flex items-center gap-2 sm:gap-3 shrink-0 flex-wrap justify-end">
+                    {categoryPrice != null && Number(categoryPrice) > 0 && (
+                      <span className="font-mono font-black text-xs text-slate-900 bg-slate-100/90 px-2.5 py-0.5 rounded-md border border-slate-200/70">
+                        {safeCurrency(categoryPrice, row.currency)}
+                      </span>
+                    )}
+                    <span className="text-[11px] font-semibold text-slate-500 bg-slate-50 px-2 py-0.5 rounded border border-slate-200/60">
+                      {avail} avail
+                    </span>
+                    <StatusPill status={effectiveStatus} />
+                    <div className={`p-1 rounded-lg transition-all ${isExpanded ? "bg-teal-100 text-teal-800" : "text-slate-400"}`}>
+                      {isExpanded ? (
+                        <ChevronUp size={15} className="shrink-0" />
+                      ) : (
+                        <ChevronDown size={15} className="shrink-0" />
+                      )}
                     </div>
-                  ) : cache?.loading ? (
-                    <div className="p-5 text-center text-xs font-semibold text-slate-500 flex items-center justify-center gap-2">
-                      <RefreshCw size={14} className="animate-spin text-teal-700" />
-                      <span>Loading stateroom deck inventory…</span>
-                    </div>
-                  ) : cache?.error ? (
-                    <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 space-y-2">
-                      <p className="font-bold">Failed to load cabin inventory.</p>
-                      <RefreshBanner
-                        job={refreshJob}
-                        onRefresh={() => handleRefresh(cat.code)}
-                      />
-                    </div>
-                  ) : !cache || cache.decks.length === 0 ? (
-                    <div className="rounded-xl bg-white border border-slate-200/80 p-3">
-                      <RefreshBanner
-                        job={refreshJob}
-                        onRefresh={() => handleRefresh(cat.code)}
-                      />
-                    </div>
-                  ) : (
-                    <>
-                      {cache.decks.map((deck) => {
-                        const deckKey = String(deck.deckNumber ?? deck.deckName);
-                        const isDeckOpen = expandedDecks.has(deckKey);
-                        return (
-                          <div
-                            key={deckKey}
-                            className="rounded-2xl border border-slate-200/90 bg-white overflow-hidden shadow-2xs"
-                          >
-                            {/* Deck header */}
-                            <div className="flex items-center justify-between p-3 px-4 bg-slate-50/80 border-b border-slate-100">
-                              <button
-                                onClick={() => toggleDeck(deckKey)}
-                                className="flex-1 flex items-center gap-2 text-left cursor-pointer"
-                              >
-                                {isDeckOpen ? (
-                                  <ChevronDown size={14} className="text-slate-600 shrink-0" />
-                                ) : (
-                                  <ChevronRight size={14} className="text-slate-600 shrink-0" />
-                                )}
-                                <span className="font-bold text-xs text-slate-900">
-                                  {deck.deckName}
-                                </span>
-                                <span className="text-[11px] font-semibold text-teal-800 bg-teal-50 border border-teal-200/60 px-2 py-0.2 rounded-md">
-                                  {deck.cabins.length} cabin{deck.cabins.length !== 1 ? "s" : ""}
-                                </span>
-                              </button>
+                  </div>
+                </button>
 
-                              <button
-                                onClick={() => setDeckImageUrl(deck.deckImage || "")}
-                                title={deck.deckImage ? "View deck plan" : "No deck image uploaded"}
-                                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-[11px] font-bold text-slate-700 shadow-2xs transition cursor-pointer"
-                              >
-                                <ImageIcon size={12} className="text-teal-700" />
-                                <span>Deck Plan</span>
-                              </button>
+                {/* Expanded: deck list */}
+                {isExpanded && (
+                  <div className="bg-slate-50/50 border-t border-slate-200/70 p-3 sm:p-4 space-y-3">
+                    {isGTY ? (
+                      <div className="p-4 rounded-xl bg-white border border-slate-200/80 text-xs text-slate-600 italic">
+                        Guarantee — specific cabin assigned at time of sailing.
+                      </div>
+                    ) : cache?.loading ? (
+                      <div className="p-3 space-y-2.5">
+                        <div className="flex items-center justify-between pb-2 border-b border-slate-200/60">
+                          <Skeleton className="h-3.5 w-32 bg-slate-300" />
+                          <Skeleton className="h-3.5 w-20 bg-slate-200" />
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+                          {Array.from({ length: 3 }).map((_, i) => (
+                            <div key={i} className="p-3 rounded-xl border border-slate-200/80 bg-white space-y-2">
+                              <Skeleton className="h-4 w-24 bg-slate-300" />
+                              <Skeleton className="h-3 w-16 bg-slate-200" />
+                              <Skeleton className="h-5 w-20 bg-teal-200/70" />
                             </div>
+                          ))}
+                        </div>
+                      </div>
 
-                            {/* Multi-column Stateroom Cards Grid */}
-                            {isDeckOpen && (
-                              <div className="p-3 bg-slate-50/30">
-                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                                  {deck.cabins.map((cabin) => (
-                                    <div
-                                      key={cabin.cabinNumber}
-                                      className="flex items-center justify-between p-2 px-2.5 rounded-xl bg-white border border-slate-200/80 shadow-2xs hover:border-teal-400 hover:bg-teal-50/20 transition-all duration-150"
-                                    >
-                                      <div className="flex flex-col">
-                                        <span className="font-mono font-black text-slate-900 text-xs">
-                                          {cabin.cabinNumber}
-                                        </span>
-                                        {cabin.capacity && (
-                                          <span className="text-[9.5px] text-slate-400 font-medium">
-                                            {cabin.capacity}p
-                                          </span>
-                                        )}
-                                      </div>
-                                      <StatusPill status={cabin.status} />
-                                    </div>
-                                  ))}
-                                </div>
+                    ) : cache?.error ? (
+                      <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 space-y-2">
+                        <p className="font-bold">Failed to load cabin inventory.</p>
+                        <RefreshBanner
+                          job={refreshJob}
+                          onRefresh={() => handleRefresh(cat.code)}
+                        />
+                      </div>
+                    ) : !cache || cache.decks.length === 0 ? (
+                      <div className="rounded-xl bg-white border border-slate-200/80 p-3">
+                        <RefreshBanner
+                          job={refreshJob}
+                          onRefresh={() => handleRefresh(cat.code)}
+                        />
+                      </div>
+                    ) : (
+                      <>
+                        {cache.decks.map((deck) => {
+                          const deckKey = String(deck.deckNumber ?? deck.deckName);
+                          const isDeckOpen = expandedDecks.has(deckKey);
+                          return (
+                            <div
+                              key={deckKey}
+                              className="rounded-2xl border border-slate-200/90 bg-white overflow-hidden shadow-2xs"
+                            >
+                              {/* Deck header */}
+                              <div className="flex items-center justify-between p-3 px-4 bg-slate-50/80 border-b border-slate-100">
+                                <button
+                                  onClick={() => toggleDeck(deckKey)}
+                                  className="flex-1 flex items-center gap-2 text-left cursor-pointer"
+                                >
+                                  {isDeckOpen ? (
+                                    <ChevronDown size={14} className="text-slate-600 shrink-0" />
+                                  ) : (
+                                    <ChevronRight size={14} className="text-slate-600 shrink-0" />
+                                  )}
+                                  <span className="font-bold text-xs text-slate-900">
+                                    {deck.deckName}
+                                  </span>
+                                  <span className="text-[11px] font-semibold text-teal-800 bg-teal-50 border border-teal-200/60 px-2 py-0.2 rounded-md">
+                                    {deck.cabins.length} cabin{deck.cabins.length !== 1 ? "s" : ""}
+                                  </span>
+                                </button>
+
+                                <button
+                                  onClick={() => setDeckImageUrl(deck.deckImage || "")}
+                                  title={deck.deckImage ? "View deck plan" : "No deck image uploaded"}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-[11px] font-bold text-slate-700 shadow-2xs transition cursor-pointer"
+                                >
+                                  <ImageIcon size={12} className="text-teal-700" />
+                                  <span>Deck Plan</span>
+                                </button>
                               </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                      <DataRefreshStrip
-                        job={refreshJob}
-                        row={row}
-                        onRefresh={() => handleRefresh(cat.code)}
-                      />
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
+
+                              {/* Multi-column Stateroom Cards Grid */}
+                              {isDeckOpen && (
+                                <div className="p-3 bg-slate-50/30">
+                                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                                    {deck.cabins.map((cabin) => (
+                                      <div
+                                        key={cabin.cabinNumber}
+                                        className="flex items-center justify-between p-2 px-2.5 rounded-xl bg-white border border-slate-200/80 shadow-2xs hover:border-teal-400 hover:bg-teal-50/20 transition-all duration-150"
+                                      >
+                                        <div className="flex flex-col">
+                                          <span className="font-mono font-black text-slate-900 text-xs">
+                                            {cabin.cabinNumber}
+                                          </span>
+                                          {cabin.capacity && (
+                                            <span className="text-[9.5px] text-slate-400 font-medium">
+                                              {cabin.capacity}p
+                                            </span>
+                                          )}
+                                        </div>
+                                        <StatusPill status={cabin.status} />
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                        <DataRefreshStrip
+                          job={refreshJob}
+                          row={row}
+                          onRefresh={() => handleRefresh(cat.code)}
+                        />
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
     </Modal>
@@ -1368,49 +1752,63 @@ function TagManagementModal({
 
   return (
     <Modal onClose={onClose} width="min(96vw, 860px)">
-      <div style={{ padding: 24, borderBottom: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between" }}>
-        <div>
-          <div style={{ fontSize: 12, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1 }}>Cruise Tags</div>
-          <h2 style={{ margin: "6px 0 0", fontSize: 22 }}>{row.package}</h2>
-          <div style={{ marginTop: 6, fontSize: 12, color: T.textMuted }}>{getCruiseDisplayId(row)} · {getCruiseRouteLabel(row)}</div>
+      <div className="p-4 sm:p-6 border-b border-slate-200 flex items-start justify-between gap-3 bg-gradient-to-b from-slate-50/80 to-white">
+        <div className="min-w-0 flex-1 space-y-1">
+          <div className="text-[11px] font-bold text-amber-800 uppercase tracking-wider bg-amber-50 border border-amber-200/80 px-2.5 py-0.5 rounded-full inline-block">Cruise Tags & Assignments</div>
+          <h2 className="text-base sm:text-xl font-black text-slate-900 leading-snug break-words">{row.package || "Cruise Booking"}</h2>
+          <div className="text-xs text-slate-500 font-mono truncate">{getCruiseDisplayId(row)} · {getCruiseRouteLabel(row)}</div>
         </div>
-        <button onClick={onClose} style={{ border: "none", background: T.muted, borderRadius: "50%", width: 36, height: 36, cursor: "pointer" }}>
+        <button
+          onClick={onClose}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 transition cursor-pointer"
+          aria-label="Close"
+        >
           <X size={16} />
         </button>
       </div>
 
-      <div style={{ padding: 24, display: "grid", gridTemplateColumns: "minmax(0, 1.1fr) minmax(280px, 0.9fr)", gap: 18 }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: T.textPrimary }}>Saved tags</div>
+      <div className="p-4 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 overflow-y-auto max-h-[75vh]">
+        <div className="flex flex-col gap-3">
+          <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Saved tags ({tags.length})</div>
           {tags.length === 0 ? (
-            <div style={{ border: `1px dashed ${T.border}`, borderRadius: 14, padding: 24, color: T.textMuted, textAlign: "center" }}>
+            <div className="border border-dashed border-slate-200 rounded-2xl p-6 text-slate-400 text-center text-xs font-medium bg-slate-50/50">
               No tags yet for this cruise.
             </div>
           ) : (
             tags.map((tagItem) => (
-              <div key={tagItem.id} style={{ border: `1px solid ${T.border}`, borderRadius: 14, padding: 14, background: "#fff" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: 6, background: `${tagItem.color || defaultColor}15`, color: tagItem.color || defaultColor, borderRadius: 999, padding: "4px 10px", fontSize: 11, fontWeight: 700 }}>
-                        <Tag size={12} />
-                        {tagItem.label}
+              <div key={tagItem.id} className="border border-slate-200/90 rounded-xl p-3.5 bg-white shadow-2xs space-y-2.5">
+                <div className="flex justify-between gap-2.5 items-start">
+                  <div className="flex flex-col gap-1.5 min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span
+                        style={{ backgroundColor: `${tagItem.color || defaultColor}15`, color: tagItem.color || defaultColor }}
+                        className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-bold"
+                      >
+                        <Tag size={11} />
+                        <span className="truncate max-w-[150px]">{tagItem.label}</span>
                       </span>
                       {tagItem.assignedTo ? (
-                        <span style={{ fontSize: 11, color: T.textSlate, background: T.muted, borderRadius: 999, padding: "4px 10px" }}>
+                        <span className="text-[11px] text-slate-600 bg-slate-100 border border-slate-200/60 rounded-full px-2 py-0.5 font-medium truncate max-w-[120px]">
                           {tagItem.assignedTo}
                         </span>
                       ) : null}
                     </div>
                     {tagItem.note ? (
-                      <div style={{ color: T.textSlate, fontSize: 13 }}>{tagItem.note}</div>
+                      <div className="text-xs text-slate-600 leading-relaxed break-words">{tagItem.note}</div>
                     ) : null}
                   </div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button onClick={() => startEdit(tagItem)} style={{ border: `1px solid ${T.border}`, background: "#fff", borderRadius: 10, padding: "6px 10px", cursor: "pointer" }}>
+                  <div className="flex gap-1.5 shrink-0">
+                    <button
+                      onClick={() => startEdit(tagItem)}
+                      className="border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg px-2.5 py-1 text-xs font-semibold cursor-pointer transition"
+                    >
                       Edit
                     </button>
-                    <button onClick={() => onDelete(tagItem.id)} disabled={saving} style={{ border: "none", background: "#fee2e2", color: "#b91c1c", borderRadius: 10, padding: "6px 10px", cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
+                    <button
+                      onClick={() => onDelete(tagItem.id)}
+                      disabled={saving}
+                      className="border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-lg px-2.5 py-1 text-xs font-semibold cursor-pointer transition disabled:opacity-50"
+                    >
                       Delete
                     </button>
                   </div>
@@ -1420,29 +1818,29 @@ function TagManagementModal({
           )}
         </div>
 
-        <div style={{ border: `1px solid ${T.border}`, borderRadius: 16, padding: 16, background: T.muted, display: "flex", flexDirection: "column", gap: 12 }}>
+        <div className="border border-slate-200/90 rounded-2xl p-4 sm:p-5 bg-slate-50/80 flex flex-col gap-3.5">
           <div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: T.textPrimary }}>
-              {editingTagId ? "Edit tag" : "Add tag"}
+            <div className="text-sm font-bold text-slate-900">
+              {editingTagId ? "Edit tag" : "Add new tag"}
             </div>
-            <div style={{ marginTop: 4, fontSize: 12, color: T.textMuted }}>
-              Use this to mark cruises that will be booked by your team.
+            <div className="text-xs text-slate-500 mt-0.5">
+              Mark this cruise and assign to team members for follow up.
             </div>
           </div>
 
           <input
             value={form.label}
             onChange={(event) => setForm(current => ({ ...current, label: event.target.value }))}
-            placeholder="Tag label"
-            style={{ width: "100%", height: 38, borderRadius: 10, border: `1px solid ${T.border}`, padding: "8px 12px" }}
+            placeholder="Tag label (e.g. Employee Booking, VIP Lead)"
+            className="w-full h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-900 shadow-2xs focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600"
           />
 
           <select
             value={form.assignedTo}
             onChange={(event) => setForm(current => ({ ...current, assignedTo: event.target.value }))}
-            style={{ width: "100%", height: 38, borderRadius: 10, border: `1px solid ${T.border}`, padding: "8px 12px" }}
+            className="w-full h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-900 shadow-2xs focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 cursor-pointer"
           >
-            <option value="">Assigned to</option>
+            <option value="">Select Assignee (Optional)</option>
             {assigneeOptions.map(option => (
               <option key={option} value={option}>
                 {option}
@@ -1450,33 +1848,40 @@ function TagManagementModal({
             ))}
           </select>
 
-          <input
-            type="color"
-            value={form.color}
-            onChange={(event) => setForm(current => ({ ...current, color: event.target.value }))}
-            style={{ width: 72, height: 42, borderRadius: 10, border: `1px solid ${T.border}`, background: "#fff", cursor: "pointer" }}
-          />
+          <div className="flex items-center gap-2.5">
+            <span className="text-xs font-semibold text-slate-600">Tag Color:</span>
+            <input
+              type="color"
+              value={form.color}
+              onChange={(event) => setForm(current => ({ ...current, color: event.target.value }))}
+              className="w-10 h-8 rounded-lg border border-slate-200 bg-white p-0.5 cursor-pointer"
+            />
+          </div>
 
           <textarea
             value={form.note}
             onChange={(event) => setForm(current => ({ ...current, note: event.target.value }))}
-            placeholder="Optional note"
-            rows={4}
-            style={{ width: "100%", borderRadius: 12, border: `1px solid ${T.border}`, padding: "12px", resize: "vertical" }}
+            placeholder="Optional note / client details..."
+            rows={3}
+            className="w-full rounded-xl border border-slate-200 bg-white p-3 text-xs font-medium text-slate-900 shadow-2xs focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 resize-y"
           />
 
-          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+          <div className="flex gap-2 justify-end pt-1">
             {editingTagId ? (
-              <button onClick={resetForm} disabled={saving} style={{ border: `1px solid ${T.border}`, background: "#fff", borderRadius: 10, padding: "8px 14px", cursor: "pointer" }}>
+              <button
+                onClick={resetForm}
+                disabled={saving}
+                className="border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 rounded-xl px-3.5 py-2 text-xs font-bold cursor-pointer transition"
+              >
                 Cancel
               </button>
             ) : null}
             <button
               onClick={submit}
               disabled={saving || !form.label.trim()}
-              style={{ border: "none", background: T.textPrimary, color: "#fff", borderRadius: 10, padding: "8px 14px", cursor: "pointer", opacity: saving || !form.label.trim() ? 0.6 : 1 }}
+              className="bg-teal-700 hover:bg-teal-800 text-white rounded-xl px-4 py-2 text-xs font-bold cursor-pointer transition shadow-2xs disabled:opacity-50"
             >
-              {saving ? "Saving..." : editingTagId ? "Update tag" : "Add tag"}
+              {saving ? "Saving..." : editingTagId ? "Update Tag" : "Save Tag"}
             </button>
           </div>
         </div>
@@ -1528,15 +1933,58 @@ export default function CruiseSearchPage() {
     portFrom: "",
     portTo: "",
   });
-  const [datePreset, setDatePreset] = useState("All");
+  const [sortBy, setSortBy] = useState("refreshed");
+  const [datePreset, setDatePreset] = useState("All Dates");
 
   // Targeted Individual Ship Live Search / Scrape State
   const [targetStartDate, setTargetStartDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [targetHorizonDays, setTargetHorizonDays] = useState(30);
   const [targetShipName, setTargetShipName] = useState("");
   const [targetVendor, setTargetVendor] = useState("");
+  const [targetVendorShips, setTargetVendorShips] = useState([]);
+  const [targetShipsLoading, setTargetShipsLoading] = useState(false);
   const [scraperLoading, setScraperLoading] = useState(false);
   const [scraperStatus, setScraperStatus] = useState(null);
+  const [highlightedRowId, setHighlightedRowId] = useState(null);
+  const [lastSearchedShip, setLastSearchedShip] = useState("");
+
+  const scrollToRow = (cruiseId) => {
+    if (!cruiseId) return;
+    setHighlightedRowId(cruiseId);
+    setTimeout(() => {
+      const el = document.getElementById(`cruise-row-${cruiseId}`) || document.getElementById(`cruise-card-${cruiseId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 100);
+    setTimeout(() => {
+      setHighlightedRowId((prev) => (prev === cruiseId ? null : prev));
+    }, 4000);
+  };
+
+  // Initialize filters from URL search params (e.g. ?ship=MSC+Preziosa&vendor=MSC)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const initialShip = params.get("ship") || params.get("shipName") || "";
+    const initialVendor = params.get("vendor") || params.get("vendorName") || "";
+    const initialCode = params.get("code") || params.get("search") || "";
+    if (initialShip || initialVendor || initialCode) {
+      const nextFilters = {
+        ship: initialShip,
+        vendor: initialVendor,
+        code: initialCode
+      };
+      setFilters(prev => ({ ...prev, ...nextFilters }));
+      setAppliedFilters(prev => ({ ...prev, ...nextFilters }));
+      if (initialShip) {
+        setTargetShipName(initialShip);
+      }
+      if (initialVendor) {
+        setTargetVendor(initialVendor);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -1550,6 +1998,8 @@ export default function CruiseSearchPage() {
           page,
           limit: PAGE_SIZE,
           detail: "full",
+          sortBy: sortBy === "refreshed" ? "updatedAt" : sortBy === "departure" ? "startDate" : sortBy === "price_asc" || sortBy === "price_desc" ? "price" : "updatedAt",
+          sortOrder: sortBy === "price_asc" || sortBy === "departure" ? "asc" : "desc",
           search: appliedFilters.code || undefined,
           vendorName: appliedFilters.vendor || undefined,
           ship: appliedFilters.ship || undefined,
@@ -1592,7 +2042,7 @@ export default function CruiseSearchPage() {
     return () => {
       active = false;
     };
-  }, [appliedFilters, page]);
+  }, [appliedFilters, page, sortBy]);
 
   useEffect(() => {
     let active = true;
@@ -1658,6 +2108,49 @@ export default function CruiseSearchPage() {
     return () => { active = false; };
   }, [filters.vendor, lookupOptions.vendors]);
 
+  // Auto-initialize targetVendor when lookupOptions.vendors is loaded
+  useEffect(() => {
+    if (!targetVendor && lookupOptions.vendors.length > 0) {
+      setTargetVendor(lookupOptions.vendors[0].name);
+    }
+  }, [lookupOptions.vendors, targetVendor]);
+
+  // Auto-fetch ships belonging to the selected targeted vendor
+  useEffect(() => {
+    let active = true;
+    if (!targetVendor) {
+      setTargetVendorShips([]);
+      return () => { active = false; };
+    }
+    const selectedVendor = lookupOptions.vendors.find((v) => v.name === targetVendor);
+    if (!selectedVendor) {
+      const fallback = [...new Set(lookupOptions.allShips.map((s) => s.name).filter(Boolean))];
+      setTargetVendorShips(fallback);
+      return () => { active = false; };
+    }
+
+    setTargetShipsLoading(true);
+    fetchShips({ vendorId: selectedVendor.id, limit: 300 })
+      .then((res) => {
+        if (!active) return;
+        const list = (res.data || []).map((s) => s.name).filter(Boolean);
+        const unique = [...new Set(list)];
+        setTargetVendorShips(unique);
+        // Automatically select the 1st ship if current targetShipName is empty or not in this vendor's fleet
+        if (unique.length > 0 && (!targetShipName || !unique.includes(targetShipName))) {
+          setTargetShipName(unique[0]);
+        }
+      })
+      .catch((err) => {
+        if (active) console.error("Failed to load ships for vendor:", err);
+      })
+      .finally(() => {
+        if (active) setTargetShipsLoading(false);
+      });
+
+    return () => { active = false; };
+  }, [targetVendor, lookupOptions.vendors]);
+
   const opts = useMemo(() => {
     const vendorNames = [...new Set(lookupOptions.vendors.map((v) => v.name).filter(Boolean))];
     const rawShips = vendorShips ?? lookupOptions.allShips.map((s) => s.name);
@@ -1672,10 +2165,52 @@ export default function CruiseSearchPage() {
     };
   }, [data, lookupOptions, vendorShips]);
 
-  const rows = useMemo(
-    () => [...data].sort((a, b) => (b.tags?.length || 0) - (a.tags?.length || 0)),
-    [data],
-  );
+  const rows = useMemo(() => {
+    return [...data].sort((a, b) => {
+      // Pinned / tagged cruises stay at top if any
+      const tagDiff = (b.tags?.length || 0) - (a.tags?.length || 0);
+      if (tagDiff !== 0) return tagDiff;
+
+      if (sortBy === "refreshed") {
+        const timeA = new Date(a.cabinsUpdatedAt ?? a.updatedAt ?? a.createdAt ?? 0).getTime();
+        const timeB = new Date(b.cabinsUpdatedAt ?? b.updatedAt ?? b.createdAt ?? 0).getTime();
+        return (isNaN(timeB) ? 0 : timeB) - (isNaN(timeA) ? 0 : timeA);
+      }
+      if (sortBy === "departure") {
+        const getDepTime = (item) => {
+          const val = item.startDate || item.departureDate || item.sailDate || item.date;
+          if (!val) return Infinity;
+          const t = new Date(val).getTime();
+          return isNaN(t) ? Infinity : t;
+        };
+        return getDepTime(a) - getDepTime(b);
+      }
+      if (sortBy === "price_asc") {
+        const getP = (item) => {
+          const prices = (item.cabinCategories || []).map(c => Number(c.cabinPrice ?? c.price)).filter(p => Number.isFinite(p) && p > 0);
+          const p = prices.length > 0 ? Math.min(...prices) : (Number(item.price ?? item.leadInPrice) || Infinity);
+          return Number.isFinite(p) && p > 0 ? p : Infinity;
+        };
+        return getP(a) - getP(b);
+      }
+      if (sortBy === "price_desc") {
+        const getP = (item) => {
+          const prices = (item.cabinCategories || []).map(c => Number(c.cabinPrice ?? c.price)).filter(p => Number.isFinite(p) && p > 0);
+          const p = prices.length > 0 ? Math.min(...prices) : (Number(item.price ?? item.leadInPrice) || -Infinity);
+          return Number.isFinite(p) && p > 0 ? p : -Infinity;
+        };
+        return getP(b) - getP(a);
+      }
+      if (sortBy === "avail") {
+        const getAvail = (item) => {
+          const count = (item.cabinCategories || []).filter(c => c.avlResult === "OK" || c.status === "Available" || (Number(c.avail ?? c.available ?? 0) > 0)).length;
+          return count || Number(item.seatsAvailable ?? 0);
+        };
+        return getAvail(b) - getAvail(a);
+      }
+      return 0;
+    });
+  }, [data, sortBy]);
 
   const setF = (key, value) => {
     setFilters((current) => {
@@ -1747,6 +2282,8 @@ export default function CruiseSearchPage() {
     const toInputDate = (d) => d.toISOString().slice(0, 10);
     const endDate = toInputDate(end);
 
+    setLastSearchedShip(trimmedShip || targetVendor || "ship");
+
     const nextFilters = {
       ...filters,
       ship: trimmedShip,
@@ -1772,10 +2309,18 @@ export default function CruiseSearchPage() {
         horizonDays: targetHorizonDays,
         ...(trimmedShip ? { shipName: trimmedShip } : {}),
       });
-      const ok = res.httpStatus === 202 || res.result?.status === "queued" || res.success;
+      const ok = res.httpStatus === 202 || res.result?.status === "queued" || res.result?.status === "started" || res.success;
+      const rawStatus = res.result?.status || res.status;
+      let displayMsg = "Searched";
+      if (rawStatus === "queued" || rawStatus === "started" || rawStatus === "in_progress" || ok) {
+        displayMsg = `Searched: Live inventory scan initiated for ${targetVendor || vendorKey}${trimmedShip ? ` (Ship: ${trimmedShip})` : ""}`;
+      } else {
+        displayMsg = res.error ?? "Live search triggered";
+      }
+
       setScraperStatus({
         ok,
-        msg: res.result?.status ?? (ok ? `Scraper run queued for ${targetVendor || vendorKey} (Ship: ${trimmedShip || "All"})` : res.error ?? "Triggered")
+        msg: displayMsg
       });
       handleTargetedSearch();
     } catch (err) {
@@ -1814,15 +2359,15 @@ export default function CruiseSearchPage() {
   };
 
   const refreshTagDirectory = async () => {
-      try {
-        const response = await fetchCruiseTags();
-        setTagDirectory({
-          assignees: lookupOptions.users.length > 0 ? lookupOptions.users : response.data?.assignees || []
-        });
-      } catch (err) {
-        console.error(err);
-      }
-    };
+    try {
+      const response = await fetchCruiseTags();
+      setTagDirectory({
+        assignees: lookupOptions.users.length > 0 ? lookupOptions.users : response.data?.assignees || []
+      });
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const handleCreateTag = async (payload) => {
     if (!tagRow) {
@@ -1980,38 +2525,54 @@ export default function CruiseSearchPage() {
           </div>
         </div>
 
-        {/* 3 Main Inputs Grid */}
+        {/* 4 Main Inputs Grid: Vendor first (mandatory), then Ship (auto-fetched), Start Date, Search Horizon */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3.5 items-end">
-          {/* Ship Name Input */}
-          <div className="sm:col-span-1 lg:col-span-4 space-y-1.5">
+          {/* 1. Vendor / Cruise Line Provider (Mandatory) */}
+          <div className="sm:col-span-1 lg:col-span-3 space-y-1.5">
             <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-700 uppercase tracking-wider">
-              <Ship size={13} className="text-teal-600" />
-              <span>Ship Name</span>
+              <Building2 size={13} className="text-teal-600" />
+              <span>Cruise Line / Vendor <span className="text-rose-500">*</span></span>
             </label>
-            <div className="relative">
-              <input
-                type="text"
-                value={targetShipName}
-                onChange={(e) => setTargetShipName(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") handleTargetedSearch(); }}
-                placeholder="Type ship name (e.g. Seaside, Arvia, Iona...)"
-                className="w-full h-10 px-3.5 pr-8 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white text-sm font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 shadow-2xs transition-all"
-              />
-              {targetShipName && (
-                <button
-                  type="button"
-                  onClick={() => setTargetShipName("")}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100 cursor-pointer transition"
-                  title="Clear"
-                >
-                  <X size={14} />
-                </button>
+            <select
+              value={targetVendor}
+              onChange={(e) => setTargetVendor(e.target.value)}
+              required
+              className="w-full h-10 px-3.5 rounded-xl border border-teal-300/80 bg-white hover:bg-slate-50 focus:bg-white text-xs sm:text-sm font-semibold text-slate-900 shadow-2xs focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition-all cursor-pointer"
+            >
+              {opts.vendors.length === 0 ? (
+                <option value="">Loading providers…</option>
+              ) : (
+                opts.vendors.map((v) => (
+                  <option key={v} value={v}>
+                    {v}
+                  </option>
+                ))
               )}
-            </div>
+            </select>
           </div>
 
-          {/* Start Date */}
+          {/* 2. Ship Name (Search & Select from Auto-fetched Fleet) */}
           <div className="sm:col-span-1 lg:col-span-3 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                <Ship size={13} className="text-teal-600" />
+                <span>Ship Name <span className="text-rose-500">*</span></span>
+              </label>
+              <span className="text-[10.5px] font-semibold text-teal-700">
+                {targetShipsLoading ? "Loading…" : `${targetVendorShips.length} ship${targetVendorShips.length === 1 ? "" : "s"}`}
+              </span>
+            </div>
+            <SearchableSelect
+              placeholder={targetShipsLoading ? "Loading fleet ships…" : `Type or select ship (${targetVendorShips.length})`}
+              value={targetShipName}
+              onChange={(val) => setTargetShipName(val)}
+              options={targetVendorShips}
+              onEnter={handleTargetedSearch}
+            />
+          </div>
+
+          {/* 3. Start Date */}
+          <div className="sm:col-span-1 lg:col-span-2 space-y-1.5">
             <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-700 uppercase tracking-wider">
               <CalendarDays size={13} className="text-teal-600" />
               <span>Start Date</span>
@@ -2020,12 +2581,12 @@ export default function CruiseSearchPage() {
               type="date"
               value={targetStartDate}
               onChange={(e) => setTargetStartDate(e.target.value)}
-              className="w-full h-10 px-3.5 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white text-sm font-semibold text-slate-900 shadow-2xs focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition-all cursor-pointer"
+              className="w-full h-10 px-3 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white text-xs sm:text-sm font-semibold text-slate-900 shadow-2xs focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition-all cursor-pointer"
             />
           </div>
 
-          {/* Horizon Days Selector */}
-          <div className="sm:col-span-2 lg:col-span-5 space-y-1.5">
+          {/* 4. Horizon Days Selector */}
+          <div className="sm:col-span-2 lg:col-span-4 space-y-1.5">
             <div className="flex items-center justify-between">
               <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-700 uppercase tracking-wider">
                 <Compass size={13} className="text-teal-600" />
@@ -2033,7 +2594,7 @@ export default function CruiseSearchPage() {
               </label>
               <span className="text-[11px] font-semibold text-slate-500">{targetHorizonDays} Days Horizon</span>
             </div>
-            <div className="flex items-center p-1 bg-slate-100/90 rounded-xl border border-slate-200/70 gap-1">
+            <div className="flex items-center p-1 bg-slate-100/90 rounded-xl border border-slate-200/70 gap-1 overflow-x-auto no-scrollbar">
               {[
                 { label: "1 Day", days: 1 },
                 { label: "7 Days", days: 7 },
@@ -2045,11 +2606,10 @@ export default function CruiseSearchPage() {
                   type="button"
                   key={opt.days}
                   onClick={() => setTargetHorizonDays(opt.days)}
-                  className={`h-8 px-2.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex-1 min-w-[58px] ${
-                    targetHorizonDays === opt.days
-                      ? "bg-white text-teal-800 font-bold shadow-xs border border-slate-200/90"
-                      : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
-                  }`}
+                  className={`h-8 px-2.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex-1 min-w-[54px] shrink-0 ${targetHorizonDays === opt.days
+                    ? "bg-white text-teal-800 font-bold shadow-xs border border-slate-200/90"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
+                    }`}
                 >
                   {opt.label}
                 </button>
@@ -2060,35 +2620,45 @@ export default function CruiseSearchPage() {
 
         {/* Action Row & Live Scraper Trigger */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-3 border-t border-slate-100">
-          {/* Vendor selector optional */}
-          <div className="flex items-center gap-2 flex-1 max-w-sm">
-            <span className="text-xs font-semibold text-slate-600 whitespace-nowrap">Vendor (Optional):</span>
-            <select
-              value={targetVendor}
-              onChange={(e) => setTargetVendor(e.target.value)}
-              className="h-10 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white px-3 text-xs font-semibold text-slate-800 shadow-2xs focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 flex-1 transition-all cursor-pointer"
-            >
-              <option value="">All / Auto-detect Provider</option>
-              {opts.vendors.map((v) => (
-                <option key={v} value={v}>{v}</option>
-              ))}
-            </select>
+          {/* Active selection summary badge */}
+          <div className="flex items-center gap-2 text-xs font-semibold text-slate-600 py-1">
+            <span className="w-2 h-2 rounded-full bg-teal-600 animate-pulse shrink-0" />
+            <span className="truncate">
+              Targeting: <strong className="text-teal-900">{targetVendor || "Select Vendor"}</strong> · <strong className="text-slate-900">{targetShipName || "All Ships"}</strong>
+            </span>
           </div>
 
           <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
             <button
               type="button"
               onClick={handleTargetedSearch}
-              className="inline-flex items-center justify-center gap-2 h-10 px-5 rounded-xl bg-teal-700 hover:bg-teal-800 text-white text-xs sm:text-sm font-bold shadow-xs hover:shadow-sm active:scale-95 transition-all cursor-pointer flex-1 sm:flex-initial"
+              disabled={loading || !targetVendor}
+              className="inline-flex items-center justify-center gap-2 h-10 px-5 rounded-xl bg-teal-700 hover:bg-teal-800 disabled:opacity-75 text-white text-xs sm:text-sm font-bold shadow-xs hover:shadow-sm active:scale-95 transition-all cursor-pointer flex-1 sm:flex-initial"
             >
-              <Search size={15} />
-              <span>Search Ship Inventory</span>
+              {loading ? (
+                <RefreshCw size={15} className="animate-spin" />
+              ) : (
+                <Search size={15} />
+              )}
+              <span>{loading ? "Searching Inventory…" : "Search Ship Inventory"}</span>
             </button>
+
+            {!loading && rows.length > 0 && (appliedFilters.ship || lastSearchedShip) && (
+              <button
+                type="button"
+                onClick={() => scrollToRow(rows[0]?.id)}
+                className="inline-flex items-center justify-center gap-1.5 h-10 px-4 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-900 text-xs sm:text-sm font-bold shadow-2xs hover:shadow-xs active:scale-95 transition-all cursor-pointer animate-in fade-in slide-in-from-top-1"
+                title={`Jump to row: ${rows[0]?.ship || "1st match"}`}
+              >
+                <ArrowDown size={14} className="text-emerald-700 animate-bounce" />
+                <span>Go to Sailing ({rows[0]?.ship || "1st Match"})</span>
+              </button>
+            )}
 
             <button
               type="button"
               onClick={handleTriggerScraper}
-              disabled={scraperLoading}
+              disabled={scraperLoading || !targetVendor}
               className="inline-flex items-center justify-center gap-2 h-10 px-5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 disabled:opacity-50 text-white text-xs sm:text-sm font-bold shadow-xs hover:shadow-sm active:scale-95 transition-all cursor-pointer flex-1 sm:flex-initial"
               title="Dispatch scraper worker with { startDate, horizonDays, shipName }"
             >
@@ -2104,11 +2674,10 @@ export default function CruiseSearchPage() {
 
         {/* Live Scraper feedback alert if triggered */}
         {scraperStatus && (
-          <div className={`p-3 rounded-xl text-xs font-semibold flex items-center justify-between gap-2 shadow-2xs ${
-            scraperStatus.ok
-              ? "bg-emerald-50 text-emerald-900 border border-emerald-200/80"
-              : "bg-rose-50 text-rose-900 border border-rose-200/80"
-          }`}>
+          <div className={`p-3 rounded-xl text-xs font-semibold flex items-center justify-between gap-2 shadow-2xs ${scraperStatus.ok
+            ? "bg-emerald-50 text-emerald-900 border border-emerald-200/80"
+            : "bg-rose-50 text-rose-900 border border-rose-200/80"
+            }`}>
             <div className="flex items-center gap-2">
               {scraperStatus.ok ? <CheckCircle2 size={16} className="text-emerald-600 shrink-0" /> : <AlertCircle size={16} className="text-rose-600 shrink-0" />}
               <span>{scraperStatus.msg}</span>
@@ -2178,11 +2747,10 @@ export default function CruiseSearchPage() {
             <button
               type="button"
               onClick={() => selectVendor("")}
-              className={`h-9 px-4 rounded-xl text-xs font-semibold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
-                filters.vendor === ""
-                  ? "bg-teal-700 text-white font-bold shadow-xs border border-teal-700"
-                  : "bg-slate-50 hover:bg-slate-100 text-slate-700 hover:text-slate-900 border border-slate-200/80 shadow-2xs"
-              }`}
+              className={`h-9 px-4 rounded-xl text-xs font-semibold transition-all cursor-pointer shrink-0 whitespace-nowrap ${filters.vendor === ""
+                ? "bg-teal-700 text-white font-bold shadow-xs border border-teal-700"
+                : "bg-slate-50 hover:bg-slate-100 text-slate-700 hover:text-slate-900 border border-slate-200/80 shadow-2xs"
+                }`}
             >
               All Providers
             </button>
@@ -2194,11 +2762,10 @@ export default function CruiseSearchPage() {
                   type="button"
                   key={value}
                   onClick={() => selectVendor(value)}
-                  className={`h-9 px-3.5 rounded-xl text-xs font-semibold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
-                    isSelected
-                      ? "bg-teal-700 text-white font-bold shadow-xs border border-teal-700 scale-[1.01]"
-                      : "bg-white text-slate-700 hover:bg-slate-50 hover:text-slate-900 border border-slate-200/80 shadow-2xs"
-                  }`}
+                  className={`h-9 px-3.5 rounded-xl text-xs font-semibold transition-all cursor-pointer shrink-0 whitespace-nowrap ${isSelected
+                    ? "bg-teal-700 text-white font-bold shadow-xs border border-teal-700 scale-[1.01]"
+                    : "bg-white text-slate-700 hover:bg-slate-50 hover:text-slate-900 border border-slate-200/80 shadow-2xs"
+                    }`}
                 >
                   <span className="inline-flex items-center gap-2">
                     <span className={`w-2 h-2 rounded-full ${isSelected ? "bg-white ring-2 ring-teal-400" : vStyle.dot}`} />
@@ -2287,11 +2854,10 @@ export default function CruiseSearchPage() {
                     type="button"
                     key={preset.label}
                     onClick={() => applyDatePreset(preset)}
-                    className={`h-8 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
-                      isActive
-                        ? "bg-white text-teal-800 font-bold shadow-xs border border-slate-200/90"
-                        : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
-                    }`}
+                    className={`h-8 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer shrink-0 whitespace-nowrap ${isActive
+                      ? "bg-white text-teal-800 font-bold shadow-xs border border-slate-200/90"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
+                      }`}
                   >
                     {preset.label}
                   </button>
@@ -2320,14 +2886,29 @@ export default function CruiseSearchPage() {
 
         {/* Action Buttons Row */}
         <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-100 flex-wrap">
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2.5 flex-wrap">
             <button
               onClick={applyFilters}
-              className="inline-flex items-center gap-2 h-10 px-5 rounded-xl bg-teal-700 hover:bg-teal-800 text-white text-xs sm:text-sm font-bold shadow-xs hover:shadow active:scale-95 transition-all cursor-pointer"
+              disabled={loading}
+              className="inline-flex items-center gap-2 h-10 px-5 rounded-xl bg-teal-700 hover:bg-teal-800 disabled:opacity-75 text-white text-xs sm:text-sm font-bold shadow-xs hover:shadow active:scale-95 transition-all cursor-pointer"
             >
-              <Search size={15} />
-              <span>Search Inventory</span>
+              {loading ? (
+                <RefreshCw size={15} className="animate-spin" />
+              ) : (
+                <Search size={15} />
+              )}
+              <span>{loading ? "Searching Inventory…" : "Search Inventory"}</span>
             </button>
+            {!loading && rows.length > 0 && (
+              <button
+                type="button"
+                onClick={() => scrollToRow(rows[0]?.id)}
+                className="inline-flex items-center gap-1.5 h-10 px-4 rounded-xl border border-teal-200 bg-teal-50/70 hover:bg-teal-100 text-teal-800 text-xs sm:text-sm font-semibold shadow-2xs active:scale-95 transition-all cursor-pointer animate-in fade-in"
+              >
+                <ArrowDown size={14} className="text-teal-600" />
+                <span>Go to 1st Result</span>
+              </button>
+            )}
             <button
               onClick={reset}
               className="inline-flex items-center gap-1.5 h-10 px-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs sm:text-sm font-semibold shadow-2xs active:scale-95 transition-all cursor-pointer"
@@ -2345,346 +2926,417 @@ export default function CruiseSearchPage() {
         </div>
       </div>
 
-        {/* ── Results Status Toolbar ──────────────────────────────────────── */}
-        <div className="rounded-xl border border-slate-200/90 bg-slate-50/80 px-4 py-2.5 flex items-center justify-between shadow-2xs">
-          <div className="inline-flex items-center gap-2">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-teal-600"></span>
-            </span>
-            <span className="text-xs font-bold text-slate-900">
-              {loading ? "Searching inventory…" : `${(pagination?.total ?? rows.length).toLocaleString()} sailings found`}
-            </span>
+      {/* ── Results Status Toolbar ──────────────────────────────────────── */}
+      <div className="rounded-xl border border-slate-200/90 bg-slate-50/80 px-4 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+        <div className="inline-flex items-center gap-2">
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-teal-600"></span>
+          </span>
+          <span className="text-xs font-bold text-slate-900">
+            {loading ? "Searching inventory…" : `${(pagination?.total ?? rows.length).toLocaleString()} sailings found`}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-3 flex-wrap sm:flex-nowrap">
+          <div className="flex items-center gap-1.5 text-xs text-slate-600">
+            <span className="font-semibold text-slate-500 whitespace-nowrap">Sort by:</span>
+            <SortDropdown
+              value={sortBy}
+              onChange={(newSort) => {
+                setSortBy(newSort);
+                setPage(1);
+              }}
+            />
           </div>
-          <div className="bg-white px-3 py-0.5 rounded-md border border-slate-200 text-xs font-semibold text-slate-700 font-mono shadow-2xs">
+
+          <div className="bg-white px-3 py-1 rounded-md border border-slate-200 text-xs font-semibold text-slate-700 font-mono shadow-2xs whitespace-nowrap">
             Page {pagination?.page ?? 1} of {pagination?.totalPages ?? 1}
           </div>
         </div>
+      </div>
 
-        {/* ── Table & Mobile List Card ────────────────────────────────────── */}
-        <div className="rounded-2xl border border-slate-200/90 bg-white shadow-xs overflow-hidden">
-          {loading ? (
-            <div className="py-20 text-center text-sm font-semibold text-slate-600 flex flex-col items-center justify-center gap-2.5">
-              <RefreshCw className="animate-spin text-teal-600" size={20} />
-              <span>Loading cruises from database...</span>
-            </div>
-          ) : error ? (
-            <div className="py-20 text-center text-sm font-bold text-rose-600">{error}</div>
-          ) : rows.length === 0 ? (
-            <div className="py-20 text-center text-sm font-medium text-slate-400">No cruises found.</div>
-          ) : (
-            <>
-              {/* ── Mobile List View (md:hidden) ─────────────────────────── */}
-              <div className="block md:hidden divide-y divide-slate-100">
-                {rows.map((row) => {
-                  const validPrices = (row.cabinCategories || [])
-                    .map((cabin) => Number(cabin.cabinPrice ?? cabin.price ?? 0))
-                    .filter((p) => Number.isFinite(p) && p > 0);
-                  const lowestPrice = validPrices.length > 0 ? Math.min(...validPrices) : (Number(row.price ?? row.leadInPrice) || NaN);
-                  const hasFullDetails = (row.cabinCategories || []).some(
-                    c => c.confidence === "Medium" || c.confidence === "High"
-                  );
-                  const isTagged = (row.tags?.length || 0) > 0;
-                  const canTag = hasFullDetails || isTagged;
-                  const availableCabins = row.cabinCategories?.filter(c => c.avlResult === "OK" || c.status === "Available" || (Number(c.avail ?? c.available ?? 0) > 0)).length ?? 0;
-                  const vStyle = getVendorStyle(row.vendor?.name);
+      {/* ── Table & Mobile List Card ────────────────────────────────────── */}
+      {loading ? (
+        <CruiseSearchSkeleton rows={8} />
+      ) : error ? (
+        <div className="rounded-2xl border border-slate-200/90 bg-white p-12 text-center text-sm font-bold text-rose-600 shadow-xs">
+          {error}
+        </div>
+      ) : rows.length === 0 ? (
+        <div className="rounded-2xl border border-slate-200/90 bg-white p-12 text-center text-sm font-medium text-slate-400 shadow-xs">
+          No cruises found.
+        </div>
+      ) : (
+        <>
+          {/* ── Mobile / Tablet Separated Card View (block lg:hidden) ─── */}
+          <div className="block lg:hidden space-y-3.5">
+            {rows.map((row) => {
+              const validPrices = (row.cabinCategories || [])
+                .map((cabin) => Number(cabin.cabinPrice ?? cabin.price ?? 0))
+                .filter((p) => Number.isFinite(p) && p > 0);
+              const lowestPrice = validPrices.length > 0 ? Math.min(...validPrices) : (Number(row.price ?? row.leadInPrice) || NaN);
+              const hasFullDetails = (row.cabinCategories || []).some(
+                c => c.confidence === "Medium" || c.confidence === "High"
+              );
+              const isTagged = (row.tags?.length || 0) > 0;
+              const canTag = hasFullDetails || isTagged;
+              const availableCabins = row.cabinCategories?.filter(c => c.avlResult === "OK" || c.status === "Available" || (Number(c.avail ?? c.available ?? 0) > 0)).length ?? 0;
+              const vStyle = getVendorStyle(row.vendor?.name);
+              const packageTitle = row.package || row.name || row.title || (row.ship ? `${row.ship} Cruise` : "Cruise Sailing");
 
-                  return (
-                    <div key={row.id} className={`p-4 transition-colors ${isTagged ? "bg-amber-50/50" : "bg-white"}`}>
-                      {/* Top bar: Vendor, Ship badge, Pin */}
-                      <div className="flex items-start justify-between gap-2 mb-2">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-md border whitespace-nowrap shrink-0 ${vStyle.badge}`}>
-                            {row.vendor?.name}
-                          </span>
-                          {row.cruiseLine && (
-                            <span className="text-[10px] font-semibold text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md whitespace-nowrap shrink-0">
-                              {CRUISE_LINE_LABELS[row.cruiseLine] ?? row.cruiseLine}
-                            </span>
-                          )}
-                          <button
-                            onClick={() => setShipRow(row)}
-                            className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-sky-50 border border-sky-200 text-sky-800 hover:bg-sky-100 text-[11px] font-bold transition cursor-pointer whitespace-nowrap shrink-0"
-                          >
-                            <Ship size={11} className="text-sky-600 shrink-0" />
-                            <span className="whitespace-nowrap">{row.ship}</span>
-                          </button>
-                        </div>
-                        <button
-                          onClick={() => canTag ? togglePin(row.id) : null}
-                          className={`p-1.5 rounded-lg transition shrink-0 ${
-                            canTag ? "cursor-pointer hover:bg-slate-100" : "cursor-not-allowed opacity-30"
-                          } ${isTagged ? "text-amber-600 bg-amber-100/60" : "text-slate-400"}`}
-                          title={
-                            isTagged ? "Manage tags"
-                            : canTag ? "Add tag"
+              return (
+                <div
+                  key={row.id}
+                  id={`cruise-card-${row.id}`}
+                  className={`rounded-2xl border bg-white p-4 sm:p-5 shadow-xs hover:shadow-md transition-all duration-300 space-y-3.5 ${highlightedRowId === row.id
+                      ? "ring-2 ring-teal-500 bg-teal-50/90 border-teal-400 shadow-md scale-[1.01]"
+                      : isTagged
+                        ? "border-amber-300/90 bg-amber-50/20 ring-1 ring-amber-200/60"
+                        : "border-slate-200/90 hover:border-teal-300/80"
+                    }`}
+                >
+                  {/* Top bar: Vendor, Cruise Line, Ship badge & Pin */}
+                  <div className="flex items-start justify-between gap-2.5">
+                    <div className="flex items-center gap-1.5 flex-wrap min-w-0 flex-1">
+                      <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-md border whitespace-nowrap shrink-0 ${vStyle.badge}`}>
+                        {row.vendor?.name}
+                      </span>
+                      {row.cruiseLine && (
+                        <span className="text-[10.5px] font-semibold text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md whitespace-nowrap shrink-0">
+                          {CRUISE_LINE_LABELS[row.cruiseLine] ?? row.cruiseLine}
+                        </span>
+                      )}
+                      <button
+                        onClick={() => setShipRow(row)}
+                        className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-sky-50 border border-sky-200 text-sky-800 hover:bg-sky-100 text-[11px] font-bold transition cursor-pointer whitespace-nowrap shrink-0"
+                      >
+                        <Ship size={11} className="text-sky-600 shrink-0" />
+                        <span className="whitespace-nowrap">{row.ship}</span>
+                      </button>
+                    </div>
+                    <button
+                      onClick={() => canTag ? togglePin(row.id) : null}
+                      className={`p-2 rounded-xl transition shrink-0 ${canTag ? "cursor-pointer hover:bg-slate-100" : "cursor-not-allowed opacity-30"
+                        } ${isTagged ? "text-amber-600 bg-amber-100/80" : "text-slate-400 bg-slate-50 border border-slate-200/60"}`}
+                      title={
+                        isTagged ? "Manage tags"
+                          : canTag ? "Add tag"
                             : "Get Full Details first before tagging"
-                          }
-                        >
-                          <Pin size={15} className={isTagged ? "fill-amber-500 text-amber-600" : ""} />
-                        </button>
-                      </div>
+                      }
+                    >
+                      <Pin size={15} className={isTagged ? "fill-amber-500 text-amber-600" : ""} />
+                    </button>
+                  </div>
 
-                      {/* Package Title */}
-                      <h4 className="text-sm font-bold text-slate-900 leading-snug mb-2">
-                        {row.package}
-                      </h4>
+                  {/* Package Title */}
+                  <h4 className="text-sm sm:text-base font-bold text-slate-900 leading-snug">
+                    {packageTitle}
+                  </h4>
 
-                      {/* Route & Nights */}
-                      <div className="flex items-center gap-2 text-xs mb-3 flex-wrap">
-                        <button
-                          onClick={() => setItineraryRow(row)}
-                          className="inline-flex items-center gap-1 font-semibold text-teal-700 hover:text-teal-900 text-xs cursor-pointer hover:underline underline-offset-2 whitespace-nowrap"
-                        >
-                          <MapPin size={12} className="shrink-0 text-teal-600" />
-                          <span>{getCruiseRouteLabel(row)}</span>
-                        </button>
+                  {/* Route & Nights */}
+                  <div className="flex items-center gap-2 text-xs flex-wrap">
+                    <button
+                      onClick={() => setItineraryRow(row)}
+                      className="inline-flex items-center gap-1.5 font-semibold text-teal-700 hover:text-teal-900 text-xs cursor-pointer hover:underline underline-offset-2 break-words text-left"
+                    >
+                      <MapPin size={13} className="shrink-0 text-teal-600" />
+                      <span>{getCruiseRouteLabel(row)}</span>
+                    </button>
+                    {row.nights && (
+                      <>
                         <span className="text-slate-300">•</span>
                         <span className="font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md text-[11px] whitespace-nowrap shrink-0">
                           {row.nights} Nights
                         </span>
-                      </div>
+                      </>
+                    )}
+                  </div>
 
-                      {/* Sailing Dates */}
-                      <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 p-2.5 rounded-lg border border-slate-200/70 mb-3">
-                        <div>
-                          <div className="text-[10px] uppercase font-bold text-slate-400">Departure</div>
-                          <div className="font-semibold text-slate-900 mt-0.5 whitespace-nowrap">{fmtDate(row.startDate)}</div>
-                        </div>
-                        <div>
-                          <div className="text-[10px] uppercase font-bold text-slate-400">Arrival</div>
-                          <div className="font-semibold text-slate-900 mt-0.5 whitespace-nowrap">{fmtDate(row.endDate)}</div>
-                        </div>
-                      </div>
-
-                      {/* Bottom Bar: Availability & Price Button */}
-                      <div className="flex items-center justify-between gap-2 pt-1 flex-wrap sm:flex-nowrap">
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-semibold bg-emerald-50 border border-emerald-200 text-emerald-800 whitespace-nowrap shrink-0">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                          <span className="whitespace-nowrap">{availableCabins} cabins available</span>
-                        </span>
-
-                        <button
-                          onClick={() => setPricingRow(row)}
-                          className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer whitespace-nowrap shrink-0 ${
-                            Number.isFinite(lowestPrice)
-                              ? "bg-teal-700 hover:bg-teal-800 text-white shadow-2xs"
-                              : "bg-amber-50 border border-amber-200 text-amber-900 hover:bg-amber-100"
-                          }`}
-                        >
-                          {Number.isFinite(lowestPrice) ? safeCurrency(lowestPrice, row.currency) : "View Cabins / WTL"}
-                        </button>
+                  {/* Sailing Dates Sub-card */}
+                  <div className="grid grid-cols-2 gap-3 text-xs bg-slate-50/80 p-3 rounded-xl border border-slate-200/70">
+                    <div>
+                      <div className="text-[10px] uppercase font-bold text-slate-400">Departure</div>
+                      <div className="font-semibold text-slate-800 mt-0.5 whitespace-nowrap">
+                        {fmtDate(row.startDate || row.departureDate || row.sailDate || row.date)}
                       </div>
                     </div>
-                  );
-                })}
-              </div>
+                    <div>
+                      <div className="text-[10px] uppercase font-bold text-slate-400">Arrival</div>
+                      <div className="font-semibold text-slate-800 mt-0.5 whitespace-nowrap">
+                        {fmtDate(row.endDate || row.arrivalDate || row.returnDate)}
+                      </div>
+                    </div>
+                  </div>
 
-              {/* ── Desktop Table View (hidden md:block) ─────────────────── */}
-              <div className="hidden md:block overflow-x-auto w-full max-w-full rounded-xl">
-                <table className="w-full text-left border-collapse min-w-[1100px]">
-                  <thead className="bg-slate-50 border-b border-slate-200">
-                    <tr>
-                      {["", "Vendor", "Ship", "Cruise", "Nights", "Route", "Departure", "Arrival", "Avail.", "Refreshed", "Price"].map((header) => (
-                        <th key={header} className="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-600 whitespace-nowrap">
-                          {header}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 text-sm">
-                    {rows.map((row, index) => {
-                      const validPrices = (row.cabinCategories || [])
-                        .map((cabin) => Number(cabin.cabinPrice ?? cabin.price ?? 0))
-                        .filter((p) => Number.isFinite(p) && p > 0);
-                      const lowestPrice = validPrices.length > 0 ? Math.min(...validPrices) : (Number(row.price ?? row.leadInPrice) || NaN);
-                      const hasFullDetails = (row.cabinCategories || []).some(
-                        c => c.confidence === "Medium" || c.confidence === "High"
-                      );
-                      const isTagged = (row.tags?.length || 0) > 0;
-                      const canTag = hasFullDetails || isTagged;
-                      const availableCabins = row.cabinCategories?.filter(c => c.avlResult === "OK" || c.status === "Available" || (Number(c.avail ?? c.available ?? 0) > 0)).length ?? 0;
-                      const vStyle = getVendorStyle(row.vendor?.name);
+                  {/* Bottom Bar: Availability, Refreshed & Price Button */}
+                  <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-100/90 flex-wrap sm:flex-nowrap">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-50 border border-emerald-200 text-emerald-800 whitespace-nowrap shrink-0">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                        <span className="whitespace-nowrap">{availableCabins} cabins available</span>
+                      </span>
+                      {(() => {
+                        const ts = row.cabinsUpdatedAt ?? row.updatedAt ?? row.createdAt;
+                        if (!ts) return null;
+                        const num = new Date(ts).getTime();
+                        const diffSec = Math.round((Date.now() - num) / 1000);
+                        return (
+                          <span className={`text-[10.5px] font-semibold px-2 py-0.5 rounded border ${diffSec < 3600 ? "bg-emerald-50 text-emerald-800 border-emerald-200" : "bg-slate-50 text-slate-500 border-slate-200/60"
+                            }`}>
+                            {fmtFetchedAt(num)}
+                          </span>
+                        );
+                      })()}
+                    </div>
 
-                      return (
-                        <tr key={row.id} className={`transition-all hover:bg-slate-50/70 ${isTagged ? "bg-amber-50/50" : index % 2 === 0 ? "bg-white" : "bg-slate-50/30"}`}>
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            <button
-                              onClick={() => canTag ? togglePin(row.id) : null}
-                              className={`p-1 rounded-md transition ${
-                                canTag ? "cursor-pointer hover:bg-slate-100" : "cursor-not-allowed opacity-30"
-                              } ${isTagged ? "text-amber-600" : "text-slate-400"}`}
-                              title={
-                                isTagged ? "Manage tags"
-                                : canTag ? "Add tag"
-                                : "Get Full Details first before tagging"
-                              }
-                            >
-                              <Pin size={15} className={isTagged ? "fill-amber-500 text-amber-600" : ""} />
-                            </button>
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            <div className="flex flex-col items-start gap-0.5 whitespace-nowrap">
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-semibold border whitespace-nowrap shrink-0 ${vStyle.badge}`}>
-                                {row.vendor?.name}
-                              </span>
-                              {row.cruiseLine && (
-                                <div className="mt-0.5 text-[10px] font-semibold text-slate-500 whitespace-nowrap">
-                                  {CRUISE_LINE_LABELS[row.cruiseLine] ?? row.cruiseLine}
-                                </div>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            <button
-                              onClick={() => setShipRow(row)}
-                              className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-sky-50 border border-sky-200 text-sky-800 hover:bg-sky-100 text-xs font-bold transition cursor-pointer whitespace-nowrap shrink-0"
-                            >
-                              <Ship size={11} className="text-sky-600 shrink-0" />
-                              <span className="whitespace-nowrap">{row.ship}</span>
-                            </button>
-                            <div className="mt-0.5 text-[11px] font-mono text-slate-400 whitespace-nowrap">
-                              {getCruiseDisplayId(row)}
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 font-semibold text-slate-900 max-w-[260px] truncate whitespace-nowrap" title={row.package}>
-                            {row.package}
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold bg-indigo-50 border border-indigo-200 text-indigo-700 whitespace-nowrap">
-                              {row.nights}N
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            <button
-                              onClick={() => setItineraryRow(row)}
-                              className="text-left font-semibold text-teal-700 hover:text-teal-900 hover:underline text-xs decoration-dotted underline-offset-4 cursor-pointer whitespace-nowrap max-w-[280px] truncate block"
-                              title={getCruiseRouteLabel(row)}
-                            >
-                              {getCruiseRouteLabel(row)}
-                            </button>
-                          </td>
-                          <td className="px-4 py-3 text-xs font-medium text-slate-700 whitespace-nowrap">
-                            {fmtDate(row.startDate)}
-                          </td>
-                          <td className="px-4 py-3 text-xs font-medium text-slate-700 whitespace-nowrap">
-                            {fmtDate(row.endDate)}
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-semibold bg-emerald-50 border border-emerald-200 text-emerald-800 whitespace-nowrap shrink-0">
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                              <span className="whitespace-nowrap">{availableCabins} avail</span>
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-xs font-medium text-slate-400 whitespace-nowrap">
-                            {(() => {
-                              const ts = row.cabinsUpdatedAt ?? row.updatedAt ?? row.createdAt;
-                              return ts ? fmtFetchedAt(new Date(ts).getTime()) : "—";
-                            })()}
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            <button
-                              onClick={() => setPricingRow(row)}
-                              className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer shadow-2xs whitespace-nowrap shrink-0 ${
-                                Number.isFinite(lowestPrice)
-                                  ? "bg-teal-700 hover:bg-teal-800 text-white"
-                                  : "bg-amber-50 border border-amber-200 text-amber-800 hover:bg-amber-100"
-                              }`}
-                            >
-                              {Number.isFinite(lowestPrice) ? safeCurrency(lowestPrice, row.currency) : "WTL"}
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* ── Modern Pagination Bar ─────────────────────────────────────────── */}
-        <div className="flex flex-col md:flex-row items-center justify-between gap-4 p-4 rounded-xl border border-slate-200/90 bg-white shadow-2xs">
-          <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
-            <span>
-              Showing page <strong className="text-slate-900 font-bold">{pagination?.page ?? 1}</strong> of{" "}
-              <strong className="text-slate-900 font-bold">{pagination?.totalPages ?? 1}</strong>
-            </span>
-            <span className="text-slate-300">•</span>
-            <span>
-              <strong className="text-slate-900 font-bold">{(pagination?.total ?? rows.length).toLocaleString()}</strong> total sailings
-            </span>
-          </div>
-
-          <div className="flex items-center gap-1.5 flex-wrap justify-center">
-            <button
-              onClick={() => setPage(1)}
-              disabled={!pagination?.hasPreviousPage || loading}
-              className="inline-flex items-center gap-1 h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 disabled:opacity-35 disabled:cursor-not-allowed transition shadow-2xs"
-              title="First Page"
-            >
-              <ChevronsLeft size={14} />
-              <span className="hidden sm:inline">First</span>
-            </button>
-
-            <button
-              onClick={() => setPage((current) => Math.max(1, current - 1))}
-              disabled={!pagination?.hasPreviousPage || loading}
-              className="inline-flex items-center gap-1 h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 disabled:opacity-35 disabled:cursor-not-allowed transition shadow-2xs"
-              title="Previous Page"
-            >
-              <ChevronLeft size={14} />
-              <span>Prev</span>
-            </button>
-
-            <div className="flex items-center gap-1 mx-0.5">
-              {getVisiblePages(pagination?.page ?? 1, pagination?.totalPages ?? 1).map((pageNumber, index, pages) => {
-                const previousPage = pages[index - 1];
-                const showGap = previousPage && pageNumber - previousPage > 1;
-
-                return (
-                  <div key={pageNumber} className="flex items-center gap-1">
-                    {showGap && <span className="text-slate-400 text-xs px-1 font-bold select-none">...</span>}
                     <button
-                      onClick={() => setPage(pageNumber)}
-                      disabled={loading}
-                      className={`min-w-[32px] h-8 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                        pageNumber === (pagination?.page ?? 1)
-                          ? "bg-teal-700 text-white shadow-xs border border-teal-700 ring-2 ring-teal-700/20"
-                          : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 shadow-2xs"
-                      }`}
+                      onClick={() => setPricingRow(row)}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold transition shadow-2xs active:scale-95 cursor-pointer whitespace-nowrap shrink-0 ${Number.isFinite(lowestPrice)
+                        ? "bg-teal-700 hover:bg-teal-800 text-white shadow-teal-700/20"
+                        : "bg-amber-50 border border-amber-200 text-amber-900 hover:bg-amber-100"
+                        }`}
                     >
-                      {pageNumber}
+                      {Number.isFinite(lowestPrice) ? safeCurrency(lowestPrice, row.currency) : "View Cabins / WTL"}
                     </button>
                   </div>
-                );
-              })}
-            </div>
-
-            <button
-              onClick={() => setPage((current) => current + 1)}
-              disabled={!pagination?.hasNextPage || loading}
-              className="inline-flex items-center gap-1 h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 disabled:opacity-35 disabled:cursor-not-allowed transition shadow-2xs"
-              title="Next Page"
-            >
-              <span>Next</span>
-              <ChevronRight size={14} />
-            </button>
-
-            <button
-              onClick={() => setPage(pagination?.totalPages ?? 1)}
-              disabled={!pagination?.hasNextPage || loading}
-              className="inline-flex items-center gap-1 h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 disabled:opacity-35 disabled:cursor-not-allowed transition shadow-2xs"
-              title="Last Page"
-            >
-              <span className="hidden sm:inline">Last</span>
-              <ChevronsRight size={14} />
-            </button>
+                </div>
+              );
+            })}
           </div>
+
+          {/* ── Desktop Table View (hidden lg:block) ─────────────────── */}
+          <div className="hidden lg:block rounded-2xl border border-slate-200/90 bg-white shadow-xs overflow-hidden">
+            <div className="overflow-x-auto w-full max-w-full">
+              <table className="w-full text-left border-collapse min-w-[1100px]">
+                <thead className="bg-slate-50 border-b border-slate-200">
+                  <tr>
+                    {["", "Vendor", "Ship", "Cruise", "Nights", "Route", "Departure", "Arrival", "Avail.", "Refreshed", "Price"].map((header) => (
+                      <th key={header} className="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-600 whitespace-nowrap">
+                        {header}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-sm">
+                  {rows.map((row, index) => {
+                    const validPrices = (row.cabinCategories || [])
+                      .map((cabin) => Number(cabin.cabinPrice ?? cabin.price ?? 0))
+                      .filter((p) => Number.isFinite(p) && p > 0);
+                    const lowestPrice = validPrices.length > 0 ? Math.min(...validPrices) : (Number(row.price ?? row.leadInPrice) || NaN);
+                    const hasFullDetails = (row.cabinCategories || []).some(
+                      c => c.confidence === "Medium" || c.confidence === "High"
+                    );
+                    const isTagged = (row.tags?.length || 0) > 0;
+                    const canTag = hasFullDetails || isTagged;
+                    const availableCabins = row.cabinCategories?.filter(c => c.avlResult === "OK" || c.status === "Available" || (Number(c.avail ?? c.available ?? 0) > 0)).length ?? 0;
+                    const vStyle = getVendorStyle(row.vendor?.name);
+
+                    return (
+                      <tr
+                        key={row.id}
+                        id={`cruise-row-${row.id}`}
+                        className={`transition-all duration-300 ${highlightedRowId === row.id
+                            ? "ring-2 ring-teal-500 bg-teal-100/60 font-semibold shadow-sm"
+                            : isTagged
+                              ? "bg-amber-50/50 hover:bg-slate-50/70"
+                              : index % 2 === 0
+                                ? "bg-white hover:bg-slate-50/70"
+                                : "bg-slate-50/30 hover:bg-slate-50/70"
+                          }`}
+                      >
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <button
+                            onClick={() => canTag ? togglePin(row.id) : null}
+                            className={`p-1 rounded-md transition ${canTag ? "cursor-pointer hover:bg-slate-100" : "cursor-not-allowed opacity-30"
+                              } ${isTagged ? "text-amber-600" : "text-slate-400"}`}
+                            title={
+                              isTagged ? "Manage tags"
+                                : canTag ? "Add tag"
+                                  : "Get Full Details first before tagging"
+                            }
+                          >
+                            <Pin size={15} className={isTagged ? "fill-amber-500 text-amber-600" : ""} />
+                          </button>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <div className="flex flex-col items-start gap-0.5 whitespace-nowrap">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-semibold border whitespace-nowrap shrink-0 ${vStyle.badge}`}>
+                              {row.vendor?.name}
+                            </span>
+                            {row.cruiseLine && (
+                              <div className="mt-0.5 text-[10px] font-semibold text-slate-500 whitespace-nowrap">
+                                {CRUISE_LINE_LABELS[row.cruiseLine] ?? row.cruiseLine}
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <button
+                            onClick={() => setShipRow(row)}
+                            className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-sky-50 border border-sky-200 text-sky-800 hover:bg-sky-100 text-xs font-bold transition cursor-pointer whitespace-nowrap shrink-0"
+                          >
+                            <Ship size={11} className="text-sky-600 shrink-0" />
+                            <span className="whitespace-nowrap">{row.ship}</span>
+                          </button>
+                          <div className="mt-0.5 text-[11px] font-mono text-slate-400 whitespace-nowrap">
+                            {getCruiseDisplayId(row)}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 font-semibold text-slate-900 max-w-[260px] truncate whitespace-nowrap" title={row.package}>
+                          {row.package}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold bg-indigo-50 border border-indigo-200 text-indigo-700 whitespace-nowrap">
+                            {row.nights}N
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <button
+                            onClick={() => setItineraryRow(row)}
+                            className="text-left font-semibold text-teal-700 hover:text-teal-900 hover:underline text-xs decoration-dotted underline-offset-4 cursor-pointer whitespace-nowrap max-w-[280px] truncate block"
+                            title={getCruiseRouteLabel(row)}
+                          >
+                            {getCruiseRouteLabel(row)}
+                          </button>
+                        </td>
+                        <td className="px-4 py-3 text-xs font-medium text-slate-700 whitespace-nowrap">
+                          {fmtDate(row.startDate || row.departureDate || row.sailDate || row.date)}
+                        </td>
+                        <td className="px-4 py-3 text-xs font-medium text-slate-700 whitespace-nowrap">
+                          {fmtDate(row.endDate || row.arrivalDate || row.returnDate)}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-semibold bg-emerald-50 border border-emerald-200 text-emerald-800 whitespace-nowrap shrink-0">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                            <span className="whitespace-nowrap">{availableCabins} avail</span>
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-xs whitespace-nowrap">
+                          {(() => {
+                            const ts = row.cabinsUpdatedAt ?? row.updatedAt ?? row.createdAt;
+                            if (!ts) return <span className="text-slate-400 font-medium">—</span>;
+                            const num = new Date(ts).getTime();
+                            const diffSec = Math.round((Date.now() - num) / 1000);
+                            const isRecent = diffSec < 86400;
+                            return (
+                              <span
+                                title={new Date(ts).toLocaleString()}
+                                className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold border ${diffSec < 3600
+                                  ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                                  : isRecent
+                                    ? "bg-teal-50 text-teal-800 border-teal-200"
+                                    : "bg-slate-50 text-slate-600 border-slate-200/70"
+                                  }`}
+                              >
+                                {fmtFetchedAt(num)}
+                              </span>
+                            );
+                          })()}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <button
+                            onClick={() => setPricingRow(row)}
+                            className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer shadow-2xs whitespace-nowrap shrink-0 ${Number.isFinite(lowestPrice)
+                              ? "bg-teal-700 hover:bg-teal-800 text-white"
+                              : "bg-amber-50 border border-amber-200 text-amber-800 hover:bg-amber-100"
+                              }`}
+                          >
+                            {Number.isFinite(lowestPrice) ? safeCurrency(lowestPrice, row.currency) : "WTL"}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+
+
+      {/* ── Modern Pagination Bar ─────────────────────────────────────────── */}
+      <div className="flex flex-col md:flex-row items-center justify-between gap-4 p-4 rounded-xl border border-slate-200/90 bg-white shadow-2xs">
+        <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
+          <span>
+            Showing page <strong className="text-slate-900 font-bold">{pagination?.page ?? 1}</strong> of{" "}
+            <strong className="text-slate-900 font-bold">{pagination?.totalPages ?? 1}</strong>
+          </span>
+          <span className="text-slate-300">•</span>
+          <span>
+            <strong className="text-slate-900 font-bold">{(pagination?.total ?? rows.length).toLocaleString()}</strong> total sailings
+          </span>
         </div>
 
+        <div className="flex items-center gap-1.5 flex-wrap justify-center">
+          <button
+            onClick={() => setPage(1)}
+            disabled={!pagination?.hasPreviousPage || loading}
+            className="inline-flex items-center gap-1 h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 disabled:opacity-35 disabled:cursor-not-allowed transition shadow-2xs"
+            title="First Page"
+          >
+            <ChevronsLeft size={14} />
+            <span className="hidden sm:inline">First</span>
+          </button>
+
+          <button
+            onClick={() => setPage((current) => Math.max(1, current - 1))}
+            disabled={!pagination?.hasPreviousPage || loading}
+            className="inline-flex items-center gap-1 h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 disabled:opacity-35 disabled:cursor-not-allowed transition shadow-2xs"
+            title="Previous Page"
+          >
+            <ChevronLeft size={14} />
+            <span>Prev</span>
+          </button>
+
+          <div className="flex items-center gap-1 mx-0.5">
+            {getVisiblePages(pagination?.page ?? 1, pagination?.totalPages ?? 1).map((pageNumber, index, pages) => {
+              const previousPage = pages[index - 1];
+              const showGap = previousPage && pageNumber - previousPage > 1;
+
+              return (
+                <div key={pageNumber} className="flex items-center gap-1">
+                  {showGap && <span className="text-slate-400 text-xs px-1 font-bold select-none">...</span>}
+                  <button
+                    onClick={() => setPage(pageNumber)}
+                    disabled={loading}
+                    className={`min-w-[32px] h-8 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${pageNumber === (pagination?.page ?? 1)
+                      ? "bg-teal-700 text-white shadow-xs border border-teal-700 ring-2 ring-teal-700/20"
+                      : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 shadow-2xs"
+                      }`}
+                  >
+                    {pageNumber}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+
+          <button
+            onClick={() => setPage((current) => current + 1)}
+            disabled={!pagination?.hasNextPage || loading}
+            className="inline-flex items-center gap-1 h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 disabled:opacity-35 disabled:cursor-not-allowed transition shadow-2xs"
+            title="Next Page"
+          >
+            <span>Next</span>
+            <ChevronRight size={14} />
+          </button>
+
+          <button
+            onClick={() => setPage(pagination?.totalPages ?? 1)}
+            disabled={!pagination?.hasNextPage || loading}
+            className="inline-flex items-center gap-1 h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 disabled:opacity-35 disabled:cursor-not-allowed transition shadow-2xs"
+            title="Last Page"
+          >
+            <span className="hidden sm:inline">Last</span>
+            <ChevronsRight size={14} />
+          </button>
+        </div>
+      </div>
+
       {shipRow && <ShipModal row={shipRow} onClose={() => setShipRow(null)} />}
+
       {itineraryRow && <ItineraryModal row={itineraryRow} onClose={() => setItineraryRow(null)} />}
       {pricingRow && <PricingModal row={pricingRow} onClose={() => setPricingRow(null)} onRefreshComplete={handlePricingRefreshComplete} />}
       {tagRow && (

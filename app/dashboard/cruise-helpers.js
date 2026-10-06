@@ -118,6 +118,24 @@ export function normalizeCruise(cruise = {}) {
   const code            = getCruiseCode(cruise)
   const cabinCategories = (cruise.cabinCategories ?? []).map(normalizeCabinCategory)
 
+  let startDate = cruise.startDate || cruise.departureDate || cruise.sailDate || cruise.date || null
+  let endDate = cruise.endDate || cruise.arrivalDate || cruise.returnDate || null
+
+  if (!startDate && code) {
+    const match = String(code).match(/(20\d{2})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])/)
+    if (match) {
+      startDate = `${match[1]}-${match[2]}-${match[3]}`
+    }
+  }
+
+  if (startDate && !endDate && cruise.nights) {
+    const d = new Date(startDate)
+    if (!isNaN(d.getTime())) {
+      d.setDate(d.getDate() + Number(cruise.nights))
+      endDate = d.toISOString().slice(0, 10)
+    }
+  }
+
   const seatsAvailable = cabinCategories
     .filter(c => c.avlResult === "OK" || c.status === "Available" || (Number(c.avail ?? c.available ?? 0) > 0))
     .reduce((sum, c) => sum + (normalizeInteger(c.avail) ?? 0), 0)
@@ -128,6 +146,8 @@ export function normalizeCruise(cruise = {}) {
     ...cruise,
     id:             cruise.id ?? code,
     code,
+    startDate,
+    endDate,
     routeLabel:     getCruiseRouteLabel(cruise),
     shipDetails: {
       ...cruise.shipDetails,

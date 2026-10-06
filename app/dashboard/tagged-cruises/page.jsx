@@ -18,7 +18,18 @@ import {
   Bell,
   Sparkles,
   ArrowDownRight,
-  Flame
+  Flame,
+  Plus,
+  Trash2,
+  Edit2,
+  X,
+  RefreshCw,
+  Volume2,
+  VolumeX,
+  Radio,
+  Check,
+  CheckCheck,
+  Zap
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -26,12 +37,17 @@ import {
   fetchCruises,
   fetchCruiseTags,
   fetchCruisePriceAlerts,
+  markCruisePriceAlertRead,
+  createCruiseTag,
+  updateCruiseTag,
+  deleteCruiseTag,
   fetchShips,
   fetchUsers,
   fetchVendors,
   refreshCruiseCabins,
   getCruiseRefreshStatus
 } from "../api"
+import { TaggedCruisesSkeleton } from "@/components/ui/skeleton-patterns"
 import { buildCabinGroups, getCruiseDisplayId, getCruiseRouteLabel, getLoadFactor } from "../cruise-helpers"
 
 function fmtSeconds(sec) {
@@ -43,10 +59,7 @@ function fmtSeconds(sec) {
 const PAGE_SIZE = 20
 
 function formatDate(value) {
-  if (!value) {
-    return "--"
-  }
-
+  if (!value) return "--"
   return new Date(value).toLocaleDateString("en-GB", {
     day: "2-digit",
     month: "short",
@@ -58,8 +71,35 @@ function formatCurrency(amount, currency = "GBP") {
   return `${currency === "GBP" ? "\u00A3" : "$"}${Number(amount ?? 0).toLocaleString()}`
 }
 
+function playPriceDropChime() {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext
+    if (!AudioCtx) return
+    const ctx = new AudioCtx()
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+
+    osc.type = "sine"
+    osc.frequency.setValueAtTime(587.33, ctx.currentTime)
+    osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.12)
+    osc.frequency.exponentialRampToValueAtTime(1174.66, ctx.currentTime + 0.25)
+
+    gain.gain.setValueAtTime(0.01, ctx.currentTime)
+    gain.gain.linearRampToValueAtTime(0.2, ctx.currentTime + 0.05)
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5)
+
+    osc.connect(gain)
+    gain.connect(ctx.destination)
+    osc.start()
+    osc.stop(ctx.currentTime + 0.52)
+  } catch {
+    // AudioContext blocked or not supported
+  }
+}
+
 export default function TaggedCruisesPage() {
   const [loading, setLoading] = useState(true)
+  const [refreshingAll, setRefreshingAll] = useState(false)
   const [error, setError] = useState("")
   const [rows, setRows] = useState([])
   const [expandedRows, setExpandedRows] = useState(new Set())
@@ -72,6 +112,18 @@ export default function TaggedCruisesPage() {
   })
   const [page, setPage] = useState(1)
   const [priceDropOnly, setPriceDropOnly] = useState(false)
+  
+  // Real-time price radar controls
+  const [radarActive, setRadarActive] = useState(true)
+  const [soundEnabled, setSoundEnabled] = useState(true)
+  const [radarCountdown, setRadarCountdown] = useState(20)
+  const [priceAlerts, setPriceAlerts] = useState([])
+  const [showAlertsPanel, setShowAlertsPanel] = useState(false)
+
+  // Tag Management modal state
+  const [tagModalCruise, setTagModalCruise] = useState(null)
+  const [savingTag, setSavingTag] = useState(false)
+
   const [filters, setFilters] = useState({
     tag: "",
     assignedTo: "",
@@ -90,7 +142,7 @@ export default function TaggedCruisesPage() {
     endDateTo: ""
   })
 
-  // Debounce tag input changes so typing doesn't spam fetchCruises requests
+  // Debounce tag input changes so typing doesn't spam requests
   useEffect(() => {
     setAppliedFilters(current => {
       if (current.tag === debouncedTag) return current
@@ -99,124 +151,140 @@ export default function TaggedCruisesPage() {
     setPage(1)
   }, [debouncedTag])
 
-  // Ref to track notified price drops to prevent duplicate toasts
+  // Ref to track notified price drops to avoid duplicate toasts in session
   const notifiedDropsRef = useRef(new Set())
 
-  useEffect(() => {
-    let active = true
+  // Load tag lookups & assignees
+  const loadDirectory = useCallback(async () => {
+    try {
+      const [tagResponse, vendorResponse, shipResponse, userResponse] = await Promise.all([
+        fetchCruiseTags().catch(() => ({ data: {} })),
+        fetchVendors({ limit: 100 }).catch(() => ({ data: [] })),
+        fetchShips({ limit: 100 }).catch(() => ({ data: [] })),
+        fetchUsers().catch(() => ({ data: [] }))
+      ])
 
-    const loadDirectory = async () => {
-      try {
-        const [tagResponse, vendorResponse, shipResponse, userResponse] = await Promise.all([
-          fetchCruiseTags().catch(() => ({ data: {} })),
-          fetchVendors({ limit: 100 }).catch(() => ({ data: [] })),
-          fetchShips({ limit: 100 }).catch(() => ({ data: [] })),
-          fetchUsers().catch(() => ({ data: [] }))
-        ])
+      setTagDirectory({
+        tags: tagResponse.data?.tags ?? [],
+        assignees:
+          userResponse.data?.map(user => user.name).filter(Boolean) ||
+          (tagResponse.data?.assignees ?? [])
+      })
 
-        if (!active) {
-          return
-        }
-
-        setTagDirectory({
-          tags: tagResponse.data?.tags ?? [],
-          assignees:
-            userResponse.data?.map(user => user.name).filter(Boolean) ||
-            (tagResponse.data?.assignees ?? [])
-        })
-
-        setLookupOptions({
-          vendors: [...new Set((vendorResponse.data || []).map(vendor => vendor.name).filter(Boolean))],
-          ships: [...new Set((shipResponse.data || []).map(ship => ship.name).filter(Boolean))],
-          users: [...new Set((userResponse.data || []).map(user => user.name).filter(Boolean))]
-        })
-      } catch (err) {
-        if (active) {
-          console.warn("Failed to load tagged cruise lookups:", err?.message || err)
-        }
-      }
-    }
-
-    loadDirectory()
-
-    return () => {
-      active = false
+      setLookupOptions({
+        vendors: [...new Set((vendorResponse.data || []).map(vendor => vendor.name).filter(Boolean))],
+        ships: [...new Set((shipResponse.data || []).map(ship => ship.name).filter(Boolean))],
+        users: [...new Set((userResponse.data || []).map(user => user.name).filter(Boolean))]
+      })
+    } catch (err) {
+      console.warn("Failed to load tagged cruise lookups:", err?.message || err)
     }
   }, [])
 
+  useEffect(() => {
+    loadDirectory()
+  }, [loadDirectory])
+
+  // Main loader for cruises and price alerts
   const loadCruises = useCallback(async ({ silent = false } = {}) => {
     try {
       if (!silent) setLoading(true)
       setError("")
 
-      const response = await fetchCruises({
-        page,
-        limit: PAGE_SIZE,
-        detail: "full",
-        tagged: true,
-        tag: appliedFilters.tag || undefined,
-        assignedTo: appliedFilters.assignedTo || undefined,
-        vendorName: appliedFilters.vendorName || undefined,
-        ship: appliedFilters.ship || undefined,
-        startDateFrom: appliedFilters.startDateFrom || undefined,
-        endDateTo: appliedFilters.endDateTo || undefined
-      })
+      const [cruisesResponse, alertsResponse] = await Promise.allSettled([
+        fetchCruises({
+          page,
+          limit: PAGE_SIZE,
+          detail: "full",
+          tagged: true,
+          tag: appliedFilters.tag || undefined,
+          assignedTo: appliedFilters.assignedTo || undefined,
+          vendorName: appliedFilters.vendorName || undefined,
+          ship: appliedFilters.ship || undefined,
+          startDateFrom: appliedFilters.startDateFrom || undefined,
+          endDateTo: appliedFilters.endDateTo || undefined
+        }),
+        fetchCruisePriceAlerts({ status: "unread", limit: 20 })
+      ])
 
-      const data = response.data || []
+      const data = cruisesResponse.status === "fulfilled" ? cruisesResponse.value?.data || [] : []
+      const alerts = alertsResponse.status === "fulfilled" ? alertsResponse.value?.data || [] : []
+      
       setRows(data)
-      setPagination(response.pagination || null)
+      setPagination(cruisesResponse.status === "fulfilled" ? cruisesResponse.value?.pagination || null : null)
+      setPriceAlerts(alerts)
 
-      // ── Scan & Trigger Toast Notifications for Price Drops with Team Mentions ──
+      // Scan & Trigger Real-Time Toast Notifications for Price Drops with Team Mentions
+      let hasNewDrop = false
+
       data.forEach(row => {
         const availPrices = (row.cabinCategories || [])
           .filter(c => c.avlResult === "OK" || c.status === "Available" || (Number(c.avail ?? c.available ?? 0) > 0) || !c.avlResult)
           .map(c => Number(c.cabinPrice ?? c.price ?? 0))
           .filter(p => Number.isFinite(p) && p > 0)
-        const currentLowest = availPrices.length > 0 ? Math.min(...availPrices) : null
+        const currentLowest = availPrices.length > 0 ? Math.min(...availPrices) : (row.lowestPrice ? Number(row.lowestPrice) : (row.price ? Number(row.price) : null))
 
         const tags = row.tags || []
         tags.forEach(tag => {
           const trackedLow = Number(tag.trackedLowestPrice)
           const lastSeen = Number(tag.lastSeenPrice)
-          const isDrop = tag.lastPriceDropAt || (Number.isFinite(trackedLow) && currentLowest && currentLowest < trackedLow) || (Number.isFinite(lastSeen) && currentLowest && currentLowest < lastSeen)
+          const isDrop = Boolean(tag.lastPriceDropAt) || 
+            (Number.isFinite(trackedLow) && trackedLow > 0 && currentLowest && currentLowest < trackedLow) || 
+            (Number.isFinite(lastSeen) && lastSeen > 0 && currentLowest && currentLowest < lastSeen)
+          
           const dropKey = `${row.id}-${tag.id}-${currentLowest}`
 
-          if (isDrop && !notifiedDropsRef.current.has(dropKey)) {
+          if (isDrop && currentLowest && !notifiedDropsRef.current.has(dropKey)) {
             notifiedDropsRef.current.add(dropKey)
-            const basePrice = Number.isFinite(trackedLow) ? trackedLow : lastSeen
+            hasNewDrop = true
+            const basePrice = (Number.isFinite(trackedLow) && trackedLow > 0) ? trackedLow : lastSeen
             const savedAmount = basePrice && currentLowest ? basePrice - currentLowest : null
             const savedPercent = savedAmount && basePrice ? Math.round((savedAmount / basePrice) * 100) : null
+            const shipName = row.ship || row.shipName || "Cruise Ship"
 
             toast.success(
-              <div className="flex flex-col gap-1 py-0.5">
-                <div className="flex items-center gap-1.5 font-bold text-sm text-emerald-900">
-                  <TrendingDown size={16} className="text-emerald-600 shrink-0" />
+              <div className="flex flex-col gap-1.5 py-0.5 font-sans">
+                <div className="flex items-center gap-2 font-bold text-sm text-emerald-900">
+                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white shadow-xs">
+                    <TrendingDown size={14} />
+                  </div>
                   <span>Price Drop Alert!</span>
                   {savedPercent && savedPercent > 0 ? (
-                    <span className="ml-auto rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-extrabold text-emerald-800">
+                    <span className="ml-auto rounded-full bg-emerald-200 px-2 py-0.5 text-[11px] font-bold text-emerald-950 border border-emerald-300">
                       {savedPercent}% OFF
                     </span>
                   ) : null}
                 </div>
                 <div className="text-xs text-slate-700 leading-snug">
-                  <strong>{row.ship || row.package}</strong> dropped to <strong className="text-emerald-800">{formatCurrency(currentLowest, row.currency)}</strong>
-                  {savedAmount && savedAmount > 0 ? ` (Save ${formatCurrency(savedAmount, row.currency)})` : ""}!
+                  <strong>{shipName}</strong> ({row.package || row.code}) dropped to{" "}
+                  <strong className="text-emerald-800 font-bold">{formatCurrency(currentLowest, row.currency)}</strong>
+                  {savedAmount && savedAmount > 0 ? (
+                    <span className="font-semibold text-emerald-700"> (Save {formatCurrency(savedAmount, row.currency)})</span>
+                  ) : ""}!
                 </div>
-                {tag.assignedTo && (
-                  <div className="flex items-center gap-1 text-[11px] font-semibold text-teal-800 bg-teal-50 border border-teal-200/60 px-2 py-0.5 rounded-md mt-1 w-fit">
-                    <Bell size={11} className="shrink-0" />
+                {tag.assignedTo ? (
+                  <div className="flex items-center gap-1.5 text-[11px] font-semibold text-teal-900 bg-teal-50 border border-teal-200 px-2.5 py-1 rounded-md mt-0.5 w-fit">
+                    <Bell size={12} className="shrink-0 text-teal-700 animate-bounce" />
                     <span>Mention: @{tag.assignedTo} · Tag: {tag.label}</span>
+                  </div>
+                ) : (
+                  <div className="text-[11px] font-medium text-slate-500">
+                    Tag: {tag.label}
                   </div>
                 )}
               </div>,
               {
-                duration: 9000,
+                duration: 10000,
                 id: `price-drop-${row.id}-${tag.id}`
               }
             )
           }
         })
       })
+
+      if (hasNewDrop && soundEnabled) {
+        playPriceDropChime()
+      }
     } catch (err) {
       setError(err.message || "Failed to load tagged cruises")
       setRows([])
@@ -224,19 +292,38 @@ export default function TaggedCruisesPage() {
     } finally {
       if (!silent) setLoading(false)
     }
-  }, [appliedFilters, page])
+  }, [appliedFilters, page, soundEnabled])
 
   useEffect(() => {
     loadCruises()
   }, [loadCruises])
 
-  // rowId -> { status, estimatedMs, remaining, error, retryAfter }
+  // Dynamic Real-Time Price Radar Polling
+  useEffect(() => {
+    if (!radarActive) return
+
+    setRadarCountdown(20)
+    const interval = setInterval(() => {
+      setRadarCountdown(prev => {
+        if (prev <= 1) {
+          loadCruises({ silent: true })
+          return 20
+        }
+        return prev - 1
+      })
+    }, 1000)
+
+    return () => clearInterval(interval)
+  }, [radarActive, loadCruises])
+
+  // Refresh single cruise cabins & prices with live polling
   const [refreshJobs, setRefreshJobs] = useState({})
   const pollRefs = useRef({})
 
   useEffect(() => {
+    const currentPolls = pollRefs.current
     return () => {
-      Object.values(pollRefs.current).forEach(clearInterval)
+      Object.values(currentPolls).forEach(clearInterval)
     }
   }, [])
 
@@ -246,12 +333,15 @@ export default function TaggedCruisesPage() {
       try {
         const s = await getCruiseRefreshStatus(cruiseCode)
         setRefreshJobs(prev => ({ ...prev, [rowId]: s }))
-        if (s.status === "cooldown" || s.status === "idle") {
+        if (s.status === "cooldown" || s.status === "idle" || s.status === "completed") {
           clearInterval(pollRefs.current[rowId])
           delete pollRefs.current[rowId]
-          if (s.success) loadCruises({ silent: true })
+          toast.success(`Pricing updated for ${cruiseCode}`)
+          loadCruises({ silent: true })
         }
-      } catch { /* network hiccup — keep polling */ }
+      } catch {
+        // network retry
+      }
     }, 3000)
   }
 
@@ -264,50 +354,165 @@ export default function TaggedCruisesPage() {
     }
     try {
       const result = await refreshCruiseCabins(cruiseCode, vendorKey)
-      setRefreshJobs(prev => ({ ...prev, [row.id]: { status: result.status, estimatedMs: result.estimatedMs, remaining: result.estimatedMs } }))
-      if (result.status === "started" || result.status === "in_progress") startPolling(row.id, cruiseCode)
+      const rem = result.remaining ?? result.estimatedMs ?? 45000
+      setRefreshJobs(prev => ({ ...prev, [row.id]: { status: result.status, estimatedMs: result.estimatedMs ?? rem, remaining: rem } }))
+      if (result.status === "started" || result.status === "in_progress") {
+        startPolling(row.id, cruiseCode)
+      } else if (result.status === "cooldown" || result.status === "completed" || rem <= 0) {
+        loadCruises({ silent: true })
+      }
     } catch (err) {
       const offline = err.message?.toLowerCase().includes("fetch") || err.message?.toLowerCase().includes("network")
       setRefreshJobs(prev => ({ ...prev, [row.id]: { status: "error", error: offline ? "Scraper server is offline." : err.message, retryAfter: err.retryAfter } }))
     }
   }
 
+  // Scan & Refresh all tagged cruises currently on screen
+  async function handleRefreshAllTagged() {
+    setRefreshingAll(true)
+    toast.info(`Starting live radar scan for ${rows.length} tagged ships...`)
+    try {
+      for (const row of rows) {
+        const cruiseCode = row.code ?? row.id
+        const vendorKey = row.vendor?.slug ?? row.vendorKey ?? row.source
+        if (cruiseCode && vendorKey) {
+          try {
+            await refreshCruiseCabins(cruiseCode, vendorKey)
+          } catch {
+            // ignore individual rate-limit
+          }
+        }
+      }
+      toast.success("Radar scan initiated for all tagged ships. Prices will update dynamically.")
+      setTimeout(() => loadCruises({ silent: true }), 4000)
+    } finally {
+      setRefreshingAll(false)
+    }
+  }
+
+  // Mark alert as read
+  async function handleMarkAlertRead(alertId) {
+    try {
+      await markCruisePriceAlertRead(alertId)
+      setPriceAlerts(current => current.filter(a => a.id !== alertId))
+      toast.success("Price alert marked as read")
+    } catch (err) {
+      toast.error("Failed to dismiss alert: " + err.message)
+    }
+  }
+
+  // Tag Management Handlers
+  const handleCreateTag = async (cruiseId, payload) => {
+    try {
+      setSavingTag(true)
+      const res = await createCruiseTag(cruiseId, payload)
+      if (res.data) {
+        setRows(current => current.map(r => (r.id === cruiseId ? res.data : r)))
+        if (tagModalCruise?.id === cruiseId) {
+          setTagModalCruise(res.data)
+        }
+      }
+      await loadDirectory()
+      await loadCruises({ silent: true })
+      toast.success("Tag saved successfully")
+    } catch (err) {
+      toast.error("Failed to save tag: " + err.message)
+    } finally {
+      setSavingTag(false)
+    }
+  }
+
+  const handleUpdateTag = async (cruiseId, tagId, payload) => {
+    try {
+      setSavingTag(true)
+      const res = await updateCruiseTag(cruiseId, tagId, payload)
+      if (res.data) {
+        setRows(current => current.map(r => (r.id === cruiseId ? res.data : r)))
+        if (tagModalCruise?.id === cruiseId) {
+          setTagModalCruise(res.data)
+        }
+      }
+      await loadDirectory()
+      await loadCruises({ silent: true })
+      toast.success("Tag updated successfully")
+    } catch (err) {
+      toast.error("Failed to update tag: " + err.message)
+    } finally {
+      setSavingTag(false)
+    }
+  }
+
+  const handleDeleteTag = async (cruiseId, tagId) => {
+    try {
+      setSavingTag(true)
+      const res = await deleteCruiseTag(cruiseId, tagId)
+      if (res.data) {
+        setRows(current => current.map(r => (r.id === cruiseId ? res.data : r)))
+        if (tagModalCruise?.id === cruiseId) {
+          setTagModalCruise(res.data)
+        }
+      } else {
+        setRows(current => current.map(r => {
+          if (r.id === cruiseId) {
+            return { ...r, tags: (r.tags || []).filter(t => t.id !== tagId) }
+          }
+          return r
+        }))
+        if (tagModalCruise?.id === cruiseId) {
+          setTagModalCruise(prev => ({
+            ...prev,
+            tags: (prev.tags || []).filter(t => t.id !== tagId)
+          }))
+        }
+      }
+      await loadDirectory()
+      await loadCruises({ silent: true })
+      toast.success("Tag removed")
+    } catch (err) {
+      toast.error("Failed to delete tag: " + err.message)
+    } finally {
+      setSavingTag(false)
+    }
+  }
+
+  // Helper to check if a row has a price drop
+  const checkRowHasDrop = useCallback((row) => {
+    const availPrices = (row.cabinCategories || [])
+      .filter(c => c.avlResult === "OK" || c.status === "Available" || (Number(c.avail ?? c.available ?? 0) > 0) || !c.avlResult)
+      .map(c => Number(c.cabinPrice ?? c.price ?? 0))
+      .filter(p => Number.isFinite(p) && p > 0)
+    const lowest = availPrices.length > 0 ? Math.min(...availPrices) : (row.lowestPrice ? Number(row.lowestPrice) : (row.price ? Number(row.price) : null))
+
+    const hasTagDrop = (row.tags || []).some(tag => {
+      const trackedLow = Number(tag.trackedLowestPrice)
+      const lastSeen = Number(tag.lastSeenPrice)
+      return Boolean(tag.lastPriceDropAt) ||
+        (Number.isFinite(trackedLow) && trackedLow > 0 && lowest && lowest < trackedLow) ||
+        (Number.isFinite(lastSeen) && lastSeen > 0 && lowest && lowest < lastSeen)
+    })
+
+    const hasAlertDrop = priceAlerts.some(a => 
+      (a.cruiseCode && a.cruiseCode === (row.code || row.id)) || 
+      (a.cruiseId && a.cruiseId === row.id)
+    )
+
+    return hasTagDrop || hasAlertDrop
+  }, [priceAlerts])
+
+  // Summary Metrics
   const summary = useMemo(() => {
     const totalTagged = pagination?.total ?? rows.length
     const employees = new Set(
       rows.flatMap(row => (row.tags || []).map(tag => tag.assignedTo).filter(Boolean))
     ).size
     const ships = new Set(rows.map(row => row.shipCode || row.ship).filter(Boolean)).size
-    const drops = rows.reduce((count, row) => {
-      const availPrices = (row.cabinCategories || [])
-        .filter(c => c.avlResult === "OK" || c.status === "Available" || (Number(c.avail ?? c.available ?? 0) > 0) || !c.avlResult)
-        .map(c => Number(c.cabinPrice ?? c.price ?? 0))
-        .filter(p => Number.isFinite(p) && p > 0)
-      const lowest = availPrices.length > 0 ? Math.min(...availPrices) : null
-
-      const hasDrop = (row.tags || []).some(tag => {
-        const trackedLow = Number(tag.trackedLowestPrice)
-        const lastSeen = Number(tag.lastSeenPrice)
-        return Boolean(tag.lastPriceDropAt) ||
-          (Number.isFinite(trackedLow) && lowest && lowest < trackedLow) ||
-          (Number.isFinite(lastSeen) && lowest && lowest < lastSeen)
-      })
-
-      return count + (hasDrop ? 1 : 0)
-    }, 0)
+    const drops = rows.reduce((count, row) => count + (checkRowHasDrop(row) ? 1 : 0), 0)
 
     return { totalTagged, employees, ships, drops }
-  }, [pagination, rows])
+  }, [pagination, rows, checkRowHasDrop])
 
-  const vendorOptions = useMemo(
-    () => lookupOptions.vendors,
-    [lookupOptions]
-  )
-
-  const shipOptions = useMemo(
-    () => lookupOptions.ships,
-    [lookupOptions]
-  )
+  const vendorOptions = useMemo(() => lookupOptions.vendors, [lookupOptions])
+  const shipOptions = useMemo(() => lookupOptions.ships, [lookupOptions])
 
   const setF = (key, value) => {
     setFilters(current => ({ ...current, [key]: value }))
@@ -331,7 +536,6 @@ export default function TaggedCruisesPage() {
       startDateFrom: "",
       endDateTo: ""
     }
-
     setFilters(empty)
     setAppliedFilters(empty)
     setPage(1)
@@ -341,42 +545,15 @@ export default function TaggedCruisesPage() {
     const next = !priceDropOnly
     setPriceDropOnly(next)
     if (next) {
-      const droppedIds = rows.filter(row => {
-        const availPrices = (row.cabinCategories || [])
-          .filter(c => c.avlResult === "OK" || c.status === "Available" || (Number(c.avail ?? c.available ?? 0) > 0) || !c.avlResult)
-          .map(c => Number(c.cabinPrice ?? c.price ?? 0))
-          .filter(p => Number.isFinite(p) && p > 0)
-        const lowest = availPrices.length > 0 ? Math.min(...availPrices) : null
-        return (row.tags || []).some(tag => {
-          const trackedLow = Number(tag.trackedLowestPrice)
-          const lastSeen = Number(tag.lastSeenPrice)
-          return Boolean(tag.lastPriceDropAt) ||
-            (Number.isFinite(trackedLow) && lowest && lowest < trackedLow) ||
-            (Number.isFinite(lastSeen) && lowest && lowest < lastSeen)
-        })
-      }).map(r => r.id)
+      const droppedIds = rows.filter(checkRowHasDrop).map(r => r.id)
       setExpandedRows(new Set(droppedIds))
     }
   }
 
   const displayedRows = useMemo(() => {
     if (!priceDropOnly) return rows
-    return rows.filter(row => {
-      const availPrices = (row.cabinCategories || [])
-        .filter(c => c.avlResult === "OK" || c.status === "Available" || (Number(c.avail ?? c.available ?? 0) > 0) || !c.avlResult)
-        .map(c => Number(c.cabinPrice ?? c.price ?? 0))
-        .filter(p => Number.isFinite(p) && p > 0)
-      const lowest = availPrices.length > 0 ? Math.min(...availPrices) : null
-
-      return (row.tags || []).some(tag => {
-        const trackedLow = Number(tag.trackedLowestPrice)
-        const lastSeen = Number(tag.lastSeenPrice)
-        return Boolean(tag.lastPriceDropAt) ||
-          (Number.isFinite(trackedLow) && lowest && lowest < trackedLow) ||
-          (Number.isFinite(lastSeen) && lowest && lowest < lastSeen)
-      })
-    })
-  }, [rows, priceDropOnly])
+    return rows.filter(checkRowHasDrop)
+  }, [rows, priceDropOnly, checkRowHasDrop])
 
   const toggleExpand = (id) => {
     setExpandedRows(current => {
@@ -391,52 +568,118 @@ export default function TaggedCruisesPage() {
   }
 
   return (
-    <div className="w-full min-h-screen bg-slate-50/50 px-3 sm:px-4 py-4 space-y-4">
-      {/* ── Top Header Banner ────────────────────────────────────────────── */}
+    <div className="w-full min-h-screen bg-slate-50/50 px-3 sm:px-4 py-4 space-y-4 font-sans">
+      {/* ── Top Header Banner with Live Radar Status & Controls ──────────────── */}
       <div className="relative overflow-hidden rounded-2xl border border-teal-200/80 bg-gradient-to-r from-teal-500/10 via-sky-500/5 to-teal-500/10 p-5 sm:p-6 shadow-xs">
         <div className="pointer-events-none absolute -right-12 -top-12 h-48 w-48 rounded-full bg-teal-500/10 blur-3xl" />
         <div className="pointer-events-none absolute -left-12 -bottom-12 h-48 w-48 rounded-full bg-sky-500/10 blur-3xl" />
 
-        <div className="relative z-10 space-y-2">
-          <div className="inline-flex items-center gap-2 rounded-full border border-teal-200/80 bg-white/80 backdrop-blur-xs px-3.5 py-1 text-[11px] font-bold text-teal-800 shadow-2xs">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-teal-600"></span>
-            </span>
-            <span>Employee Booking Queue · Tagged Inventory</span>
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex items-center gap-2 rounded-full border border-teal-200/80 bg-white/90 backdrop-blur-xs px-3.5 py-1 text-[11px] font-semibold text-teal-800 shadow-2xs">
+                <span className="relative flex h-2.5 w-2.5">
+                  {radarActive ? (
+                    <>
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-600" />
+                    </>
+                  ) : (
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-slate-400" />
+                  )}
+                </span>
+                <span>{radarActive ? "Live Price Radar: Active" : "Price Radar: Paused"}</span>
+                {radarActive && (
+                  <span className="text-[10px] text-teal-600 font-semibold bg-teal-50 px-1.5 py-0.2 rounded border border-teal-200 tabular-nums">
+                    sync in {radarCountdown}s
+                  </span>
+                )}
+              </div>
+
+              {priceAlerts.length > 0 && (
+                <button
+                  onClick={() => setShowAlertsPanel(true)}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-rose-300 bg-rose-50 px-3 py-1 text-[11px] font-bold text-rose-700 shadow-2xs hover:bg-rose-100 transition cursor-pointer animate-pulse"
+                >
+                  <Flame size={13} className="text-rose-600" />
+                  <span>{priceAlerts.length} Price Alert{priceAlerts.length > 1 ? "s" : ""}</span>
+                </button>
+              )}
+            </div>
+
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+              Tagged Cruises & Dynamic Price Drop Radar
+            </h1>
+            <p className="text-xs sm:text-sm font-normal text-slate-600 max-w-3xl leading-relaxed">
+              Real-time radar monitoring saved cruise tags, calculating live fare reductions against baselines, and triggering instant mentions for assigned team members.
+            </p>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
-            Tagged Cruises & Price Drop Radar
-          </h1>
-          <p className="text-xs sm:text-sm font-medium text-slate-600 max-w-3xl leading-relaxed">
-            Saved tags from cruise search, persisted in the database for team follow-up, price drop monitoring, and booking review.
-          </p>
+
+          {/* Quick Action Controls on Header */}
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <button
+              onClick={() => setRadarActive(!radarActive)}
+              className={`inline-flex items-center gap-1.5 h-9 px-3.5 rounded-xl border text-xs font-semibold transition shadow-2xs cursor-pointer ${
+                radarActive
+                  ? "bg-white text-emerald-800 border-emerald-300 hover:bg-emerald-50"
+                  : "bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200"
+              }`}
+              title={radarActive ? "Pause automated background radar" : "Resume real-time background price drop sync"}
+            >
+              <Radio size={14} className={radarActive ? "text-emerald-600 animate-pulse" : "text-slate-400"} />
+              <span>{radarActive ? "Radar: ON" : "Radar: PAUSED"}</span>
+            </button>
+
+            <button
+              onClick={() => setSoundEnabled(!soundEnabled)}
+              className={`inline-flex items-center justify-center h-9 w-9 rounded-xl border text-xs font-semibold transition shadow-2xs cursor-pointer ${
+                soundEnabled
+                  ? "bg-white text-teal-800 border-teal-300 hover:bg-teal-50"
+                  : "bg-slate-100 text-slate-400 border-slate-300"
+              }`}
+              title={soundEnabled ? "Mute audio alerts" : "Enable chime on price drop"}
+            >
+              {soundEnabled ? <Volume2 size={15} /> : <VolumeX size={15} />}
+            </button>
+
+            <button
+              onClick={handleRefreshAllTagged}
+              disabled={refreshingAll || rows.length === 0}
+              className="inline-flex items-center gap-1.5 h-9 px-4 rounded-xl bg-teal-700 hover:bg-teal-800 disabled:opacity-50 text-white text-xs font-semibold shadow-sm transition active:scale-95 cursor-pointer"
+            >
+              <RefreshCw size={13} className={refreshingAll ? "animate-spin" : ""} />
+              <span>{refreshingAll ? "Scanning Fleet…" : "Scan Fleet Now"}</span>
+            </button>
+          </div>
         </div>
 
+        {/* Metric Cards Grid */}
         <div className="relative z-10 mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="Tagged Cruises" value={summary.totalTagged} />
-          <StatCard label="Assigned Employees" value={summary.employees} />
-          <StatCard label="Ships Covered" value={summary.ships} />
+          <StatCard label="Tagged Cruises" value={summary.totalTagged} icon={Tag} />
+          <StatCard label="Assigned Employees" value={summary.employees} icon={Bell} />
+          <StatCard label="Ships Covered" value={summary.ships} icon={Sparkles} />
           <StatCard
             label="Price Drops Tracked"
             value={summary.drops}
             highlight={summary.drops > 0}
             active={priceDropOnly}
             onClick={togglePriceDropFilter}
-            subtext={summary.drops > 0 ? (priceDropOnly ? "Filtering drops (click to reset)" : "Click to view & expand drops") : null}
+            subtext={summary.drops > 0 ? (priceDropOnly ? "Filtering drops (click to show all)" : "Click to filter & expand drops") : "All fares steady"}
+            icon={Flame}
           />
         </div>
       </div>
 
+      {/* ── Filters Section ─────────────────────────────────────────────────── */}
       <div className="rounded-xl border border-slate-200/90 bg-white p-5 shadow-2xs space-y-4">
         <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           <div>
-            <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Tag</label>
+            <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Tag</label>
             <input
               list="tagged-tag-options"
               value={filters.tag}
               onChange={event => setF("tag", event.target.value)}
-              className="w-full h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition"
+              className="w-full h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs sm:text-sm font-normal text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition"
               placeholder="e.g. Priority"
             />
             <datalist id="tagged-tag-options">
@@ -447,11 +690,11 @@ export default function TaggedCruisesPage() {
           </div>
 
           <div>
-            <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Assigned to</label>
+            <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Assigned to</label>
             <select
               value={filters.assignedTo}
               onChange={event => setF("assignedTo", event.target.value)}
-              className="w-full h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition"
+              className="w-full h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs sm:text-sm font-normal text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition"
             >
               <option value="">All assignees</option>
               {lookupOptions.users.map(item => (
@@ -463,11 +706,11 @@ export default function TaggedCruisesPage() {
           </div>
 
           <div>
-            <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Vendor</label>
+            <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Vendor</label>
             <select
               value={filters.vendorName}
               onChange={event => setF("vendorName", event.target.value)}
-              className="w-full h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition"
+              className="w-full h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs sm:text-sm font-normal text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition"
             >
               <option value="">All vendors</option>
               {vendorOptions.map(item => (
@@ -479,11 +722,11 @@ export default function TaggedCruisesPage() {
           </div>
 
           <div>
-            <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Ship</label>
+            <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Ship</label>
             <select
               value={filters.ship}
               onChange={event => setF("ship", event.target.value)}
-              className="w-full h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition"
+              className="w-full h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs sm:text-sm font-normal text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition"
             >
               <option value="">All ships</option>
               {shipOptions.map(item => (
@@ -510,54 +753,64 @@ export default function TaggedCruisesPage() {
         <div className="flex flex-wrap items-center gap-3 pt-4 border-t border-slate-100">
           <button
             onClick={applyFilters}
-            className="inline-flex items-center gap-2 h-10 px-6 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white text-xs sm:text-sm font-bold shadow-sm shadow-emerald-700/20 active:scale-95 transition cursor-pointer"
+            className="inline-flex items-center gap-2 h-10 px-6 rounded-xl bg-teal-700 hover:bg-teal-800 text-white text-xs sm:text-sm font-semibold shadow-xs active:scale-95 transition cursor-pointer"
           >
             <Filter size={15} />
             <span>Apply Filters</span>
           </button>
           <button
             onClick={resetFilters}
-            className="inline-flex items-center gap-2 h-10 px-5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs sm:text-sm font-semibold active:scale-95 transition cursor-pointer"
+            className="inline-flex items-center gap-2 h-10 px-5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs sm:text-sm font-medium active:scale-95 transition cursor-pointer"
           >
             <RotateCcw size={14} />
             <span>Reset</span>
           </button>
           <button
             onClick={togglePriceDropFilter}
-            className={`inline-flex items-center gap-1.5 h-10 px-4 rounded-xl border text-xs sm:text-sm font-bold active:scale-95 transition cursor-pointer ${priceDropOnly
+            className={`inline-flex items-center gap-1.5 h-10 px-4 rounded-xl border text-xs sm:text-sm font-semibold active:scale-95 transition cursor-pointer ${
+              priceDropOnly
                 ? "bg-emerald-700 text-white border-emerald-800 shadow-sm"
                 : summary.drops > 0
                   ? "bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100"
                   : "bg-slate-50 text-slate-400 border-slate-200 opacity-60"
-              }`}
+            }`}
           >
             <Flame size={14} className={summary.drops > 0 ? "text-amber-500" : ""} />
             <span>{priceDropOnly ? "Showing Drops Only" : `Price Drops (${summary.drops})`}</span>
           </button>
+
+          {priceAlerts.length > 0 && (
+            <button
+              onClick={() => setShowAlertsPanel(true)}
+              className="ml-auto inline-flex items-center gap-1.5 h-10 px-4 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-800 text-xs sm:text-sm font-semibold transition cursor-pointer"
+            >
+              <Bell size={14} className="text-rose-600 animate-bounce" />
+              <span>Price Alerts Feed ({priceAlerts.length})</span>
+            </button>
+          )}
         </div>
       </div>
 
+      {/* ── Main Tagged Cruises List ────────────────────────────────────────── */}
       <div className="rounded-xl border border-slate-200/90 bg-white p-5 shadow-2xs">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div className="text-sm text-slate-500 font-medium">
             {loading ? "Loading tagged cruises..." : `${pagination?.total ?? rows.length} tagged cruise${(pagination?.total ?? rows.length) === 1 ? "" : "s"}`}
           </div>
-          <div className="text-sm text-slate-500 font-medium">
+          <div className="text-sm text-slate-500 font-medium tabular-nums">
             Page {pagination?.page ?? 1} of {pagination?.totalPages ?? 1}
           </div>
         </div>
 
         {loading ? (
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-12 text-center text-sm text-slate-500">
-            Loading tagged cruises...
-          </div>
+          <TaggedCruisesSkeleton count={4} />
         ) : error ? (
-          <div className="rounded-2xl border border-rose-200 bg-rose-50 px-6 py-12 text-center text-sm text-rose-700">
+          <div className="rounded-2xl border border-rose-200 bg-rose-50 px-6 py-12 text-center text-sm font-semibold text-rose-700">
             {error}
           </div>
         ) : rows.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-12 text-center text-sm text-slate-500">
-            No tagged cruises found for the current filters.
+          <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-12 text-center text-sm font-normal text-slate-500">
+            No tagged cruises found for the current filters. Tag cruises in "Search Cruise" to monitor price drops here.
           </div>
         ) : (
           <div className="grid gap-4">
@@ -566,90 +819,109 @@ export default function TaggedCruisesPage() {
                 .filter(c => c.avlResult === "OK" || c.status === "Available" || (Number(c.avail ?? c.available ?? 0) > 0) || !c.avlResult)
                 .map(c => Number(c.cabinPrice ?? c.price ?? 0))
                 .filter(p => Number.isFinite(p) && p > 0)
-              const lowest = availPrices.length > 0 ? Math.min(...availPrices) : null
+              const lowest = availPrices.length > 0 ? Math.min(...availPrices) : (row.lowestPrice ? Number(row.lowestPrice) : (row.price ? Number(row.price) : null))
 
               const trackedLow = (() => {
                 const vals = (row.tags || [])
                   .map(t => Number(t.trackedLowestPrice))
-                  .filter(v => Number.isFinite(v))
+                  .filter(v => Number.isFinite(v) && v > 0)
                 return vals.length > 0 ? Math.min(...vals) : null
               })()
 
               const lastSeen = (() => {
                 const vals = (row.tags || [])
                   .map(t => Number(t.lastSeenPrice))
-                  .filter(v => Number.isFinite(v))
+                  .filter(v => Number.isFinite(v) && v > 0)
                 return vals.length > 0 ? Math.min(...vals) : null
               })()
 
               const isExpanded = expandedRows.has(row.id)
               const cabinGroups = buildCabinGroups(row.cabinCategories || [])
 
-              // ── Price Drop Calculations ──
-              const dropTags = (row.tags || []).filter(t => t.lastPriceDropAt || (trackedLow && lowest && lowest < trackedLow))
-              const hasPriceDrop = dropTags.length > 0 || (trackedLow && lowest && lowest < trackedLow)
+              // Price Drop Calculations
+              const matchingAlert = priceAlerts.find(a => 
+                (a.cruiseCode && a.cruiseCode === (row.code || row.id)) || 
+                (a.cruiseId && a.cruiseId === row.id)
+              )
+
+              const dropTags = (row.tags || []).filter(t => 
+                Boolean(t.lastPriceDropAt) || 
+                (Number.isFinite(Number(t.trackedLowestPrice)) && Number(t.trackedLowestPrice) > 0 && lowest && lowest < Number(t.trackedLowestPrice)) ||
+                (Number.isFinite(Number(t.lastSeenPrice)) && Number(t.lastSeenPrice) > 0 && lowest && lowest < Number(t.lastSeenPrice))
+              )
+              const hasPriceDrop = dropTags.length > 0 || (trackedLow && lowest && lowest < trackedLow) || Boolean(matchingAlert)
               const primaryDropTag = dropTags[0] || (row.tags || [])[0]
 
-              const priceDiff = (trackedLow && lowest) ? lowest - trackedLow : null
-              const percentDiff = (priceDiff && trackedLow) ? Math.round((Math.abs(priceDiff) / trackedLow) * 100) : null
+              // Base comparison against tracked price at tag creation or server alert
+              const baselinePrice = trackedLow || (matchingAlert?.previousPrice ? Number(matchingAlert.previousPrice) : lastSeen)
+              const priceDiff = (baselinePrice && lowest) ? lowest - baselinePrice : null
+              const percentDiff = (priceDiff && baselinePrice) ? Math.round((Math.abs(priceDiff) / baselinePrice) * 100) : null
 
-              // ── Availability Trend Calculations ──
+              // Availability Trend Calculations
               const seatsAvailable = Number(row.seatsAvailable ?? 0)
               const totalCapacity = Number(row.totalCapacity ?? 0)
               const loadFactor = getLoadFactor(row)
               const isLowAvailability = seatsAvailable > 0 && seatsAvailable <= 15
               const isSoldOut = seatsAvailable === 0 && totalCapacity > 0
 
+              const shipName = row.ship || row.shipName || "Cruise Ship"
+
               return (
                 <div
                   key={row.id}
-                  className={`rounded-2xl border transition p-4.5 ${hasPriceDrop
-                    ? "border-emerald-300 bg-gradient-to-br from-emerald-50/40 via-white to-teal-50/20 shadow-xs"
-                    : "border-slate-200/80 bg-slate-50/40 hover:bg-slate-50"
-                    }`}
+                  className={`rounded-2xl border transition-all p-4 sm:p-5 duration-200 ${
+                    hasPriceDrop
+                      ? "border-emerald-300 bg-gradient-to-br from-emerald-50/40 via-white to-teal-50/20 shadow-xs ring-1 ring-emerald-400/30"
+                      : "border-slate-200/80 bg-slate-50/30 hover:bg-slate-50/70"
+                  }`}
                 >
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="space-y-2.5 flex-1">
+                    <div className="space-y-2 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">
+                        <span className="rounded-full bg-slate-900 px-3 py-0.5 text-xs font-semibold text-white">
                           {row.vendor?.name || "Vendor"}
                         </span>
-                        <span className="rounded-full bg-white border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700">
+                        <span className="rounded-full bg-white border border-slate-200 px-3 py-0.5 text-xs font-semibold text-slate-700">
                           {getCruiseDisplayId(row)}
                         </span>
-                        <span className={`rounded-full px-3 py-1 text-xs font-bold ${loadFactor >= 85
-                          ? "bg-rose-100 text-rose-800 border border-rose-200"
-                          : loadFactor >= 60
-                            ? "bg-amber-100 text-amber-800 border border-amber-200"
-                            : "bg-teal-100 text-teal-800 border border-teal-200"
-                          }`}>
+                        <span className={`rounded-full px-3 py-0.5 text-xs font-semibold ${
+                          loadFactor >= 85
+                            ? "bg-rose-100 text-rose-800 border border-rose-200"
+                            : loadFactor >= 60
+                              ? "bg-amber-100 text-amber-800 border border-amber-200"
+                              : "bg-teal-100 text-teal-800 border border-teal-200"
+                        }`}>
                           Load {loadFactor}%
                         </span>
                         {hasPriceDrop && (
-                          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-3 py-1 text-xs font-bold text-white shadow-xs animate-pulse">
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-3 py-0.5 text-xs font-semibold text-white shadow-xs animate-pulse">
                             <TrendingDown size={13} />
                             Price Drop Active
                           </span>
                         )}
                         {isLowAvailability && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 border border-rose-200 px-2.5 py-0.5 text-xs font-bold text-rose-700">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 border border-rose-200 px-2.5 py-0.5 text-xs font-semibold text-rose-700">
                             <AlertTriangle size={12} />
                             Only {seatsAvailable} cabins left!
                           </span>
                         )}
                       </div>
 
-                      <h2 className="text-xl font-bold text-slate-900 leading-snug">{row.package}</h2>
-                      <div className="text-sm font-medium text-slate-500">
-                        {row.ship} · {getCruiseRouteLabel(row)} · {row.nights}N
+                      <div>
+                        <h2 className="text-lg font-bold text-slate-900 leading-snug">
+                          {row.package || row.code}
+                        </h2>
+                        <div className="text-xs font-medium text-slate-600 mt-1">
+                          <span className="text-slate-900 font-bold">{shipName}</span> · {getCruiseRouteLabel(row)} · {row.nights}N
+                        </div>
                       </div>
 
-                      {/* Tag badges */}
-                      <div className="flex flex-wrap gap-2 pt-0.5">
+                      {/* Tag badges with Manage Tags action */}
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
                         {(row.tags || []).map(tag => (
                           <span
                             key={tag.id}
-                            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold shadow-2xs"
+                            className="inline-flex items-center gap-1.5 rounded-full px-3 py-0.5 text-xs font-semibold shadow-2xs"
                             style={{
                               background: `${tag.color || "#0d9488"}15`,
                               color: tag.color || "#0d9488",
@@ -663,108 +935,125 @@ export default function TaggedCruisesPage() {
                             ) : ""}
                           </span>
                         ))}
+
+                        <button
+                          onClick={() => setTagModalCruise(row)}
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-teal-700 hover:text-teal-900 bg-teal-50 hover:bg-teal-100 border border-teal-200/80 px-2.5 py-0.5 rounded-full transition cursor-pointer"
+                        >
+                          <Edit2 size={11} />
+                          <span>Manage Tags</span>
+                        </button>
                       </div>
                     </div>
 
-                    {/* ── Metric Grid & Comparison Columns ── */}
-                    <div className="grid gap-2.5 text-sm text-slate-600 sm:grid-cols-2 md:grid-cols-3 lg:min-w-[480px]">
+                    {/* Metric Grid & Comparison Columns */}
+                    <div className="grid gap-2 text-sm text-slate-600 sm:grid-cols-2 md:grid-cols-3 lg:min-w-[480px]">
                       <Metric label="Departure" value={formatDate(row.startDate)} icon={CalendarDays} />
                       <Metric label="Arrival" value={formatDate(row.endDate)} icon={CalendarDays} />
 
-                      {/* Availability Trend Column */}
-                      <div className="rounded-xl bg-white px-3.5 py-2.5 border border-slate-200/90 shadow-2xs flex flex-col justify-between">
-                        <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      {/* Availability Column */}
+                      <div className="rounded-xl bg-white px-3.5 py-2 border border-slate-200/90 shadow-2xs flex flex-col justify-between">
+                        <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                           <span>Avail. / Total Cabins</span>
                           {isLowAvailability ? (
-                            <span className="text-rose-600 font-extrabold">Tight</span>
+                            <span className="text-rose-600 font-bold">Tight</span>
                           ) : null}
                         </div>
                         <div className="mt-1 flex items-baseline justify-between">
-                          <span className="font-bold text-slate-900 text-sm">
+                          <span className="font-semibold text-slate-900 text-sm tabular-nums">
                             {seatsAvailable.toLocaleString()} / {totalCapacity.toLocaleString()}
                           </span>
-                          <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${isSoldOut
-                            ? "bg-rose-100 text-rose-700"
-                            : isLowAvailability
-                              ? "bg-rose-50 text-rose-600"
-                              : "bg-emerald-50 text-emerald-700"
-                            }`}>
+                          <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded ${
+                            isSoldOut
+                              ? "bg-rose-100 text-rose-700"
+                              : isLowAvailability
+                                ? "bg-rose-50 text-rose-600"
+                                : "bg-emerald-50 text-emerald-700"
+                          }`}>
                             {isSoldOut ? "Sold Out" : isLowAvailability ? "Low Avail" : "In Stock"}
                           </span>
                         </div>
                       </div>
 
-                      <Metric label="Current Lowest" value={lowest !== null ? formatCurrency(lowest, row.currency) : "WTL"} highlight />
+                      <Metric
+                        label="Current Lowest"
+                        value={lowest !== null ? formatCurrency(lowest, row.currency) : "WTL"}
+                        highlight
+                      />
 
                       <Metric
                         label="Tracked Low (at Tag)"
-                        value={trackedLow !== null ? formatCurrency(trackedLow, row.currency) : "--"}
+                        value={baselinePrice !== null ? formatCurrency(baselinePrice, row.currency) : "--"}
                       />
 
-                      {/* ── Price Comparison Column ── */}
-                      <div className="rounded-xl bg-white px-3.5 py-2.5 border border-slate-200/90 shadow-2xs flex flex-col justify-between">
-                        <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      {/* Price Comparison Column */}
+                      <div className="rounded-xl bg-white px-3.5 py-2 border border-slate-200/90 shadow-2xs flex flex-col justify-between">
+                        <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                           <TrendingDown size={12} />
                           <span>Price Comparison</span>
                         </div>
                         <div className="mt-1">
                           {priceDiff !== null ? (
                             priceDiff < 0 ? (
-                              <div className="flex items-center gap-1.5 text-emerald-700 font-extrabold text-xs">
+                              <div className="flex items-center gap-1.5 text-emerald-700 font-bold text-xs tabular-nums">
                                 <ArrowDownRight size={14} className="shrink-0" />
                                 <span>-{formatCurrency(Math.abs(priceDiff), row.currency)} ({percentDiff}%)</span>
                               </div>
                             ) : priceDiff > 0 ? (
-                              <div className="flex items-center gap-1.5 text-amber-700 font-bold text-xs">
+                              <div className="flex items-center gap-1.5 text-amber-700 font-semibold text-xs tabular-nums">
                                 <TrendingUp size={13} className="shrink-0" />
                                 <span>+{formatCurrency(priceDiff, row.currency)} (+{percentDiff}%)</span>
                               </div>
                             ) : (
-                              <div className="flex items-center gap-1 text-teal-700 font-bold text-xs">
+                              <div className="flex items-center gap-1 text-teal-700 font-semibold text-xs">
                                 <CheckCircle size={13} className="shrink-0" />
                                 <span>Steady Low</span>
                               </div>
                             )
                           ) : (
-                            <span className="text-xs font-semibold text-slate-400">Baseline Set</span>
+                            <span className="text-xs font-medium text-slate-400">Baseline Set</span>
                           )}
                         </div>
                       </div>
                     </div>
                   </div>
 
-                  {/* ── Prominent Price Drop & Team Mention Banner ── */}
+                  {/* Dynamic Price Drop & Team Mention Notification Banner */}
                   {hasPriceDrop && (
-                    <div className="mt-4 rounded-xl border border-emerald-300 bg-gradient-to-r from-emerald-50 via-teal-50/50 to-emerald-50 p-3.5 text-sm text-emerald-950 shadow-2xs">
+                    <div className="mt-4 rounded-xl border border-emerald-300 bg-gradient-to-r from-emerald-50/80 via-teal-50/40 to-emerald-50/80 p-3.5 text-sm text-emerald-950 shadow-2xs">
                       <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-8.5 w-8.5 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-xs">
+                        <div className="flex items-start sm:items-center gap-3">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-600 text-white shadow-xs">
                             <TrendingDown size={18} />
                           </div>
                           <div>
                             <div className="font-bold text-slate-900 flex flex-wrap items-center gap-2">
-                              <span>🔥 Price Drop Confirmed!</span>
+                              <span className="inline-flex items-center gap-1.5">
+                                <Flame size={16} className="text-amber-500 shrink-0" />
+                                <span>Price Drop Confirmed on {shipName}!</span>
+                              </span>
                               {priceDiff && priceDiff < 0 ? (
-                                <span className="rounded-full bg-emerald-200/90 px-2.5 py-0.5 text-xs font-black text-emerald-900">
+                                <span className="rounded-full bg-emerald-200/90 px-2.5 py-0.5 text-xs font-bold text-emerald-950 border border-emerald-300 shadow-2xs tabular-nums">
                                   Save {formatCurrency(Math.abs(priceDiff), row.currency)} ({percentDiff}% off)
                                 </span>
                               ) : null}
                             </div>
-                            <div className="text-xs text-slate-700 mt-0.5">
+                            <div className="text-xs text-slate-700 mt-1 flex flex-wrap items-center gap-2">
                               {primaryDropTag?.assignedTo ? (
-                                <span className="font-bold text-teal-900 bg-white/80 px-2 py-0.5 rounded border border-teal-200/60 mr-2">
-                                  🔔 Mention: @{primaryDropTag.assignedTo}
+                                <span className="inline-flex items-center gap-1 font-semibold text-teal-950 bg-white px-2 py-0.5 rounded-md border border-teal-300 shadow-2xs">
+                                  <Bell size={11} className="text-teal-700 shrink-0" />
+                                  <span>Mention: @{primaryDropTag.assignedTo}</span>
                                 </span>
                               ) : null}
                               <span>
                                 Tag <strong>"{primaryDropTag?.label || "Priority"}"</strong> hit a new low of{" "}
-                                <strong className="text-emerald-800 font-bold">
+                                <strong className="text-emerald-800 font-bold tabular-nums">
                                   {formatCurrency(lowest || primaryDropTag?.trackedLowestPrice, row.currency)}
                                 </strong>
                               </span>
                               {primaryDropTag?.lastPriceDropAt ? (
-                                <span className="text-slate-500 text-[11px] ml-1.5">
-                                  (Recorded on {formatDate(primaryDropTag.lastPriceDropAt)})
+                                <span className="text-slate-500 text-[11px]">
+                                  · Recorded {formatDate(primaryDropTag.lastPriceDropAt)}
                                 </span>
                               ) : null}
                             </div>
@@ -774,13 +1063,14 @@ export default function TaggedCruisesPage() {
                     </div>
                   )}
 
+                  {/* Notes List */}
                   {(row.tags || []).some(tag => tag.note) ? (
-                    <div className="mt-3.5 grid gap-2.5 md:grid-cols-2">
+                    <div className="mt-3 grid gap-2 md:grid-cols-2">
                       {(row.tags || [])
                         .filter(tag => tag.note)
                         .map(tag => (
-                          <div key={`${tag.id}-note`} className="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs text-slate-600 shadow-2xs">
-                            <span className="font-bold text-slate-900">{tag.label}</span>
+                          <div key={`${tag.id}-note`} className="rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs text-slate-600 shadow-2xs">
+                            <span className="font-semibold text-slate-900">{tag.label}</span>
                             {tag.assignedTo ? ` · @${tag.assignedTo}` : ""}: <span className="text-slate-700">{tag.note}</span>
                           </div>
                         ))}
@@ -795,20 +1085,23 @@ export default function TaggedCruisesPage() {
                     const isError = job?.status === "error" || job?.status === "rate_limited"
                     const remainingSec = isRunning ? Math.ceil((job.remaining ?? 0) / 1000) : isCooldown ? (job.retryAfter ?? 0) : 0
                     return (
-                      <div className="mt-3.5 flex flex-wrap items-center gap-3">
+                      <div className="mt-3 flex flex-wrap items-center gap-3">
                         {isRunning ? (
-                          <span className="text-xs font-semibold text-teal-700 flex items-center gap-1.5">
+                          <span className="text-xs font-medium text-teal-700 flex items-center gap-1.5 bg-teal-50 px-3 py-1.5 rounded-xl border border-teal-200">
                             <span className="animate-spin h-3.5 w-3.5 border-2 border-teal-600 border-t-transparent rounded-full" />
-                            Fetching live data… ~{fmtSeconds(remainingSec)} remaining
+                            Scanning live fares on {shipName}… ~{fmtSeconds(remainingSec)} remaining
                           </span>
                         ) : isCooldown ? (
-                          <span className="text-xs text-slate-500 font-medium">Data refreshed — next check in {fmtSeconds(remainingSec)}</span>
+                          <span className="text-xs text-slate-500 font-medium bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
+                            Fares up-to-date · next check in {fmtSeconds(remainingSec)}
+                          </span>
                         ) : (
                           <button
                             onClick={() => handleGetFullDetails(row)}
-                            className="rounded-xl border border-teal-600 bg-teal-50 px-3.5 py-1.5 text-xs font-bold text-teal-800 hover:bg-teal-100 active:scale-95 transition cursor-pointer shadow-2xs"
+                            className="rounded-xl border border-teal-600 bg-teal-50 px-3.5 py-1.5 text-xs font-semibold text-teal-800 hover:bg-teal-100 active:scale-95 transition cursor-pointer shadow-2xs flex items-center gap-1.5"
                           >
-                            Refresh Live Pricing & Cabins
+                            <RefreshCw size={12} />
+                            <span>Refresh Live Pricing & Cabins</span>
                           </button>
                         )}
                         {isError && (
@@ -820,19 +1113,19 @@ export default function TaggedCruisesPage() {
                     )
                   })()}
 
-                  {/* ── Cabin Categories Expanded Grid with Availability & Price Comparison ── */}
+                  {/* Cabin Categories Expanded Grid with Dynamic Drop Highlighting */}
                   {cabinGroups.length > 0 && (
-                    <div className="mt-4 pt-3 border-t border-slate-200/80">
+                    <div className="mt-3.5 pt-3 border-t border-slate-200/80">
                       <button
                         onClick={() => toggleExpand(row.id)}
-                        className="flex items-center gap-2 text-xs sm:text-sm font-bold text-slate-700 hover:text-slate-900 cursor-pointer"
+                        className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 hover:text-slate-900 cursor-pointer"
                       >
-                        {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                        {isExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
                         <span>{isExpanded ? "Hide" : "Show"} cabin categories ({(row.cabinCategories || []).length})</span>
                       </button>
 
                       {isExpanded && (
-                        <div className="mt-3 grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
+                        <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                           {cabinGroups.map(group => {
                             const groupPrices = group.categories
                               .map(c => Number(c.cabinPrice || c.price || 0))
@@ -844,9 +1137,9 @@ export default function TaggedCruisesPage() {
                               <div key={group.group} className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-2xs">
                                 {/* Header with From - To Range */}
                                 <div className="mb-2.5 flex items-center justify-between pb-2 border-b border-slate-100">
-                                  <span className="text-xs font-black uppercase tracking-wider text-slate-800">{group.group}</span>
+                                  <span className="text-xs font-bold uppercase tracking-wider text-slate-800">{group.group}</span>
                                   {groupMin !== null ? (
-                                    <span className="rounded-full bg-teal-50 border border-teal-200/80 px-2.5 py-0.5 text-xs font-bold text-teal-800 shadow-2xs">
+                                    <span className="rounded-full bg-teal-50 border border-teal-200/80 px-2.5 py-0.5 text-xs font-semibold text-teal-800 shadow-2xs tabular-nums">
                                       {groupMax && groupMax > groupMin
                                         ? `from ${formatCurrency(groupMin, row.currency)} to ${formatCurrency(groupMax, row.currency)}`
                                         : `from ${formatCurrency(groupMin, row.currency)}`}
@@ -856,10 +1149,10 @@ export default function TaggedCruisesPage() {
                                   )}
                                 </div>
 
-                                {/* 3 Distinct Column Headers */}
-                                <div className="grid grid-cols-12 items-center text-[10px] font-bold uppercase tracking-wider text-slate-400 pb-2 px-1.5 border-b border-slate-100 select-none">
+                                {/* Column Headers */}
+                                <div className="grid grid-cols-12 items-center text-[10px] font-semibold uppercase tracking-wider text-slate-400 pb-2 px-1.5 border-b border-slate-100 select-none">
                                   <span className="col-span-4">Category</span>
-                                  <span className="col-span-4 text-right pr-2">New Price</span>
+                                  <span className="col-span-4 text-right pr-2">Live Fare</span>
                                   <span className="col-span-4 text-right">Avail</span>
                                 </div>
 
@@ -875,64 +1168,69 @@ export default function TaggedCruisesPage() {
                                     return (
                                       <div
                                         key={cat.code}
-                                        className={`grid grid-cols-12 items-center text-xs py-2 px-1.5 border-b border-slate-50 last:border-0 rounded-lg transition-colors ${isCruiseDroppedPrice
+                                        className={`grid grid-cols-12 items-center text-xs py-1.5 px-1.5 border-b border-slate-50 last:border-0 rounded-lg transition-colors ${
+                                          isCruiseDroppedPrice
                                             ? "bg-emerald-100/90 border-emerald-400 shadow-xs ring-1 ring-emerald-400/60"
                                             : isLowestInGroup
                                               ? "bg-emerald-50/70 border-emerald-200/80 shadow-2xs"
                                               : "hover:bg-slate-50/70"
-                                          }`}
+                                        }`}
                                       >
                                         {/* Col 1: Category */}
                                         <div className="col-span-4 flex items-center gap-1.5 min-w-0">
-                                          <span className={`font-bold truncate ${isCruiseDroppedPrice
-                                              ? "text-emerald-950 font-black"
+                                          <span className={`font-semibold truncate ${
+                                            isCruiseDroppedPrice
+                                              ? "text-emerald-950 font-bold"
                                               : isLowestInGroup
-                                                ? "text-emerald-950 font-black"
+                                                ? "text-emerald-950 font-bold"
                                                 : "text-slate-900"
-                                            }`}>
+                                          }`}>
                                             {cat.code}
                                           </span>
                                           {isCruiseDroppedPrice ? (
-                                            <span className="text-[9px] font-black text-emerald-950 bg-emerald-300/90 border border-emerald-500 px-1.5 py-0.2 rounded shrink-0 animate-pulse">
-                                              🔥 Drop
+                                            <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-950 bg-emerald-300/90 border border-emerald-500 px-1.5 py-0.2 rounded shrink-0 animate-pulse">
+                                              <TrendingDown size={11} className="shrink-0" />
+                                              <span>Drop</span>
                                             </span>
                                           ) : isLowestInGroup ? (
-                                            <span className="text-[9px] font-extrabold text-emerald-800 bg-emerald-100/90 border border-emerald-300 px-1 py-0.2 rounded shrink-0">
+                                            <span className="text-[9px] font-semibold text-emerald-800 bg-emerald-100/90 border border-emerald-300 px-1 py-0.2 rounded shrink-0">
                                               Lowest
                                             </span>
                                           ) : null}
                                         </div>
 
-                                        {/* Col 2: Dedicated New Price Column */}
+                                        {/* Col 2: Live Fare */}
                                         <div className="col-span-4 text-right pr-2">
                                           {catPrice > 0 ? (
-                                            <span className={`text-xs ${isCruiseDroppedPrice
-                                                ? "font-black text-emerald-950 bg-emerald-200/90 px-1.5 py-0.5 rounded border border-emerald-400"
+                                            <span className={`text-xs tabular-nums ${
+                                              isCruiseDroppedPrice
+                                                ? "font-bold text-emerald-950 bg-emerald-200/90 px-1.5 py-0.5 rounded border border-emerald-400"
                                                 : isLowestInGroup
-                                                  ? "font-black text-emerald-800"
-                                                  : "font-bold text-slate-900"
-                                              }`}>
+                                                  ? "font-bold text-emerald-800"
+                                                  : "font-semibold text-slate-900"
+                                            }`}>
                                               {formatCurrency(catPrice, row.currency)}
                                             </span>
                                           ) : (
-                                            <span className="text-[11px] text-slate-400 font-semibold">
+                                            <span className="text-[11px] text-slate-400 font-medium">
                                               {cat.avlResult === "WTL" ? "WTL" : cat.avlResult || cat.status || "N/A"}
                                             </span>
                                           )}
                                         </div>
 
-                                        {/* Col 3: Availability Column */}
+                                        {/* Col 3: Availability */}
                                         <div className="col-span-4 text-right">
                                           {isCatSoldOut ? (
                                             <span className="inline-flex items-center text-[10px] font-semibold text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200/80 whitespace-nowrap">
                                               0 avail (WTL)
                                             </span>
                                           ) : isCatLow ? (
-                                            <span className="inline-flex items-center text-[10px] font-bold text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/80 whitespace-nowrap">
-                                              ⚡ {catAvail} left
+                                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/80 whitespace-nowrap">
+                                              <Zap size={11} className="text-amber-600 shrink-0" />
+                                              <span>{catAvail} left</span>
                                             </span>
                                           ) : (
-                                            <span className="text-[11px] font-medium text-slate-500 whitespace-nowrap">
+                                            <span className="text-[11px] font-normal text-slate-500 whitespace-nowrap tabular-nums">
                                               {catAvail} avail.
                                             </span>
                                           )}
@@ -954,9 +1252,10 @@ export default function TaggedCruisesPage() {
           </div>
         )}
 
+        {/* Pagination Controls */}
         <div className="mt-5 flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-slate-200/80">
           <div className="text-xs text-slate-500 font-medium">
-            Showing page <strong className="text-slate-900 font-bold">{pagination?.page ?? 1}</strong> of <strong className="text-slate-900 font-bold">{pagination?.totalPages ?? 1}</strong>
+            Showing page <strong className="text-slate-900 font-semibold">{pagination?.page ?? 1}</strong> of <strong className="text-slate-900 font-semibold">{pagination?.totalPages ?? 1}</strong>
           </div>
 
           <div className="flex items-center gap-2">
@@ -979,33 +1278,158 @@ export default function TaggedCruisesPage() {
           </div>
         </div>
       </div>
+
+      {/* ── Slide-Over / Modal: Price Alerts Feed ────────────────────────────── */}
+      {showAlertsPanel && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-2 sm:p-4 md:p-6 animate-in fade-in duration-200 font-sans">
+          <div className="relative w-full max-w-2xl rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[85vh] min-w-0">
+            <div className="flex items-center justify-between p-4 sm:px-6 sm:py-4 border-b border-slate-100 bg-slate-50/50 gap-3">
+              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-rose-600 text-white shadow-xs">
+                  <Flame size={18} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-sm sm:text-base font-bold text-slate-900 truncate">Dynamic Price Alerts Feed</h3>
+                  <p className="text-xs font-normal text-slate-500 truncate">Live database triggers from automated and manual fleet price checks</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowAlertsPanel(false)}
+                className="h-8 w-8 shrink-0 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-3 flex-1 min-w-0">
+              {priceAlerts.length === 0 ? (
+                <div className="text-center py-12 text-slate-500 space-y-2">
+                  <CheckCheck size={36} className="mx-auto text-emerald-500 opacity-80" />
+                  <div className="font-semibold text-sm text-slate-800">All Caught Up!</div>
+                  <div className="text-xs text-slate-500 font-normal">No unread price drop alerts right now. The radar is actively monitoring.</div>
+                </div>
+              ) : (
+                priceAlerts.map(alert => {
+                  const saved = alert.previousPrice && alert.currentPrice ? alert.previousPrice - alert.currentPrice : null
+                  const percent = saved && alert.previousPrice ? Math.round((saved / alert.previousPrice) * 100) : null
+
+                  return (
+                    <div
+                      key={alert.id}
+                      className="rounded-xl border border-teal-200/80 bg-gradient-to-r from-emerald-50/50 via-teal-50/30 to-white p-4 transition shadow-2xs hover:shadow-xs"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="space-y-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-bold text-sm text-slate-900 truncate">
+                              {alert.ship || alert.cruisePackage || alert.cruiseCode}
+                            </span>
+                            {percent && percent > 0 ? (
+                              <span className="rounded-full bg-emerald-200 px-2 py-0.5 text-[10px] font-bold text-emerald-950 border border-emerald-300">
+                                {percent}% OFF
+                              </span>
+                            ) : null}
+                          </div>
+
+                          <div className="text-xs text-slate-600 font-medium">
+                            {alert.vendor?.name || "Vendor"} · {alert.cruisePackage || alert.cruiseCode}
+                          </div>
+
+                          <div className="flex items-center gap-2 pt-1 text-xs tabular-nums">
+                            <span className="line-through text-slate-400">
+                              {formatCurrency(alert.previousPrice, alert.currency)}
+                            </span>
+                            <ArrowDownRight size={14} className="text-emerald-600" />
+                            <span className="font-bold text-emerald-800 text-sm">
+                              {formatCurrency(alert.currentPrice, alert.currency)}
+                            </span>
+                            {saved && saved > 0 && (
+                              <span className="font-semibold text-emerald-700">
+                                (Save {formatCurrency(saved, alert.currency)})
+                              </span>
+                            )}
+                          </div>
+
+                          {alert.tag?.assignedTo && (
+                            <div className="inline-flex items-center gap-1 text-[11px] font-semibold text-teal-900 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded w-fit mt-1">
+                              <Bell size={11} className="text-teal-700 shrink-0" />
+                              <span>Mention: @{alert.tag.assignedTo} · Tag: {alert.tag.label}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        <button
+                          onClick={() => handleMarkAlertRead(alert.id)}
+                          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition shadow-2xs shrink-0 cursor-pointer"
+                        >
+                          <Check size={13} />
+                          <span>Mark Read</span>
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+
+            <div className="px-6 py-3 border-t border-slate-100 bg-slate-50/50 flex justify-end">
+              <button
+                onClick={() => setShowAlertsPanel(false)}
+                className="h-9 px-4 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: Manage Cruise Tags ───────────────────────────────────────── */}
+      {tagModalCruise && (
+        <TagManagementModal
+          row={tagModalCruise}
+          assigneeOptions={tagDirectory.assignees}
+          saving={savingTag}
+          onClose={() => setTagModalCruise(null)}
+          onCreate={payload => handleCreateTag(tagModalCruise.id, payload)}
+          onUpdate={(tagId, payload) => handleUpdateTag(tagModalCruise.id, tagId, payload)}
+          onDelete={tagId => handleDeleteTag(tagModalCruise.id, tagId)}
+        />
+      )}
     </div>
   )
 }
 
-function StatCard({ label, value, highlight = false, active = false, onClick, subtext }) {
+function StatCard({ label, value, highlight = false, active = false, onClick, subtext, icon: Icon }) {
   return (
     <div
       onClick={onClick}
-      className={`rounded-2xl border backdrop-blur-xs p-4 sm:p-5 shadow-2xs transition-all ${onClick ? "cursor-pointer active:scale-98" : ""
-        } ${active
-          ? "border-emerald-500 bg-emerald-50/90 ring-2 ring-emerald-500/40 shadow-xs"
+      className={`group relative overflow-hidden rounded-2xl border backdrop-blur-xs p-4 sm:p-5 shadow-2xs transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md ${
+        onClick ? "cursor-pointer active:scale-98" : ""
+      } ${
+        active
+          ? "border-emerald-500 bg-gradient-to-br from-white via-emerald-50/70 to-emerald-100/40 ring-2 ring-emerald-500/40 shadow-xs"
           : highlight
-            ? "border-emerald-300 bg-gradient-to-br from-emerald-50/70 via-white to-teal-50/50 hover:border-emerald-400 hover:shadow-xs"
-            : "border-teal-200/80 bg-gradient-to-br from-white via-teal-50/40 to-teal-100/30 hover:border-teal-300 hover:shadow-xs"
-        }`}
+            ? "border-emerald-300 bg-gradient-to-br from-white via-emerald-50/40 to-teal-50/50 hover:border-emerald-400 hover:shadow-emerald-500/10"
+            : "border-teal-200/80 bg-gradient-to-br from-white via-teal-50/30 to-teal-100/20 hover:border-teal-300 hover:shadow-teal-500/10"
+      }`}
     >
-      <div className="flex items-center justify-between">
-        <div className="text-[10px] font-extrabold uppercase tracking-wider text-teal-700/80">{label}</div>
+      <div className="pointer-events-none absolute -right-6 -top-6 h-20 w-20 rounded-full bg-teal-500/10 blur-xl" />
+
+      <div className="relative z-10 flex items-center justify-between gap-2">
+        <div className="text-[11px] font-semibold uppercase tracking-wider text-teal-800/90 truncate flex items-center gap-1.5">
+          {Icon && <Icon size={13} className="text-teal-600" />}
+          <span>{label}</span>
+        </div>
         {active && (
-          <span className="text-[9px] font-black uppercase text-emerald-800 bg-emerald-200/90 px-1.5 py-0.2 rounded-full">
+          <span className="text-[9px] font-bold uppercase text-emerald-800 bg-emerald-200/90 px-2 py-0.5 rounded-full shadow-2xs">
             Active
           </span>
         )}
       </div>
-      <div className="mt-1.5 text-2xl font-black text-teal-950 font-mono tracking-tight">{value}</div>
+      <div className="relative z-10 mt-2 text-2xl sm:text-3xl font-bold text-teal-950 tabular-nums tracking-tight">{value}</div>
       {subtext && (
-        <div className="mt-1 text-[10px] font-bold text-emerald-700 truncate">{subtext}</div>
+        <div className="relative z-10 mt-1.5 text-[11px] font-semibold text-emerald-700 truncate">{subtext}</div>
       )}
     </div>
   )
@@ -1013,13 +1437,14 @@ function StatCard({ label, value, highlight = false, active = false, onClick, su
 
 function Metric({ label, value, icon: Icon, highlight = false }) {
   return (
-    <div className={`rounded-xl px-3.5 py-2.5 border shadow-2xs flex flex-col justify-between ${highlight ? "bg-teal-50/70 border-teal-200/80" : "bg-white border-slate-200/90"
-      }`}>
-      <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+    <div className={`rounded-xl px-3.5 py-2 border shadow-2xs flex flex-col justify-between ${
+      highlight ? "bg-teal-50/70 border-teal-200/80" : "bg-white border-slate-200/90"
+    }`}>
+      <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
         {Icon ? <Icon size={12} /> : null}
         <span>{label}</span>
       </div>
-      <div className={`mt-1 font-bold text-sm ${highlight ? "text-teal-950 text-base" : "text-slate-900"}`}>{value}</div>
+      <div className={`mt-1 font-semibold text-sm tabular-nums ${highlight ? "text-teal-950 text-base font-bold" : "text-slate-900"}`}>{value}</div>
     </div>
   )
 }
@@ -1027,13 +1452,268 @@ function Metric({ label, value, icon: Icon, highlight = false }) {
 function DateField({ label, value, onChange }) {
   return (
     <div>
-      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">{label}</label>
+      <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">{label}</label>
       <input
         type="date"
         value={value}
         onChange={event => onChange(event.target.value)}
-        className="w-full h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition"
+        className="w-full h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs sm:text-sm font-normal text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition"
       />
+    </div>
+  )
+}
+
+function TagManagementModal({
+  row,
+  assigneeOptions = [],
+  saving = false,
+  onClose,
+  onCreate,
+  onUpdate,
+  onDelete
+}) {
+  const defaultColor = "#0d9488"
+  const [editingTagId, setEditingTagId] = useState(null)
+  const [form, setForm] = useState({
+    label: "Employee Booking",
+    assignedTo: "",
+    note: "",
+    color: defaultColor,
+    trackedLowestPrice: ""
+  })
+  const tags = row.tags || []
+
+  const resetForm = () => {
+    setEditingTagId(null)
+    setForm({
+      label: "Employee Booking",
+      assignedTo: "",
+      note: "",
+      color: defaultColor,
+      trackedLowestPrice: ""
+    })
+  }
+
+  const startEdit = (tagItem) => {
+    setEditingTagId(tagItem.id)
+    setForm({
+      label: tagItem.label || "",
+      assignedTo: tagItem.assignedTo || "",
+      note: tagItem.note || "",
+      color: tagItem.color || defaultColor,
+      trackedLowestPrice: tagItem.trackedLowestPrice ? String(tagItem.trackedLowestPrice) : ""
+    })
+  }
+
+  const submit = async () => {
+    if (!form.label.trim()) return
+
+    const payload = {
+      label: form.label.trim(),
+      assignedTo: form.assignedTo.trim(),
+      note: form.note.trim(),
+      color: form.color,
+      ...(form.trackedLowestPrice ? { trackedLowestPrice: Number(form.trackedLowestPrice) } : {})
+    }
+
+    if (editingTagId) {
+      await onUpdate(editingTagId, payload)
+    } else {
+      await onCreate(payload)
+    }
+
+    resetForm()
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-2 sm:p-4 md:p-6 animate-in fade-in duration-200 font-sans">
+      <div className="relative w-full max-w-2xl rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh] min-w-0">
+        <div className="flex items-start justify-between p-4 sm:px-6 sm:py-4 border-b border-slate-100 bg-slate-50/50 gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="text-[11px] font-semibold text-teal-800 uppercase tracking-wider bg-teal-50 border border-teal-200/80 px-2 py-0.5 rounded-full inline-block">Cruise Tag & Mention Management</div>
+            <h2 className="text-sm sm:text-base md:text-lg font-bold text-slate-900 mt-1 break-words leading-snug">{row.package || row.code}</h2>
+            <div className="text-xs text-slate-500 font-medium truncate mt-0.5">{row.ship} · {getCruiseDisplayId(row)}</div>
+          </div>
+          <button
+            onClick={onClose}
+            className="h-8 w-8 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer shrink-0"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="p-4 sm:p-6 overflow-y-auto grid md:grid-cols-2 gap-4 sm:gap-6 flex-1 min-w-0">
+          {/* Left Column: Existing Tags */}
+          <div className="space-y-3 min-w-0">
+            <div className="text-xs font-semibold text-slate-800 uppercase tracking-wider">Active Tags ({tags.length})</div>
+            {tags.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-slate-300 p-6 text-center text-xs text-slate-500 font-normal">
+                No tags assigned to this cruise yet.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {tags.map(tagItem => (
+                  <div
+                    key={tagItem.id}
+                    className="rounded-xl border border-slate-200 p-3.5 bg-slate-50/50 hover:bg-slate-50 transition shadow-2xs space-y-2"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span
+                        className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold"
+                        style={{
+                          background: `${tagItem.color || defaultColor}20`,
+                          color: tagItem.color || defaultColor,
+                          border: `1px solid ${tagItem.color || defaultColor}40`
+                        }}
+                      >
+                        <Tag size={11} />
+                        {tagItem.label}
+                      </span>
+
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => startEdit(tagItem)}
+                          className="h-7 w-7 rounded-lg flex items-center justify-center text-slate-600 hover:bg-white hover:text-slate-900 border border-transparent hover:border-slate-200 transition cursor-pointer"
+                          title="Edit tag"
+                        >
+                          <Edit2 size={13} />
+                        </button>
+                        <button
+                          onClick={() => onDelete(tagItem.id)}
+                          className="h-7 w-7 rounded-lg flex items-center justify-center text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition cursor-pointer"
+                          title="Delete tag"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {tagItem.assignedTo && (
+                      <div className="text-xs font-semibold text-teal-800 flex items-center gap-1">
+                        <Bell size={11} className="text-teal-600" />
+                        <span>Mention: @{tagItem.assignedTo}</span>
+                      </div>
+                    )}
+
+                    {tagItem.note && (
+                      <div className="text-xs text-slate-600 font-normal bg-white p-2 rounded-lg border border-slate-100">
+                        {tagItem.note}
+                      </div>
+                    )}
+
+                    {tagItem.trackedLowestPrice && (
+                      <div className="text-[11px] text-slate-500 font-medium tabular-nums">
+                        Tracked Baseline: <strong>{formatCurrency(tagItem.trackedLowestPrice, row.currency)}</strong>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Right Column: Form */}
+          <div className="space-y-3.5 bg-slate-50/70 p-4 rounded-xl border border-slate-200/80">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-800 uppercase tracking-wider">
+                {editingTagId ? "Edit Tag" : "Add New Tag"}
+              </span>
+              {editingTagId && (
+                <button
+                  onClick={resetForm}
+                  className="text-xs text-slate-500 hover:text-slate-800 underline cursor-pointer"
+                >
+                  Cancel Edit
+                </button>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Tag Label *</label>
+              <input
+                value={form.label}
+                onChange={e => setForm(f => ({ ...f, label: e.target.value }))}
+                className="w-full h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-normal text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600"
+                placeholder="e.g. Employee Booking, VIP"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Assign / Mention User</label>
+              <select
+                value={form.assignedTo}
+                onChange={e => setForm(f => ({ ...f, assignedTo: e.target.value }))}
+                className="w-full h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-normal text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600"
+              >
+                <option value="">No assignee</option>
+                {assigneeOptions.map(u => (
+                  <option key={u} value={u}>
+                    {u}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Baseline Price / Threshold (Optional)</label>
+              <input
+                type="number"
+                value={form.trackedLowestPrice}
+                onChange={e => setForm(f => ({ ...f, trackedLowestPrice: e.target.value }))}
+                className="w-full h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-normal text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 tabular-nums"
+                placeholder="e.g. 2600"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Tag Color</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={form.color}
+                  onChange={e => setForm(f => ({ ...f, color: e.target.value }))}
+                  className="h-8 w-12 rounded cursor-pointer border border-slate-200 bg-white p-0.5"
+                />
+                <span className="text-xs font-mono text-slate-600">{form.color}</span>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Note / Instructions</label>
+              <textarea
+                value={form.note}
+                onChange={e => setForm(f => ({ ...f, note: e.target.value }))}
+                className="w-full h-20 rounded-lg border border-slate-200 bg-white p-2.5 text-xs font-normal text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 resize-none"
+                placeholder="Add special booking notes or instructions..."
+              />
+            </div>
+
+            <button
+              onClick={submit}
+              disabled={saving || !form.label.trim()}
+              className="w-full h-9 rounded-xl bg-teal-700 hover:bg-teal-800 disabled:opacity-50 text-white text-xs font-semibold shadow-xs transition active:scale-98 cursor-pointer flex items-center justify-center gap-1.5"
+            >
+              {saving ? (
+                <span className="animate-spin h-3.5 w-3.5 border-2 border-white border-t-transparent rounded-full" />
+              ) : editingTagId ? (
+                <Check size={14} />
+              ) : (
+                <Plus size={14} />
+              )}
+              <span>{editingTagId ? "Update Tag" : "Add Tag"}</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="px-6 py-3 border-t border-slate-100 bg-slate-50/50 flex justify-end">
+          <button
+            onClick={onClose}
+            className="h-9 px-4 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+          >
+            Done
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

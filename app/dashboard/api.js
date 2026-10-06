@@ -273,28 +273,43 @@ export async function triggerVendorScrapeFetch(vendorKey, options = {}) {
 
 export async function refreshCruiseCabins(cruiseCode, vendorKey) {
   try {
+    // 1. Pre-flight check: if scraper already reported in_progress or finished, resolve directly without issuing a duplicate POST that triggers 409
+    try {
+      const activeStatus = await getCruiseRefreshStatus(cruiseCode);
+      if (activeStatus && (activeStatus.status === "in_progress" || activeStatus.status === "completed")) {
+        return { ...activeStatus, httpStatus: 200 };
+      }
+    } catch {
+      // Continue to POST if status check fails
+    }
+
     const response = await fetch(
       getScraperEndpoint(`/api/cruises/${encodeURIComponent(cruiseCode)}/refresh-cabins`),
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ vendorKey })
+        body: JSON.stringify({ vendorKey, force: true, reset: true })
       }
-    )
-    const data = await response.json().catch(() => ({}))
-    // 202 = started, 409 = already in_progress — both are "ok" for the caller
+    );
+    const data = await response.json().catch(() => ({}));
     if (response.status === 429) {
-      throw Object.assign(new Error(data?.message ?? "Too many requests"), { code: data?.status, retryAfter: data?.retryAfter })
+      throw Object.assign(new Error(data?.message ?? "Too many requests"), { code: data?.status, retryAfter: data?.retryAfter });
     }
     if (!response.ok && response.status !== 409) {
-      throw new Error(data?.error ?? "Refresh failed")
+      throw new Error(data?.error ?? data?.message ?? "Refresh failed");
     }
-    return { ...data, httpStatus: response.status }
+
+    // If 409 returned but remaining is 0 or elapsed >= estimatedMs, treat lock as expired/completed
+    const isExpired = (data.remaining != null && data.remaining <= 0) ||
+                      (data.elapsed != null && data.estimatedMs != null && data.elapsed >= data.estimatedMs);
+    const normalizedStatus = isExpired ? "completed" : (data?.status ?? (response.status === 409 ? "in_progress" : "started"));
+
+    return { status: normalizedStatus, ...data, httpStatus: response.status, isStale: isExpired };
   } catch (err) {
     if (err.name === "TypeError" || (err.message && err.message.toLowerCase().includes("fetch"))) {
-      throw new Error("Scraper server is offline.")
+      throw new Error("Scraper server is offline.");
     }
-    throw err
+    throw err;
   }
 }
 
@@ -302,14 +317,23 @@ export async function getCruiseRefreshStatus(cruiseCode) {
   try {
     const response = await fetch(
       getScraperEndpoint(`/api/cruises/${encodeURIComponent(cruiseCode)}/refresh-status`)
-    )
+    );
     if (!response.ok) {
-      return { status: "offline", error: "Scraper server is offline." }
+      return { status: "offline", error: "Scraper server is offline." };
     }
-    const data = await response.json().catch(() => ({}))
-    return data
+    const data = await response.json().catch(() => ({}));
+    
+    // If the server still reports in_progress but the job time has elapsed (remaining == 0 or elapsed >= estimatedMs)
+    if (data.status === "in_progress") {
+      const isExpired = (data.remaining != null && data.remaining <= 0) ||
+                        (data.elapsed != null && data.estimatedMs != null && data.elapsed >= data.estimatedMs);
+      if (isExpired) {
+        return { ...data, status: "completed", isStale: true, remaining: 0 };
+      }
+    }
+    return data;
   } catch (err) {
-    return { status: "offline", error: "Scraper server is offline." }
+    return { status: "offline", error: "Scraper server is offline." };
   }
 }
 
@@ -353,22 +377,38 @@ export async function fetchVendorRuns(params = {}) {
 }
 
 export async function fetchOperationalHealthData() {
-  return {
-    success: true,
-    dashboard: await fetchDashboardOverview()
+  try {
+    const dashboard = await fetchDashboardOverview()
+    return {
+      success: true,
+      dashboard
+    }
+  } catch (err) {
+    return {
+      success: false,
+      dashboard: null,
+      error: err?.message
+    }
   }
 }
 
-export async function fetchCapacityInsightsData() {
-  const [dashboard, cruises] = await Promise.all([
+export async function fetchCapacityInsightsData(params = {}) {
+  const [dashboardResult, cruisesResult] = await Promise.allSettled([
     fetchDashboardOverview(),
-    fetchCruises()
+    fetchCruises(params)
   ])
 
+  const dashboard = dashboardResult.status === "fulfilled" ? dashboardResult.value : { vendor_fleet: [] }
+  const cruises = cruisesResult.status === "fulfilled" ? cruisesResult.value : { data: [] }
+
   return {
-    success: true,
+    success: dashboardResult.status === "fulfilled" || cruisesResult.status === "fulfilled",
     dashboard,
-    cruises
+    cruises,
+    errors: {
+      dashboard: dashboardResult.status === "rejected" ? dashboardResult.reason?.message : null,
+      cruises: cruisesResult.status === "rejected" ? cruisesResult.reason?.message : null
+    }
   }
 }
 

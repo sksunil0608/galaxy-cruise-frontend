@@ -43,6 +43,8 @@ import {
   ExternalLink,
   Filter
 } from "lucide-react"
+import { Skeleton } from "@/components/ui/skeleton"
+
 
 const USERS_PER_PAGE = 10
 
@@ -688,10 +690,26 @@ export default function UsersPage() {
 
         <CardContent className="p-0">
           {loading ? (
-            <div className="text-center py-16 text-xs text-slate-400 font-medium">
-              Loading users directory...
+            <div className="divide-y divide-slate-100">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="p-4 flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <Skeleton className="h-9 w-9 rounded-lg bg-slate-200 shrink-0" />
+                    <div className="space-y-1.5 flex-1">
+                      <Skeleton className="h-4 w-32 bg-slate-300" />
+                      <Skeleton className="h-3 w-48 bg-slate-200" />
+                    </div>
+                  </div>
+                  <Skeleton className="h-6 w-20 rounded-md bg-slate-200" />
+                  <div className="flex items-center gap-2">
+                    <Skeleton className="h-8 w-8 rounded-lg bg-slate-200" />
+                    <Skeleton className="h-8 w-8 rounded-lg bg-slate-200" />
+                  </div>
+                </div>
+              ))}
             </div>
           ) : filteredUsers.length === 0 ? (
+
             <div className="text-center py-16 text-xs text-slate-400 font-medium">
               No users found matching your filter criteria.
             </div>

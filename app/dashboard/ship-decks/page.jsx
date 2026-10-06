@@ -33,6 +33,8 @@ import {
   fetchShips,
   updateShipDeck
 } from "../api";
+import { Skeleton } from "@/components/ui/skeleton";
+
 
 const SECTION_TYPE_PRESETS = [
   "Cabins",
@@ -441,11 +443,19 @@ export default function ShipDecksPage() {
 
             <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
               {loadingShip ? (
-                <div className="flex items-center justify-center py-8 text-xs text-slate-400 gap-2">
-                  <RefreshCcw size={14} className="animate-spin text-teal-600" />
-                  <span>Loading blueprints…</span>
+                <div className="space-y-2 py-1">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="rounded-xl border border-slate-200/80 bg-slate-50/60 p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Skeleton className="h-4 w-28 bg-slate-300" />
+                        <Skeleton className="h-5 w-16 rounded bg-slate-200" />
+                      </div>
+                      <Skeleton className="h-3 w-40 bg-slate-200" />
+                    </div>
+                  ))}
                 </div>
               ) : filteredDecks.length === 0 ? (
+
                 <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 p-6 text-center space-y-2">
                   <div className="inline-flex rounded-full bg-slate-100 p-2.5 text-slate-400">
                     <Layers size={18} />

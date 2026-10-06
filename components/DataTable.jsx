@@ -24,7 +24,9 @@ import {
 } from "lucide-react"
 
 
-export default function DataTable({ columns, data }) {
+import { Skeleton } from "@/components/ui/skeleton"
+
+export default function DataTable({ columns, data = [], loading = false, loadingRows = 5 }) {
 
   const table = useReactTable({
     data,
@@ -56,7 +58,17 @@ export default function DataTable({ columns, data }) {
 
         <TableBody>
 
-          {table.getRowModel().rows.length ? (
+          {loading ? (
+            Array.from({ length: loadingRows }).map((_, rIdx) => (
+              <TableRow key={rIdx}>
+                {columns.map((_, cIdx) => (
+                  <TableCell key={cIdx}>
+                    <Skeleton className="h-4 w-4/5 bg-slate-200" />
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))
+          ) : table.getRowModel().rows.length ? (
 
             table.getRowModel().rows.map(row => (
               <TableRow
@@ -88,6 +100,7 @@ export default function DataTable({ columns, data }) {
           )}
 
         </TableBody>
+
 
       </Table>
 

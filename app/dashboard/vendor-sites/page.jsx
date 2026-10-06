@@ -19,6 +19,8 @@ import {
 } from "lucide-react"
 
 import { checkAllVendorAuth, checkVendorAuth, getVendorSchedules } from "../api"
+import { Skeleton } from "@/components/ui/skeleton"
+
 
 // Real vendor portal login URLs — for manually opening the actual site to
 // log in and verify data by eye, separate from the automated scraper runs.
@@ -341,15 +343,33 @@ export default function VendorSitesPage() {
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
               {loading ? (
-                <tr>
-                  <td colSpan={4} className="px-5 py-12 text-center text-slate-400">
-                    <div className="flex items-center justify-center gap-2">
-                      <RefreshCw size={14} className="animate-spin text-teal-600" />
-                      <span>Loading vendor directories…</span>
-                    </div>
-                  </td>
-                </tr>
+                Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i} className="animate-pulse">
+                    <td className="px-5 py-4">
+                      <div className="flex items-center gap-3">
+                        <Skeleton className="h-9 w-9 rounded-lg bg-slate-200 shrink-0" />
+                        <div className="space-y-1.5 flex-1">
+                          <Skeleton className="h-4 w-32 bg-slate-300" />
+                          <Skeleton className="h-3 w-20 bg-slate-200" />
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-5 py-4">
+                      <Skeleton className="h-4 w-44 bg-slate-200" />
+                    </td>
+                    <td className="px-5 py-4">
+                      <Skeleton className="h-6 w-24 rounded-md bg-slate-200" />
+                    </td>
+                    <td className="px-5 py-4 text-right">
+                      <div className="inline-flex gap-2">
+                        <Skeleton className="h-8 w-24 rounded-lg bg-slate-200" />
+                        <Skeleton className="h-8 w-16 rounded-lg bg-slate-200" />
+                      </div>
+                    </td>
+                  </tr>
+                ))
               ) : filteredKeys.length === 0 ? (
+
                 <tr>
                   <td colSpan={4} className="px-5 py-10 text-center text-slate-400">
                     No vendor portals match the active search or filters.
@@ -447,10 +467,26 @@ export default function VendorSitesPage() {
         {/* Mobile Cards View */}
         <div className="block md:hidden divide-y divide-slate-100">
           {loading ? (
-            <div className="px-4 py-12 text-center text-xs text-slate-400 font-medium">
-              Loading vendor directories…
-            </div>
+            Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="p-4 bg-white space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-2.5 flex-1">
+                    <Skeleton className="h-9 w-9 rounded-lg bg-slate-200 shrink-0" />
+                    <div className="space-y-1.5 flex-1">
+                      <Skeleton className="h-4 w-32 bg-slate-300" />
+                      <Skeleton className="h-3 w-40 bg-slate-200" />
+                    </div>
+                  </div>
+                  <Skeleton className="h-5 w-16 rounded bg-slate-200" />
+                </div>
+                <div className="flex justify-between items-center pt-2">
+                  <Skeleton className="h-7 w-20 rounded-lg bg-slate-200" />
+                  <Skeleton className="h-7 w-24 rounded-lg bg-slate-200" />
+                </div>
+              </div>
+            ))
           ) : filteredKeys.length === 0 ? (
+
             <div className="px-4 py-10 text-center text-xs text-slate-400">
               No vendor portals match search.
             </div>

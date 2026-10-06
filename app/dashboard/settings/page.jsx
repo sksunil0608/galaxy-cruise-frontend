@@ -34,6 +34,9 @@ import {
   fetchFrontendEnv,
   saveFrontendEnv
 } from "../api"
+import { SettingsSkeleton } from "@/components/ui/skeleton-patterns"
+import { Skeleton } from "@/components/ui/skeleton"
+
 import { getApiBaseUrl, setApiBaseUrl, API_URL_STORAGE_KEY } from "@/lib/api"
 
 const DEFAULT_API_URL = "http://localhost:8000/api"
@@ -614,11 +617,9 @@ export default function SettingsPage() {
       )}
 
       {loading ? (
-        <div className="flex items-center justify-center p-12 text-xs font-semibold text-slate-500 gap-2">
-          <Loader2 className="size-4 animate-spin text-teal-700" />
-          <span>Loading configuration & .env...</span>
-        </div>
+        <SettingsSkeleton />
       ) : (
+
         <div className="space-y-6 min-w-0">
           {/* ── Section 1: Microservice Endpoint Cards ─────────────────────── */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 min-w-0">
