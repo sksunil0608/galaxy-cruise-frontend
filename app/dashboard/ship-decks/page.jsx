@@ -23,7 +23,8 @@ import {
   Upload,
   Utensils,
   Waves,
-  X
+  X,
+  AlertTriangle
 } from "lucide-react";
 
 import {
@@ -34,6 +35,15 @@ import {
   updateShipDeck
 } from "../api";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 
 const SECTION_TYPE_PRESETS = [
@@ -292,23 +302,41 @@ export default function ShipDecksPage() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const handleDelete = async deckId => {
-    if (!selectedShipCode || !window.confirm("Are you sure you want to delete this deck plan?")) {
-      return;
-    }
+  // Confirmation Dialog State
+  const [confirmDialog, setConfirmDialog] = useState({
+    open: false,
+    title: "",
+    description: "",
+    onConfirm: () => {}
+  });
 
-    try {
-      setError("");
-      setMessage("");
-      await deleteShipDeck(selectedShipCode, deckId);
-      await reloadShip();
-      if (form.id === deckId) {
-        resetForm();
+  const handleDelete = deckId => {
+    if (!selectedShipCode) return;
+    const deckObj = (shipData?.decks || []).find(d => d.id === deckId);
+    const deckName = deckObj?.name || `Deck #${deckId}`;
+
+    setConfirmDialog({
+      open: true,
+      title: "Delete Deck Plan",
+      description: `Are you sure you want to delete "${deckName}" from ship "${selectedShipCode}"? This action cannot be undone.`,
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        try {
+          setError("");
+          setMessage("");
+          await deleteShipDeck(selectedShipCode, deckId);
+          await reloadShip();
+          if (form.id === deckId) {
+            resetForm();
+          }
+          toast.success(`Deck plan "${deckName}" deleted successfully`);
+          setMessage("Deck plan deleted successfully.");
+        } catch (err) {
+          setError(err.message || "Failed to delete deck plan");
+          toast.error(err.message || "Failed to delete deck plan");
+        }
       }
-      setMessage("Deck plan deleted successfully.");
-    } catch (err) {
-      setError(err.message || "Failed to delete deck plan");
-    }
+    });
   };
 
   const currentShipObj = ships.find(s => s.code === selectedShipCode) || shipData;
@@ -978,6 +1006,46 @@ export default function ShipDecksPage() {
           )}
         </div>
       </div>
+
+      {/* ── Confirmation Modal Dialog ──────────────────────────────────────── */}
+      <Dialog
+        open={confirmDialog.open}
+        onOpenChange={open => setConfirmDialog(prev => ({ ...prev, open }))}
+      >
+        <DialogContent className="sm:max-w-md rounded-2xl p-6 bg-white border border-slate-200/90 shadow-2xl">
+          <DialogHeader className="pb-3 border-b border-slate-100">
+            <DialogTitle className="text-base font-bold text-slate-900 flex items-center gap-2.5">
+              <div className="flex size-9 items-center justify-center rounded-xl bg-rose-50 border border-rose-200 text-rose-600 shrink-0">
+                <AlertTriangle className="size-5" />
+              </div>
+              <span>{confirmDialog.title}</span>
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="py-3 text-xs sm:text-sm text-slate-600 leading-relaxed">
+            {confirmDialog.description}
+          </div>
+
+          <DialogFooter className="pt-4 flex items-center justify-end gap-2 border-t border-slate-100">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
+              className="h-9 rounded-lg border-slate-200 text-xs font-semibold hover:bg-slate-50 cursor-pointer"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={confirmDialog.onConfirm}
+              className="h-9 px-4 rounded-lg text-xs font-bold shadow-xs cursor-pointer"
+            >
+              Delete Deck
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

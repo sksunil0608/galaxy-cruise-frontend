@@ -614,244 +614,396 @@ export default function DashboardPage() {
       )}
 
 
-      {/* ── Main Fleet & Alerts Grid ───────────────────────────────────────── */}
-      <div className="grid gap-4 xl:grid-cols-[1.35fr_0.95fr]">
-        <div className="rounded-xl border border-slate-200/90 bg-white p-5 shadow-2xs">
-          <div className="flex items-center justify-between gap-4 pb-4 border-b border-slate-100">
-            <div>
-              <h2 className="text-base font-bold text-slate-900">
-                Vendor Fleet
-              </h2>
-              <p className="text-xs font-medium text-slate-500">
-                Health score, extraction cycle times, coverage range, and inventory volume.
-              </p>
-            </div>
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-bold text-slate-700">
-              {vendorFleet.length} vendor{vendorFleet.length === 1 ? "" : "s"}
-            </div>
+      {/* ── Vendor Fleet (Full Width Table & Mobile List) ───────────────────── */}
+      <div className="w-full rounded-xl border border-slate-200/90 bg-white p-5 shadow-2xs">
+        <div className="flex items-center justify-between gap-4 pb-4 border-b border-slate-100">
+          <div>
+            <h2 className="text-base font-bold text-slate-900">
+              Vendor Fleet
+            </h2>
+            <p className="text-xs font-medium text-slate-500">
+              Health score, extraction cycle times, coverage range, and inventory volume.
+            </p>
           </div>
+          <div className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-bold text-slate-700">
+            {vendorFleet.length} vendor{vendorFleet.length === 1 ? "" : "s"}
+          </div>
+        </div>
 
-          <div className="mt-4 space-y-3.5">
-            {vendorFleet.map(vendor => (
-              <div
-                key={vendor.vendor_id}
-                className="rounded-xl border border-slate-200/80 bg-slate-50/50 p-4 transition hover:bg-slate-50"
-              >
-                <div className="flex flex-col gap-2.5 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
+        {/* Desktop & Tablet Table View */}
+        <div className="mt-4 hidden md:block overflow-x-auto">
+          <table className="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr className="border-b border-slate-200/80 text-[11px] font-bold uppercase tracking-wider text-slate-400 bg-slate-50/60">
+                <th className="py-3 px-3.5 rounded-l-lg font-semibold">Vendor</th>
+                <th className="py-3 px-3 font-semibold">Health Score</th>
+                <th className="py-3 px-3 font-semibold">Runs & Coverage</th>
+                <th className="py-3 px-3 font-semibold">Response & Errors</th>
+                <th className="py-3 px-3 font-semibold">Inventory Volume</th>
+                <th className="py-3 px-3 text-right rounded-r-lg font-semibold">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {vendorFleet.map(vendor => (
+                <tr
+                  key={vendor.vendor_id}
+                  className="hover:bg-slate-50/80 transition-colors group"
+                >
+                  {/* Vendor Name & Status */}
+                  <td className="py-3.5 px-3.5 align-middle">
                     <div className="flex items-center gap-2">
-                      <h3 className="text-sm font-bold text-slate-900">
+                      <span className="font-bold text-slate-900 text-sm">
                         {vendor.vendor_name}
-                      </h3>
+                      </span>
                       <span
-                        className={`rounded-md border px-2 py-0.5 text-[11px] font-bold ${healthStyles[vendor.health_label] ?? "bg-slate-100 text-slate-700 border-slate-200"}`}
+                        className={`rounded-md border px-1.5 py-0.5 text-[10px] font-bold ${healthStyles[vendor.health_label] ?? "bg-slate-100 text-slate-700 border-slate-200"}`}
                       >
                         {vendor.health_label}
                       </span>
                     </div>
-                    <p className="mt-1 text-xs font-medium text-slate-500">
-                      Last updated {formatLastUpdated(vendor.last_updated_at)}
-                    </p>
+                    <div className="mt-0.5 text-[11px] font-medium text-slate-400">
+                      Updated {formatLastUpdated(vendor.last_updated_at)}
+                    </div>
+                  </td>
+
+                  {/* Health Score & Mini Progress */}
+                  <td className="py-3.5 px-3 align-middle">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-extrabold text-sm text-slate-900">
+                        {vendor.health_score}%
+                      </span>
+                    </div>
+                    <div className="mt-1.5 h-1.5 w-24 overflow-hidden rounded-full bg-slate-100">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${
+                          vendor.health_score >= 85
+                            ? "bg-teal-600"
+                            : vendor.health_score >= 65
+                              ? "bg-amber-500"
+                              : "bg-rose-500"
+                        }`}
+                        style={{ width: `${Math.min(vendor.health_score, 100)}%` }}
+                      />
+                    </div>
+                  </td>
+
+                  {/* Runs & Coverage */}
+                  <td className="py-3.5 px-3 align-middle">
+                    <div className="flex items-center gap-1.5 font-mono font-bold text-slate-800">
+                      <RefreshCcw size={12} className="text-slate-400" />
+                      <span>{vendor.total_runs} runs</span>
+                    </div>
+                    <div className="mt-0.5 text-[11px] font-medium text-slate-500 flex items-center gap-1">
+                      <Database size={11} className="text-slate-400" />
+                      <span>{vendor.coverage_label || "Active"}</span>
+                    </div>
+                  </td>
+
+                  {/* Response & Errors */}
+                  <td className="py-3.5 px-3 align-middle">
+                    <div className="flex items-center gap-1 font-mono font-semibold text-slate-800">
+                      <Clock3 size={12} className="text-slate-400" />
+                      <span>{formatResponseTime(vendor.average_response_time_ms)}</span>
+                    </div>
+                    <div className="mt-0.5">
+                      {vendor.error_count > 0 ? (
+                        <span className="inline-flex items-center gap-1 rounded border border-rose-200 bg-rose-50 px-1.5 py-0.2 text-[10px] font-bold text-rose-700">
+                          <ServerCrash size={10} />
+                          <span>{vendor.error_count} error{vendor.error_count === 1 ? "" : "s"}</span>
+                        </span>
+                      ) : (
+                        <span className="text-[11px] text-emerald-600 font-medium flex items-center gap-1">
+                          <CheckCircle2 size={11} />
+                          <span>0 errors</span>
+                        </span>
+                      )}
+                    </div>
+                  </td>
+
+                  {/* Inventory Volume */}
+                  <td className="py-3.5 px-3 align-middle">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="inline-flex items-center gap-1 rounded-md border border-slate-200/80 bg-slate-50 px-2 py-0.5 text-[11px] text-slate-700 font-medium">
+                        <span className="font-mono font-bold text-slate-900">{formatNumber(vendor.cruise_count)}</span>
+                        <span className="text-slate-400 text-[10px]">cruises</span>
+                      </span>
+                      <span className="inline-flex items-center gap-1 rounded-md border border-slate-200/80 bg-slate-50 px-2 py-0.5 text-[11px] text-slate-700 font-medium">
+                        <span className="font-mono font-bold text-slate-900">{vendor.ship_count}</span>
+                        <span className="text-slate-400 text-[10px]">ships</span>
+                      </span>
+                      <span className="inline-flex items-center gap-1 rounded-md border border-slate-200/80 bg-slate-50 px-2 py-0.5 text-[11px] text-slate-700 font-medium">
+                        <span className="font-mono font-bold text-slate-900">{formatNumber(vendor.cabin_category_count)}</span>
+                        <span className="text-slate-400 text-[10px]">cabins</span>
+                      </span>
+                    </div>
+                  </td>
+
+                  {/* Action */}
+                  <td className="py-3.5 px-3 text-right align-middle">
+                    <Link
+                      href="/dashboard/vendor-sites"
+                      className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-teal-700 hover:border-teal-300 shadow-2xs transition active:scale-95 cursor-pointer"
+                    >
+                      <span>View</span>
+                      <ChevronRight size={12} />
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Mobile List View */}
+        <div className="mt-4 block md:hidden space-y-3">
+          {vendorFleet.map(vendor => (
+            <div
+              key={vendor.vendor_id}
+              className="rounded-xl border border-slate-200/90 bg-white p-4 shadow-2xs space-y-3 transition hover:border-slate-300"
+            >
+              {/* Mobile Header: Vendor Name, Status & Score */}
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-bold text-slate-900">
+                      {vendor.vendor_name}
+                    </span>
+                    <span
+                      className={`rounded-md border px-1.5 py-0.5 text-[10px] font-bold ${healthStyles[vendor.health_label] ?? "bg-slate-100 text-slate-700 border-slate-200"}`}
+                    >
+                      {vendor.health_label}
+                    </span>
                   </div>
-                  <div className="sm:text-right">
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                      Health Score
-                    </div>
-                    <div className="mt-0.5 text-xl font-extrabold text-slate-900 font-mono">
-                      {vendor.health_score}%
-                    </div>
+                  <div className="mt-0.5 text-[11px] font-medium text-slate-400">
+                    Updated {formatLastUpdated(vendor.last_updated_at)}
                   </div>
                 </div>
 
-                <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
-                  <div
-                    className={`h-full rounded-full transition-all duration-500 ${
-                      vendor.health_score >= 85
-                        ? "bg-teal-600"
-                        : vendor.health_score >= 65
-                          ? "bg-amber-500"
-                          : "bg-rose-500"
-                    }`}
-                    style={{ width: `${Math.min(vendor.health_score, 100)}%` }}
-                  />
-                </div>
-
-                <div className="mt-3.5 grid grid-cols-2 gap-2.5 text-xs text-slate-600 sm:grid-cols-4">
-                  <MetricItem
-                    label="Total runs"
-                    value={vendor.total_runs}
-                    icon={RefreshCcw}
-                  />
-                  <MetricItem
-                    label="Coverage"
-                    value={vendor.coverage_label}
-                    icon={Database}
-                  />
-                  <MetricItem
-                    label="Response"
-                    value={formatResponseTime(vendor.average_response_time_ms)}
-                    icon={Clock3}
-                  />
-                  <MetricItem
-                    label="Errors"
-                    value={vendor.error_count}
-                    icon={ServerCrash}
-                  />
-                </div>
-
-                <div className="mt-3 grid grid-cols-3 gap-2 rounded-lg border border-slate-200/70 bg-white p-2.5 text-xs">
-                  <div className="text-center sm:text-left">
-                    <div className="text-[10px] font-bold uppercase text-slate-400">Cruises</div>
-                    <div className="mt-0.5 font-bold text-slate-900 font-mono">
-                      {vendor.cruise_count}
-                    </div>
+                <div className="text-right shrink-0">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    Health
                   </div>
-                  <div className="text-center sm:text-left">
-                    <div className="text-[10px] font-bold uppercase text-slate-400">Ships</div>
-                    <div className="mt-0.5 font-bold text-slate-900 font-mono">
-                      {vendor.ship_count}
-                    </div>
-                  </div>
-                  <div className="text-center sm:text-left">
-                    <div className="text-[10px] font-bold uppercase text-slate-400">Cabin Categories</div>
-                    <div className="mt-0.5 font-bold text-slate-900 font-mono">
-                      {vendor.cabin_category_count}
-                    </div>
+                  <div className="font-mono text-base font-extrabold text-slate-900">
+                    {vendor.health_score}%
                   </div>
                 </div>
               </div>
-            ))}
 
-            {!loading && vendorFleet.length === 0 && (
-              <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center text-xs text-slate-500">
-                No vendor fleet telemetry recorded yet.
+              {/* Progress bar */}
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${
+                    vendor.health_score >= 85
+                      ? "bg-teal-600"
+                      : vendor.health_score >= 65
+                        ? "bg-amber-500"
+                        : "bg-rose-500"
+                  }`}
+                  style={{ width: `${Math.min(vendor.health_score, 100)}%` }}
+                />
               </div>
+
+              {/* Metrics 2x2 grid */}
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="rounded-lg bg-slate-50 border border-slate-100 p-2">
+                  <div className="flex items-center gap-1 text-[10px] font-bold uppercase text-slate-400">
+                    <RefreshCcw size={10} />
+                    <span>Total Runs</span>
+                  </div>
+                  <div className="mt-0.5 font-mono font-bold text-slate-900">
+                    {vendor.total_runs}
+                  </div>
+                </div>
+
+                <div className="rounded-lg bg-slate-50 border border-slate-100 p-2">
+                  <div className="flex items-center gap-1 text-[10px] font-bold uppercase text-slate-400">
+                    <Database size={10} />
+                    <span>Coverage</span>
+                  </div>
+                  <div className="mt-0.5 font-medium text-slate-800 truncate">
+                    {vendor.coverage_label || "--"}
+                  </div>
+                </div>
+
+                <div className="rounded-lg bg-slate-50 border border-slate-100 p-2">
+                  <div className="flex items-center gap-1 text-[10px] font-bold uppercase text-slate-400">
+                    <Clock3 size={10} />
+                    <span>Avg Latency</span>
+                  </div>
+                  <div className="mt-0.5 font-mono font-bold text-slate-900">
+                    {formatResponseTime(vendor.average_response_time_ms)}
+                  </div>
+                </div>
+
+                <div className="rounded-lg bg-slate-50 border border-slate-100 p-2">
+                  <div className="flex items-center gap-1 text-[10px] font-bold uppercase text-slate-400">
+                    <ServerCrash size={10} />
+                    <span>Errors</span>
+                  </div>
+                  <div className={`mt-0.5 font-mono font-bold ${vendor.error_count > 0 ? "text-rose-600" : "text-emerald-600"}`}>
+                    {vendor.error_count}
+                  </div>
+                </div>
+              </div>
+
+              {/* Inventory Ribbon */}
+              <div className="flex items-center justify-between rounded-lg border border-slate-200/70 bg-slate-50/70 px-3 py-2 text-xs">
+                <div className="text-center">
+                  <div className="text-[10px] font-bold uppercase text-slate-400">Cruises</div>
+                  <div className="mt-0.5 font-bold font-mono text-slate-900">{formatNumber(vendor.cruise_count)}</div>
+                </div>
+                <div className="h-6 w-px bg-slate-200" />
+                <div className="text-center">
+                  <div className="text-[10px] font-bold uppercase text-slate-400">Ships</div>
+                  <div className="mt-0.5 font-bold font-mono text-slate-900">{vendor.ship_count}</div>
+                </div>
+                <div className="h-6 w-px bg-slate-200" />
+                <div className="text-center">
+                  <div className="text-[10px] font-bold uppercase text-slate-400">Cabins</div>
+                  <div className="mt-0.5 font-bold font-mono text-slate-900">{formatNumber(vendor.cabin_category_count)}</div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {!loading && vendorFleet.length === 0 && (
+          <div className="mt-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center text-xs text-slate-500">
+            No vendor fleet telemetry recorded yet.
+          </div>
+        )}
+      </div>
+
+      {/* ── Price Alerts & Distribution (Below Table in Single Row / 2 Columns) ── */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        {/* Card 1: Tagged Cruise Price Alerts */}
+        <div className="rounded-xl border border-slate-200/90 bg-white p-5 shadow-2xs flex flex-col">
+          <div className="flex items-center justify-between gap-4 pb-3.5 border-b border-slate-100">
+            <div>
+              <h2 className="text-base font-bold text-slate-900">
+                Tagged Cruise Price Alerts
+              </h2>
+              <p className="text-xs font-medium text-slate-500">
+                Recent price drops detected on your pinned cruises.
+              </p>
+            </div>
+            <div className="rounded-md border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-bold text-rose-700">
+              {priceAlerts.length} unread
+            </div>
+          </div>
+
+          <div className="mt-3.5 space-y-2.5 max-h-[300px] overflow-y-auto pr-1 flex-1">
+            {priceAlerts.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/50 p-5 text-center space-y-3">
+                <div className="w-10 h-10 mx-auto rounded-full bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600 shadow-2xs">
+                  <BellRing size={18} />
+                </div>
+                <div className="space-y-1">
+                  <div className="text-xs font-bold text-slate-800">No Active Price Drops Detected</div>
+                  <p className="text-[11px] text-slate-500 max-w-xs mx-auto leading-relaxed">
+                    Price alerts trigger automatically when fares drop below the tracked baseline on your pinned/tagged cruises.
+                  </p>
+                </div>
+                <div className="flex items-center justify-center gap-2 pt-1 flex-wrap">
+                  <Link
+                    href="/dashboard/tagged-cruises"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold shadow-2xs transition active:scale-95 cursor-pointer"
+                  >
+                    <Tag size={12} />
+                    <span>View Tagged Cruises</span>
+                  </Link>
+                  <Link
+                    href="/dashboard/search-cruise"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold shadow-2xs transition active:scale-95 cursor-pointer"
+                  >
+                    <Pin size={12} className="text-amber-500" />
+                    <span>Pin a Cruise</span>
+                  </Link>
+                </div>
+              </div>
+            ) : (
+              priceAlerts.map(alert => (
+                <div
+                  key={alert.id}
+                  className="rounded-xl border border-teal-200/80 bg-teal-50/30 p-3.5 transition hover:bg-teal-50/50"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-slate-900 truncate">
+                        {alert.cruisePackage || alert.cruiseCode}
+                      </div>
+                      <div className="mt-0.5 text-[11px] font-medium text-slate-500">
+                        {alert.vendor?.name || "Vendor"} · {alert.ship || "--"} · {alert.tag?.label || "Tag"}
+                      </div>
+                      <div className="mt-2 text-xs text-slate-700 flex items-center gap-1.5">
+                        <span className="line-through text-slate-400 font-mono">
+                          {alert.previousPrice !== null && alert.previousPrice !== undefined
+                            ? new Intl.NumberFormat("en-GB", {
+                                style: "currency",
+                                currency: alert.currency || "GBP"
+                              }).format(alert.previousPrice)
+                            : "--"}
+                        </span>
+                        <span className="font-bold text-teal-700 font-mono text-sm">
+                          {new Intl.NumberFormat("en-GB", {
+                            style: "currency",
+                            currency: alert.currency || "GBP"
+                          }).format(alert.currentPrice)}
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleMarkAlertRead(alert.id)}
+                      className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-bold text-slate-700 transition hover:bg-slate-50 hover:text-slate-900 shrink-0 cursor-pointer"
+                    >
+                      Mark read
+                    </button>
+                  </div>
+                </div>
+              ))
             )}
           </div>
         </div>
 
-        {/* ── Price Alerts & Distribution ─────────────────────────────────── */}
-        <div className="space-y-4">
-          <div className="rounded-xl border border-slate-200/90 bg-white p-5 shadow-2xs">
-            <div className="flex items-center justify-between gap-4 pb-3.5 border-b border-slate-100">
-              <div>
-                <h2 className="text-base font-bold text-slate-900">
-                  Tagged Cruise Price Alerts
-                </h2>
-                <p className="text-xs font-medium text-slate-500">
-                  Recent price drops detected on your pinned cruises.
-                </p>
-              </div>
-              <div className="rounded-md border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-bold text-rose-700">
-                {priceAlerts.length} unread
-              </div>
+        {/* Card 2: Vendor Cruise Distribution */}
+        <div className="rounded-xl border border-slate-200/90 bg-white p-5 shadow-2xs flex flex-col">
+          <div className="flex items-center justify-between gap-4 pb-3.5 border-b border-slate-100">
+            <div>
+              <h2 className="text-base font-bold text-slate-900">
+                Vendor Cruise Distribution
+              </h2>
+              <p className="text-xs font-medium text-slate-500">
+                Total active cruises per vendor line.
+              </p>
             </div>
-
-            <div className="mt-3.5 space-y-2.5 max-h-[320px] overflow-y-auto pr-1">
-              {priceAlerts.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/50 p-5 text-center space-y-3">
-                  <div className="w-10 h-10 mx-auto rounded-full bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600 shadow-2xs">
-                    <BellRing size={18} />
-                  </div>
-                  <div className="space-y-1">
-                    <div className="text-xs font-bold text-slate-800">No Active Price Drops Detected</div>
-                    <p className="text-[11px] text-slate-500 max-w-xs mx-auto leading-relaxed">
-                      Price alerts trigger automatically when fares drop below the tracked baseline on your pinned/tagged cruises.
-                    </p>
-                  </div>
-                  <div className="flex items-center justify-center gap-2 pt-1 flex-wrap">
-                    <Link
-                      href="/dashboard/tagged-cruises"
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold shadow-2xs transition active:scale-95 cursor-pointer"
-                    >
-                      <Tag size={12} />
-                      <span>View Tagged Cruises</span>
-                    </Link>
-                    <Link
-                      href="/dashboard/search-cruise"
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold shadow-2xs transition active:scale-95 cursor-pointer"
-                    >
-                      <Pin size={12} className="text-amber-500" />
-                      <span>Pin a Cruise</span>
-                    </Link>
-                  </div>
-                </div>
-              ) : (
-                priceAlerts.map(alert => (
-                  <div
-                    key={alert.id}
-                    className="rounded-xl border border-teal-200/80 bg-teal-50/30 p-3.5 transition hover:bg-teal-50/50"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="text-xs font-bold text-slate-900 truncate">
-                          {alert.cruisePackage || alert.cruiseCode}
-                        </div>
-                        <div className="mt-0.5 text-[11px] font-medium text-slate-500">
-                          {alert.vendor?.name || "Vendor"} · {alert.ship || "--"} · {alert.tag?.label || "Tag"}
-                        </div>
-                        <div className="mt-2 text-xs text-slate-700 flex items-center gap-1.5">
-                          <span className="line-through text-slate-400 font-mono">
-                            {alert.previousPrice !== null && alert.previousPrice !== undefined
-                              ? new Intl.NumberFormat("en-GB", {
-                                  style: "currency",
-                                  currency: alert.currency || "GBP"
-                                }).format(alert.previousPrice)
-                              : "--"}
-                          </span>
-                          <span className="font-bold text-teal-700 font-mono text-sm">
-                            {new Intl.NumberFormat("en-GB", {
-                              style: "currency",
-                              currency: alert.currency || "GBP"
-                            }).format(alert.currentPrice)}
-                          </span>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => handleMarkAlertRead(alert.id)}
-                        className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-bold text-slate-700 transition hover:bg-slate-50 hover:text-slate-900 shrink-0 cursor-pointer"
-                      >
-                        Mark read
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
+            <span className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-bold text-slate-700">
+              Live Chart
+            </span>
           </div>
 
-          <div className="rounded-xl border border-slate-200/90 bg-white p-5 shadow-2xs">
-            <h2 className="text-base font-bold text-slate-900">
-              Vendor Cruise Distribution
-            </h2>
-            <p className="text-xs font-medium text-slate-500">
-              Total active cruises per vendor line.
-            </p>
-
-            <div className="mt-4 h-[240px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={vendorFleet}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                  <XAxis dataKey="vendor_name" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "#64748b" }} />
-                  <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "#64748b" }} />
-                  <Tooltip
-                    cursor={{ fill: "#f8fafc" }}
-                    contentStyle={{ borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 12 }}
-                    formatter={(value, _name, item) => {
-                      if (item.dataKey === "health_score") {
-                        return [`${value}%`, "Health score"]
-                      }
-                      return [value, "Cruises"]
-                    }}
-                  />
-                  <Bar
-                    dataKey="cruise_count"
-                    fill="#0f766e"
-                    radius={[6, 6, 0, 0]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+          <div className="mt-4 h-[300px] flex-1">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={vendorFleet}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                <XAxis dataKey="vendor_name" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "#64748b" }} />
+                <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "#64748b" }} />
+                <Tooltip
+                  cursor={{ fill: "#f8fafc" }}
+                  contentStyle={{ borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 12 }}
+                  formatter={(value, _name, item) => {
+                    if (item.dataKey === "health_score") {
+                      return [`${value}%`, "Health score"]
+                    }
+                    return [value, "Cruises"]
+                  }}
+                />
+                <Bar
+                  dataKey="cruise_count"
+                  fill="#0f766e"
+                  radius={[6, 6, 0, 0]}
+                />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </div>
       </div>

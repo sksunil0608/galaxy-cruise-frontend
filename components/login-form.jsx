@@ -38,6 +38,10 @@ export function LoginForm({ className, ...props }) {
       localStorage.setItem("permissions",JSON.stringify(res.permissions))
       localStorage.setItem("user",JSON.stringify(res.user))
 
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("auth-update"))
+      }
+
       document.cookie = `token=${res.token}; path=/; max-age=604800`
 
       logActivity("login", { email: res.user?.email, name: res.user?.name, role: res.user?.role })
@@ -70,22 +74,15 @@ return (
       px-4 sm:px-10 py-6 sm:py-8
     ">
 
-      <CardHeader className="text-center space-y-5">
-
-        <img
-          src="https://cruisesaga.com/cruisesaga.png"
-          alt="Cruise Saga"
-          className="mx-auto h-20 w-auto"
-        />
-
-        <CardTitle className="text-3xl font-bold text-white">
-          Cruise Saga
+      <CardHeader className="text-center space-y-3">
+        <CardTitle className="text-4xl font-black text-white tracking-tight drop-shadow-md">
+          <span className="text-[#38bdf8]">Galaxy</span>{" "}
+          <span className="text-[#fb923c]">Cruise</span>
         </CardTitle>
 
         <CardDescription className="text-white/80 text-base">
-          Access Cruise Saga dashboard
+          Access Galaxy Cruise dashboard
         </CardDescription>
-
       </CardHeader>
 
       <CardContent className="px-2">

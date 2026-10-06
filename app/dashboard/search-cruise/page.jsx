@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { ChevronDown, ChevronRight, ChevronUp, ChevronLeft, ChevronsLeft, ChevronsRight, Pin, Minus, Tag, TrendingDown, TrendingUp, X, ImageIcon, Search, RotateCcw, RefreshCw, Compass, Sparkles, AlertCircle, Ship, MapPin, CalendarDays, Layers, Zap, CheckCircle2, Play, Check, ArrowDown, ArrowDownNarrowWide, ArrowUpNarrowWide, Building2 } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronUp, ChevronLeft, ChevronsLeft, ChevronsRight, Pin, Minus, Tag, TrendingDown, TrendingUp, X, ImageIcon, Search, RotateCcw, RefreshCw, Compass, Sparkles, AlertCircle, Ship, MapPin, CalendarDays, Layers, Zap, CheckCircle2, Play, Check, ArrowDown, ArrowDownNarrowWide, ArrowUpNarrowWide, Building2, ShieldAlert, ShieldCheck, Lock, ExternalLink } from "lucide-react";
 
 import {
   createCruiseTag,
@@ -13,7 +13,15 @@ import {
   fetchShip,
   fetchUsers,
   fetchVendors,
-  updateCruiseTag
+  updateCruiseTag,
+  fetchCategoryDecks,
+  refreshCruiseCabins,
+  getCruiseRefreshStatus,
+  logActivity,
+  fetchCruise,
+  triggerVendorScrapeFetch,
+  checkVendorAuth,
+  checkAllVendorAuth
 } from "../api";
 import {
   buildCabinGroups,
@@ -21,7 +29,6 @@ import {
   getCruiseRouteLabel,
   normalizeCabinCategory
 } from "../cruise-helpers";
-import { fetchCategoryDecks, refreshCruiseCabins, getCruiseRefreshStatus, logActivity, fetchCruise, triggerVendorScrapeFetch } from "../api";
 import { CruiseSearchSkeleton } from "@/components/ui/skeleton-patterns";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -412,6 +419,176 @@ function Modal({ children, onClose, width = "min(96vw, 920px)", className = "" }
         {children}
       </div>
     </div>
+  );
+}
+
+function VendorAuthRequiredModal({
+  isOpen,
+  onClose,
+  vendorName,
+  shipName,
+  onVerified,
+  setVendorAuthResults
+}) {
+  const [verifying, setVerifying] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
+
+  if (!isOpen || !vendorName) return null;
+
+  const vendorKey = VENDOR_SCRAPER_MAP[vendorName] || String(vendorName).toLowerCase().replace(/[^a-z0-9]/g, "");
+
+  const handleVerify = async () => {
+    try {
+      setVerifying(true);
+      setErrorMsg("");
+      setSuccessMsg("");
+      const res = await checkVendorAuth(vendorKey);
+      const statusStr = String(res?.status || "").toLowerCase();
+      const isOk = statusStr === "ok" || statusStr === "success" || res?.ok === true || res?.valid === true;
+
+      if (isOk) {
+        setSuccessMsg("Authentication verified successfully! You can now proceed with your search.");
+        const newResult = { status: "ok", latencyMs: res?.latencyMs, message: res?.message || "Verified" };
+        if (setVendorAuthResults) {
+          setVendorAuthResults((prev) => {
+            const next = { ...prev, [vendorKey]: newResult, [vendorName]: newResult };
+            try {
+              localStorage.setItem("ops_vendor_auth_results", JSON.stringify(next));
+            } catch {}
+            return next;
+          });
+        }
+        setTimeout(() => {
+          if (onVerified) onVerified();
+          onClose();
+        }, 900);
+      } else {
+        setErrorMsg(res?.message || res?.error || `Vendor authentication check returned status: ${res?.status || "failed"}`);
+      }
+    } catch (err) {
+      setErrorMsg(err.message || "Failed to connect to authentication verification service.");
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  return (
+    <Modal onClose={onClose} width="min(94vw, 520px)">
+      <div className="p-6 space-y-5">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 border border-amber-200/80 flex items-center justify-center shadow-xs shrink-0">
+              <ShieldAlert size={24} className="stroke-[2.2]" />
+            </div>
+            <div>
+              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-100/70 text-amber-800 text-[10.5px] font-bold uppercase tracking-wider mb-1">
+                <span>Verification Required</span>
+              </div>
+              <h2 className="text-base sm:text-lg font-bold text-slate-900 leading-snug">
+                Vendor Not Verified
+              </h2>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+            aria-label="Close"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Informational Body */}
+        <div className="space-y-3 text-xs sm:text-sm text-slate-600 leading-relaxed">
+          <p>
+            {shipName ? (
+              <>
+                The ship <strong className="text-teal-900 font-bold bg-teal-50 px-1.5 py-0.5 rounded border border-teal-200">{shipName}</strong> belongs to <strong className="text-slate-900 font-bold bg-slate-100 px-1.5 py-0.5 rounded">{vendorName}</strong>, which has not passed live authentication validation yet.
+              </>
+            ) : (
+              <>
+                The cruise vendor <strong className="text-slate-900 font-bold bg-slate-100 px-1.5 py-0.5 rounded">{vendorName}</strong> has not passed live authentication validation yet.
+              </>
+            )}
+          </p>
+          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1.5">
+            {shipName && (
+              <div className="flex items-center justify-between text-xs font-semibold text-slate-700">
+                <span>Selected Ship:</span>
+                <span className="font-semibold text-teal-900">{shipName}</span>
+              </div>
+            )}
+            <div className="flex items-center justify-between text-xs font-semibold text-slate-700">
+              <span>Vendor Provider:</span>
+              <span className="font-mono text-teal-800 font-bold">{vendorName} ({vendorKey})</span>
+            </div>
+            <div className="flex items-center justify-between text-xs font-semibold text-slate-700">
+              <span>Auth Status:</span>
+              <span className="inline-flex items-center gap-1 text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200 text-[11px] font-bold">
+                <AlertCircle size={12} /> Not Verified / Pending
+              </span>
+            </div>
+          </div>
+          <p className="text-xs text-slate-500">
+            Searches and live scraper jobs cannot be executed for this provider until authentication credentials are verified.
+          </p>
+        </div>
+
+        {/* Feedback Alerts */}
+        {errorMsg && (
+          <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-start gap-2.5 animate-in fade-in">
+            <AlertCircle size={16} className="text-rose-600 shrink-0 mt-0.5" />
+            <div className="space-y-1 flex-1">
+              <div>{errorMsg}</div>
+              <div className="text-[11px] text-rose-600 font-normal">
+                You can reconfigure or check credentials in the Ops Console.
+              </div>
+            </div>
+          </div>
+        )}
+
+        {successMsg && (
+          <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center gap-2.5 animate-in fade-in">
+            <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+            <span>{successMsg}</span>
+          </div>
+        )}
+
+        {/* Action Buttons */}
+        <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2.5 border-t border-slate-100">
+          <a
+            href="/dashboard/ops-console"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center gap-1.5 h-10 px-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition shadow-2xs cursor-pointer"
+          >
+            <span>Ops Console</span>
+            <ExternalLink size={13} className="text-slate-400" />
+          </a>
+          <button
+            type="button"
+            onClick={handleVerify}
+            disabled={verifying}
+            className="inline-flex items-center justify-center gap-2 h-10 px-5 rounded-xl bg-teal-700 hover:bg-teal-800 disabled:opacity-75 text-white text-xs sm:text-sm font-bold shadow-xs hover:shadow transition active:scale-95 cursor-pointer"
+          >
+            {verifying ? (
+              <>
+                <RefreshCw size={14} className="animate-spin" />
+                <span>Verifying Credentials…</span>
+              </>
+            ) : (
+              <>
+                <ShieldCheck size={15} />
+                <span>Verify Authentication Now</span>
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -1500,7 +1677,7 @@ function PricingModal({ row: initialRow, onClose, onRefreshComplete }) {
               </div>
             </div>
           )}
-          {!isLeadInOnly && activeData?.categories?.map((cat) => {
+          {!isLeadInOnly && activeData?.categories?.map((cat, catIdx) => {
             const isExpanded = expandedCategory === cat.code;
             const isGTY = cat.avlResult === "GTY" || cat.status === "Guarantee";
             const cache = cabinCache[cat.code];
@@ -1523,7 +1700,7 @@ function PricingModal({ row: initialRow, onClose, onRefreshComplete }) {
             ].find(p => p != null && Number.isFinite(Number(p)) && Number(p) > 0);
 
             return (
-              <div key={cat.code} className="transition-colors">
+              <div key={`cat-${cat.code}-${catIdx}`} className="transition-colors">
                 {/* Category row */}
                 <button
                   onClick={() => handleCategoryClick(cat)}
@@ -1607,12 +1784,12 @@ function PricingModal({ row: initialRow, onClose, onRefreshComplete }) {
                       </div>
                     ) : (
                       <>
-                        {cache.decks.map((deck) => {
-                          const deckKey = String(deck.deckNumber ?? deck.deckName);
+                        {cache.decks.map((deck, dIdx) => {
+                          const deckKey = String(deck.deckNumber ?? deck.deckName ?? dIdx);
                           const isDeckOpen = expandedDecks.has(deckKey);
                           return (
                             <div
-                              key={deckKey}
+                              key={`deck-${deckKey}-${dIdx}`}
                               className="rounded-2xl border border-slate-200/90 bg-white overflow-hidden shadow-2xs"
                             >
                               {/* Deck header */}
@@ -1648,9 +1825,9 @@ function PricingModal({ row: initialRow, onClose, onRefreshComplete }) {
                               {isDeckOpen && (
                                 <div className="p-3 bg-slate-50/30">
                                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                                    {deck.cabins.map((cabin) => (
+                                    {deck.cabins.map((cabin, cIdx) => (
                                       <div
-                                        key={cabin.cabinNumber}
+                                        key={`cab-${cabin.cabinNumber}-${cIdx}`}
                                         className="flex items-center justify-between p-2 px-2.5 rounded-xl bg-white border border-slate-200/80 shadow-2xs hover:border-teal-400 hover:bg-teal-50/20 transition-all duration-150"
                                       >
                                         <div className="flex flex-col">
@@ -1936,9 +2113,81 @@ export default function CruiseSearchPage() {
   const [sortBy, setSortBy] = useState("refreshed");
   const [datePreset, setDatePreset] = useState("All Dates");
 
+  // Vendor Authentication Verification State & Modal Config
+  const [vendorAuthResults, setVendorAuthResults] = useState({});
+  const [authModalConfig, setAuthModalConfig] = useState({
+    isOpen: false,
+    vendorName: "",
+    shipName: "",
+    onProceed: null
+  });
+
+  useEffect(() => {
+    try {
+      const cached = localStorage.getItem("ops_vendor_auth_results");
+      if (cached) {
+        setVendorAuthResults(JSON.parse(cached));
+      }
+    } catch {}
+  }, []);
+
+  const checkVendorVerified = (vendorName, onVerifiedProceed, shipName = "") => {
+    if (!vendorName) return true;
+    const key = VENDOR_SCRAPER_MAP[vendorName] || String(vendorName).toLowerCase().replace(/[^a-z0-9]/g, "");
+    const res = vendorAuthResults[key] || vendorAuthResults[vendorName] || vendorAuthResults[key.toLowerCase()];
+    const isOk = res && (res.status === "ok" || res.status === "success" || res.ok === true || res.valid === true);
+    if (!isOk) {
+      setAuthModalConfig({
+        isOpen: true,
+        vendorName,
+        shipName: shipName || "",
+        onProceed: onVerifiedProceed || null
+      });
+      return false;
+    }
+    return true;
+  };
+
+  const getVendorForShip = (shipName) => {
+    if (!shipName) return null;
+    const clean = String(shipName).trim().toLowerCase();
+
+    // 1. If user already selected a vendor in filter, return it
+    if (filters.vendor) return filters.vendor;
+
+    // 2. Check in lookupOptions.allShips
+    const shipObj = lookupOptions.allShips.find(
+      (s) => (s.name || "").trim().toLowerCase() === clean
+    );
+    if (shipObj) {
+      if (shipObj.vendorName) return shipObj.vendorName;
+      if (shipObj.vendor?.name) return shipObj.vendor.name;
+      if (typeof shipObj.vendor === "string" && shipObj.vendor) return shipObj.vendor;
+      if (shipObj.vendorId) {
+        const v = lookupOptions.vendors.find((v) => v.id === shipObj.vendorId);
+        if (v?.name) return v.name;
+      }
+    }
+
+    // 3. Check in loaded cruises data
+    const cruiseMatch = data.find(
+      (c) => (c.ship || c.shipName || "").trim().toLowerCase() === clean
+    );
+    if (cruiseMatch?.vendor?.name) return cruiseMatch.vendor.name;
+    if (typeof cruiseMatch?.vendor === "string" && cruiseMatch.vendor) return cruiseMatch.vendor;
+
+    // 4. Check in targetVendorShips if targeted vendor selected
+    if (targetVendor && targetVendorShips.some((s) => s.trim().toLowerCase() === clean)) {
+      return targetVendor;
+    }
+
+    return null;
+  };
+
   // Targeted Individual Ship Live Search / Scrape State
+  const [targetedAccordionOpen, setTargetedAccordionOpen] = useState(false);
   const [targetStartDate, setTargetStartDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [targetHorizonDays, setTargetHorizonDays] = useState(30);
+  const [targetHorizonDays, setTargetHorizonDays] = useState(1);
   const [targetShipName, setTargetShipName] = useState("");
   const [targetVendor, setTargetVendor] = useState("");
   const [targetVendorShips, setTargetVendorShips] = useState([]);
@@ -1949,17 +2198,24 @@ export default function CruiseSearchPage() {
   const [lastSearchedShip, setLastSearchedShip] = useState("");
 
   const scrollToRow = (cruiseId) => {
-    if (!cruiseId) return;
-    setHighlightedRowId(cruiseId);
-    setTimeout(() => {
-      const el = document.getElementById(`cruise-row-${cruiseId}`) || document.getElementById(`cruise-card-${cruiseId}`);
-      if (el) {
-        el.scrollIntoView({ behavior: "smooth", block: "center" });
-      }
-    }, 100);
-    setTimeout(() => {
-      setHighlightedRowId((prev) => (prev === cruiseId ? null : prev));
-    }, 4000);
+    if (cruiseId) {
+      setHighlightedRowId(cruiseId);
+      setTimeout(() => {
+        const el = document.getElementById(`cruise-row-${cruiseId}`) || document.getElementById(`cruise-card-${cruiseId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+        } else {
+          const resEl = document.getElementById("cruise-results-section");
+          if (resEl) resEl.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      }, 100);
+      setTimeout(() => {
+        setHighlightedRowId((prev) => (prev === cruiseId ? null : prev));
+      }, 4000);
+    } else {
+      const resEl = document.getElementById("cruise-results-section");
+      if (resEl) resEl.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   };
 
   // Initialize filters from URL search params (e.g. ?ship=MSC+Preziosa&vendor=MSC)
@@ -2052,7 +2308,7 @@ export default function CruiseSearchPage() {
         const [tagResponse, vendorResponse, shipResponse, userResponse] = await Promise.all([
           fetchCruiseTags().catch(() => ({ data: {} })),
           fetchVendors({ limit: 100 }).catch(() => ({ data: [] })),
-          fetchShips({ limit: 300 }).catch(() => ({ data: [] })),
+          fetchShips({ limit: 500 }).catch(() => ({ data: [] })),
           fetchUsers().catch(() => ({ data: [] }))
         ]);
 
@@ -2060,13 +2316,21 @@ export default function CruiseSearchPage() {
           return;
         }
 
+        const rawVendors = (vendorResponse.data || []).map((v) => ({ id: v.id, name: v.name })).filter((v) => v.name);
+        const vMap = new Map(rawVendors.map((v) => [v.id, v.name]));
+
         setTagDirectory({
           assignees: userResponse.data?.map((user) => user.name).filter(Boolean) || tagResponse.data?.assignees || []
         });
 
         setLookupOptions({
-          vendors: (vendorResponse.data || []).map((v) => ({ id: v.id, name: v.name })).filter((v) => v.name),
-          allShips: (shipResponse.data || []).map((s) => ({ name: s.name, vendorId: s.vendorId })).filter((s) => s.name),
+          vendors: rawVendors,
+          allShips: (shipResponse.data || []).map((s) => ({
+            name: s.name,
+            vendorId: s.vendorId,
+            vendor: s.vendor,
+            vendorName: s.vendor?.name || (typeof s.vendor === "string" ? s.vendor : (s.vendorId ? vMap.get(s.vendorId) : null))
+          })).filter((s) => s.name),
           users: userResponse.data?.map((user) => user.name).filter(Boolean) || []
         });
       } catch (err) {
@@ -2231,6 +2495,17 @@ export default function CruiseSearchPage() {
   };
 
   const selectVendor = (vendorName) => {
+    if (vendorName) {
+      const isOk = checkVendorVerified(vendorName, () => {
+        setFilters((current) => {
+          const next = { ...current, vendor: vendorName, ship: "" };
+          setAppliedFilters(next);
+          setPage(1);
+          return next;
+        });
+      });
+      if (!isOk) return;
+    }
     setFilters((current) => {
       const next = { ...current, vendor: vendorName, ship: "" };
       setAppliedFilters(next);
@@ -2271,11 +2546,20 @@ export default function CruiseSearchPage() {
   };
 
   const applyFilters = () => {
+    const shipVendor = filters.ship ? getVendorForShip(filters.ship) : null;
+    const vendorToCheck = filters.vendor || shipVendor;
+    if (vendorToCheck) {
+      const isOk = checkVendorVerified(vendorToCheck, () => {
+        setAppliedFilters(filters);
+        setPage(1);
+      }, filters.ship);
+      if (!isOk) return;
+    }
     setAppliedFilters(filters);
     setPage(1);
   };
 
-  const handleTargetedSearch = () => {
+  const executeTargetedSearch = () => {
     const trimmedShip = targetShipName.trim();
     const base = targetStartDate ? new Date(targetStartDate) : new Date();
     const end = new Date(base.getTime() + targetHorizonDays * 86400000);
@@ -2298,7 +2582,19 @@ export default function CruiseSearchPage() {
     setPage(1);
   };
 
-  const handleTriggerScraper = async () => {
+  const handleTargetedSearch = () => {
+    const shipVendor = targetShipName ? getVendorForShip(targetShipName) : null;
+    const vendorToCheck = targetVendor || shipVendor;
+    if (vendorToCheck) {
+      const isOk = checkVendorVerified(vendorToCheck, () => {
+        executeTargetedSearch();
+      }, targetShipName);
+      if (!isOk) return;
+    }
+    executeTargetedSearch();
+  };
+
+  const executeTriggerScraper = async () => {
     const trimmedShip = targetShipName.trim();
     const vendorKey = VENDOR_SCRAPER_MAP[targetVendor] || (targetVendor ? targetVendor.toLowerCase() : "msc");
     setScraperLoading(true);
@@ -2322,7 +2618,7 @@ export default function CruiseSearchPage() {
         ok,
         msg: displayMsg
       });
-      handleTargetedSearch();
+      executeTargetedSearch();
     } catch (err) {
       setScraperStatus({ ok: false, msg: err.message || "Failed to trigger scraper" });
     } finally {
@@ -2330,10 +2626,36 @@ export default function CruiseSearchPage() {
     }
   };
 
+  const handleTriggerScraper = async () => {
+    const shipVendor = targetShipName ? getVendorForShip(targetShipName) : null;
+    const vendorToCheck = targetVendor || shipVendor;
+    if (vendorToCheck) {
+      const isOk = checkVendorVerified(vendorToCheck, () => {
+        executeTriggerScraper();
+      }, targetShipName);
+      if (!isOk) return;
+    }
+    executeTriggerScraper();
+  };
+
   // Debounce keyword and ship search inputs so typing naturally filters after short delay
   useEffect(() => {
     const timer = setTimeout(() => {
       if (filters.code !== appliedFilters.code || filters.ship !== appliedFilters.ship) {
+        if (filters.ship && filters.ship !== appliedFilters.ship) {
+          const shipVendor = getVendorForShip(filters.ship);
+          if (shipVendor) {
+            const isOk = checkVendorVerified(shipVendor, () => {
+              setAppliedFilters((current) => ({
+                ...current,
+                code: filters.code,
+                ship: filters.ship
+              }));
+              setPage(1);
+            }, filters.ship);
+            if (!isOk) return;
+          }
+        }
         setAppliedFilters((current) => ({
           ...current,
           code: filters.code,
@@ -2438,14 +2760,14 @@ export default function CruiseSearchPage() {
   }, [pagination, rows]);
 
   return (
-    <div className="w-full min-h-screen bg-slate-50/50 px-3 sm:px-4 py-4 space-y-4">
+    <div className="w-full max-w-full min-w-0 min-h-screen bg-slate-50/50 px-3 sm:px-4 py-4 space-y-4 overflow-x-hidden">
       {/* ── Top Header Banner ────────────────────────────────────────────── */}
-      <div className="relative overflow-hidden rounded-2xl border border-teal-200/80 bg-gradient-to-r from-teal-500/10 via-sky-500/5 to-teal-500/10 p-5 sm:p-6 shadow-xs">
+      <div className="relative overflow-hidden rounded-2xl border border-teal-200/80 bg-gradient-to-r from-teal-500/10 via-sky-500/5 to-teal-500/10 p-4 sm:p-6 shadow-xs w-full max-w-full min-w-0">
         <div className="pointer-events-none absolute -right-12 -top-12 h-48 w-48 rounded-full bg-teal-500/10 blur-3xl" />
         <div className="pointer-events-none absolute -left-12 -bottom-12 h-48 w-48 rounded-full bg-sky-500/10 blur-3xl" />
 
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-          <div className="space-y-2 max-w-3xl">
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 sm:gap-6 min-w-0 w-full">
+          <div className="space-y-2 max-w-3xl min-w-0">
             <div className="inline-flex items-center gap-2 rounded-full border border-teal-200/80 bg-white/90 backdrop-blur-xs px-3.5 py-1 text-[11px] font-bold text-teal-800 shadow-2xs">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
@@ -2453,42 +2775,42 @@ export default function CruiseSearchPage() {
               </span>
               <span>Inventory Manager · Live Database</span>
             </div>
-            <h1 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900">
+            <h1 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 break-words">
               Cruise Search & Inventory Explorer
             </h1>
-            <p className="text-xs sm:text-sm font-medium text-slate-600 leading-relaxed max-w-2xl">
+            <p className="text-xs sm:text-sm font-medium text-slate-600 leading-relaxed max-w-2xl break-words">
               Paginated cruise inventory from the database with ship drilldown, real-time cabin category pricing, and booking tags.
             </p>
           </div>
 
           {/* Stat Counter Chips */}
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-3 rounded-xl border border-teal-200/70 bg-white/90 hover:bg-white px-4 py-2.5 shadow-2xs min-w-[125px] transition-all hover:border-teal-300">
+          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="flex items-center gap-3 rounded-xl border border-teal-200/70 bg-white/90 hover:bg-white px-3.5 sm:px-4 py-2.5 shadow-2xs min-w-[115px] sm:min-w-[125px] transition-all hover:border-teal-300">
               <div className="p-2 rounded-lg bg-teal-100/70 text-teal-700">
                 <Ship size={17} />
               </div>
               <div>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Cruises</span>
-                <span className="text-xl font-black text-slate-900 font-mono tracking-tight">{overview.cruises?.toLocaleString() ?? 0}</span>
+                <span className="text-lg sm:text-xl font-black text-slate-900 font-mono tracking-tight">{overview.cruises?.toLocaleString() ?? 0}</span>
               </div>
             </div>
-            <div className="flex items-center gap-3 rounded-xl border border-teal-200/70 bg-white/90 hover:bg-white px-4 py-2.5 shadow-2xs min-w-[125px] transition-all hover:border-teal-300">
+            <div className="flex items-center gap-3 rounded-xl border border-teal-200/70 bg-white/90 hover:bg-white px-3.5 sm:px-4 py-2.5 shadow-2xs min-w-[115px] sm:min-w-[125px] transition-all hover:border-teal-300">
               <div className="p-2 rounded-lg bg-sky-100/70 text-sky-700">
                 <Compass size={17} />
               </div>
               <div>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Ships</span>
-                <span className="text-xl font-black text-slate-900 font-mono tracking-tight">{overview.ships?.toLocaleString() ?? 0}</span>
+                <span className="text-lg sm:text-xl font-black text-slate-900 font-mono tracking-tight">{overview.ships?.toLocaleString() ?? 0}</span>
               </div>
             </div>
             {opts.ports?.length > 0 && (
-              <div className="hidden sm:flex items-center gap-3 rounded-xl border border-teal-200/70 bg-white/90 hover:bg-white px-4 py-2.5 shadow-2xs min-w-[125px] transition-all hover:border-teal-300">
+              <div className="hidden sm:flex items-center gap-3 rounded-xl border border-teal-200/70 bg-white/90 hover:bg-white px-3.5 sm:px-4 py-2.5 shadow-2xs min-w-[115px] sm:min-w-[125px] transition-all hover:border-teal-300">
                 <div className="p-2 rounded-lg bg-emerald-100/70 text-emerald-700">
                   <MapPin size={17} />
                 </div>
                 <div>
                   <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Ports</span>
-                  <span className="text-xl font-black text-slate-900 font-mono tracking-tight">{opts.ports.length}</span>
+                  <span className="text-lg sm:text-xl font-black text-slate-900 font-mono tracking-tight">{opts.ports.length}</span>
                 </div>
               </div>
             )}
@@ -2496,223 +2818,26 @@ export default function CruiseSearchPage() {
         </div>
       </div>
 
-      {/* ── Separate Targeted Individual Ship Search & Live Scraper Card ── */}
-      <div className="rounded-2xl border border-slate-200/90 bg-white p-5 sm:p-6 shadow-xs hover:shadow-md transition-shadow duration-300 space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-slate-100">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-teal-600 to-teal-800 text-white flex items-center justify-center shadow-sm shadow-teal-700/20 ring-4 ring-teal-50 shrink-0">
-              <Ship size={19} className="stroke-[2.2]" />
-            </div>
-            <div>
-              <h3 className="text-sm sm:text-base font-bold text-slate-900 flex items-center gap-2 flex-wrap">
-                <span>Targeted Individual Ship Search</span>
-                <span className="inline-flex items-center gap-1 text-[10px] uppercase font-bold text-teal-800 bg-teal-50 border border-teal-200/80 px-2.5 py-0.5 rounded-full">
-                  <Sparkles size={11} className="text-teal-600" />
-                  Ship + Dates + Horizon
-                </span>
-              </h3>
-              <p className="text-xs font-medium text-slate-500 mt-0.5">
-                Quickly query specific ship sailings by start date & horizon window, or dispatch on-demand live scraper workers.
-              </p>
-            </div>
-          </div>
-
-          {/* Active Query JSON preview badge */}
-          <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900 text-slate-200 font-mono text-[11px] shadow-sm border border-slate-800">
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-teal-400 animate-pulse"></span>
-            <span className="text-teal-400 font-bold">query:</span>
-            <span className="text-slate-300">{`{ startDate: "${targetStartDate}", horizonDays: ${targetHorizonDays}${targetShipName ? `, shipName: "${targetShipName}"` : ""} }`}</span>
-          </div>
-        </div>
-
-        {/* 4 Main Inputs Grid: Vendor first (mandatory), then Ship (auto-fetched), Start Date, Search Horizon */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3.5 items-end">
-          {/* 1. Vendor / Cruise Line Provider (Mandatory) */}
-          <div className="sm:col-span-1 lg:col-span-3 space-y-1.5">
-            <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-700 uppercase tracking-wider">
-              <Building2 size={13} className="text-teal-600" />
-              <span>Cruise Line / Vendor <span className="text-rose-500">*</span></span>
-            </label>
-            <select
-              value={targetVendor}
-              onChange={(e) => setTargetVendor(e.target.value)}
-              required
-              className="w-full h-10 px-3.5 rounded-xl border border-teal-300/80 bg-white hover:bg-slate-50 focus:bg-white text-xs sm:text-sm font-semibold text-slate-900 shadow-2xs focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition-all cursor-pointer"
-            >
-              {opts.vendors.length === 0 ? (
-                <option value="">Loading providers…</option>
-              ) : (
-                opts.vendors.map((v) => (
-                  <option key={v} value={v}>
-                    {v}
-                  </option>
-                ))
-              )}
-            </select>
-          </div>
-
-          {/* 2. Ship Name (Search & Select from Auto-fetched Fleet) */}
-          <div className="sm:col-span-1 lg:col-span-3 space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-700 uppercase tracking-wider">
-                <Ship size={13} className="text-teal-600" />
-                <span>Ship Name <span className="text-rose-500">*</span></span>
-              </label>
-              <span className="text-[10.5px] font-semibold text-teal-700">
-                {targetShipsLoading ? "Loading…" : `${targetVendorShips.length} ship${targetVendorShips.length === 1 ? "" : "s"}`}
-              </span>
-            </div>
-            <SearchableSelect
-              placeholder={targetShipsLoading ? "Loading fleet ships…" : `Type or select ship (${targetVendorShips.length})`}
-              value={targetShipName}
-              onChange={(val) => setTargetShipName(val)}
-              options={targetVendorShips}
-              onEnter={handleTargetedSearch}
-            />
-          </div>
-
-          {/* 3. Start Date */}
-          <div className="sm:col-span-1 lg:col-span-2 space-y-1.5">
-            <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-700 uppercase tracking-wider">
-              <CalendarDays size={13} className="text-teal-600" />
-              <span>Start Date</span>
-            </label>
-            <input
-              type="date"
-              value={targetStartDate}
-              onChange={(e) => setTargetStartDate(e.target.value)}
-              className="w-full h-10 px-3 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white text-xs sm:text-sm font-semibold text-slate-900 shadow-2xs focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition-all cursor-pointer"
-            />
-          </div>
-
-          {/* 4. Horizon Days Selector */}
-          <div className="sm:col-span-2 lg:col-span-4 space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-700 uppercase tracking-wider">
-                <Compass size={13} className="text-teal-600" />
-                <span>Search Horizon</span>
-              </label>
-              <span className="text-[11px] font-semibold text-slate-500">{targetHorizonDays} Days Horizon</span>
-            </div>
-            <div className="flex items-center p-1 bg-slate-100/90 rounded-xl border border-slate-200/70 gap-1 overflow-x-auto no-scrollbar">
-              {[
-                { label: "1 Day", days: 1 },
-                { label: "7 Days", days: 7 },
-                { label: "30 Days", days: 30 },
-                { label: "60 Days", days: 60 },
-                { label: "3 Months", days: 90 },
-              ].map((opt) => (
-                <button
-                  type="button"
-                  key={opt.days}
-                  onClick={() => setTargetHorizonDays(opt.days)}
-                  className={`h-8 px-2.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex-1 min-w-[54px] shrink-0 ${targetHorizonDays === opt.days
-                    ? "bg-white text-teal-800 font-bold shadow-xs border border-slate-200/90"
-                    : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
-                    }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Action Row & Live Scraper Trigger */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-3 border-t border-slate-100">
-          {/* Active selection summary badge */}
-          <div className="flex items-center gap-2 text-xs font-semibold text-slate-600 py-1">
-            <span className="w-2 h-2 rounded-full bg-teal-600 animate-pulse shrink-0" />
-            <span className="truncate">
-              Targeting: <strong className="text-teal-900">{targetVendor || "Select Vendor"}</strong> · <strong className="text-slate-900">{targetShipName || "All Ships"}</strong>
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
-            <button
-              type="button"
-              onClick={handleTargetedSearch}
-              disabled={loading || !targetVendor}
-              className="inline-flex items-center justify-center gap-2 h-10 px-5 rounded-xl bg-teal-700 hover:bg-teal-800 disabled:opacity-75 text-white text-xs sm:text-sm font-bold shadow-xs hover:shadow-sm active:scale-95 transition-all cursor-pointer flex-1 sm:flex-initial"
-            >
-              {loading ? (
-                <RefreshCw size={15} className="animate-spin" />
-              ) : (
-                <Search size={15} />
-              )}
-              <span>{loading ? "Searching Inventory…" : "Search Ship Inventory"}</span>
-            </button>
-
-            {!loading && rows.length > 0 && (appliedFilters.ship || lastSearchedShip) && (
-              <button
-                type="button"
-                onClick={() => scrollToRow(rows[0]?.id)}
-                className="inline-flex items-center justify-center gap-1.5 h-10 px-4 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-900 text-xs sm:text-sm font-bold shadow-2xs hover:shadow-xs active:scale-95 transition-all cursor-pointer animate-in fade-in slide-in-from-top-1"
-                title={`Jump to row: ${rows[0]?.ship || "1st match"}`}
-              >
-                <ArrowDown size={14} className="text-emerald-700 animate-bounce" />
-                <span>Go to Sailing ({rows[0]?.ship || "1st Match"})</span>
-              </button>
-            )}
-
-            <button
-              type="button"
-              onClick={handleTriggerScraper}
-              disabled={scraperLoading || !targetVendor}
-              className="inline-flex items-center justify-center gap-2 h-10 px-5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 disabled:opacity-50 text-white text-xs sm:text-sm font-bold shadow-xs hover:shadow-sm active:scale-95 transition-all cursor-pointer flex-1 sm:flex-initial"
-              title="Dispatch scraper worker with { startDate, horizonDays, shipName }"
-            >
-              {scraperLoading ? (
-                <RefreshCw size={15} className="animate-spin" />
-              ) : (
-                <Zap size={15} className="text-emerald-200" />
-              )}
-              <span>{scraperLoading ? "Triggering Scraper…" : "Run Live Scraper"}</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Live Scraper feedback alert if triggered */}
-        {scraperStatus && (
-          <div className={`p-3 rounded-xl text-xs font-semibold flex items-center justify-between gap-2 shadow-2xs ${scraperStatus.ok
-            ? "bg-emerald-50 text-emerald-900 border border-emerald-200/80"
-            : "bg-rose-50 text-rose-900 border border-rose-200/80"
-            }`}>
-            <div className="flex items-center gap-2">
-              {scraperStatus.ok ? <CheckCircle2 size={16} className="text-emerald-600 shrink-0" /> : <AlertCircle size={16} className="text-rose-600 shrink-0" />}
-              <span>{scraperStatus.msg}</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setScraperStatus(null)}
-              className="text-slate-400 hover:text-slate-700 text-xs font-bold cursor-pointer transition-colors"
-            >
-              Dismiss
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* ── Filter Form Card ───────────────────────────────────────────── */}
-      <div className="rounded-2xl border border-slate-200/90 bg-white p-5 sm:p-6 shadow-xs hover:shadow-md transition-shadow duration-300 space-y-5">
+      {/* ── Filter Form Card (Main Search Inventory) ────────────────── */}
+      <div className="rounded-2xl border border-slate-200/90 bg-white p-4 sm:p-6 shadow-xs hover:shadow-md transition-shadow duration-300 space-y-5 w-full max-w-full min-w-0 overflow-hidden">
         {/* Cruise Code or Keyword Search */}
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
+        <div className="space-y-1.5 min-w-0 w-full">
+          <div className="flex items-center justify-between flex-wrap gap-1">
             <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700">
               <Search size={14} className="text-teal-600" />
               <span>Cruise Code or Keyword</span>
             </label>
             <span className="text-[11px] text-slate-400 font-normal">e.g. CJ07260801, Seaside, Mediterranean</span>
           </div>
-          <div className="relative">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
+          <div className="relative w-full min-w-0">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-teal-600 pointer-events-none" size={16} />
             <input
               type="text"
               placeholder="Search by cruise code, ship name, package title or route..."
               value={filters.code}
               onChange={(event) => setF("code", event.target.value)}
               onKeyDown={(event) => { if (event.key === "Enter") applyFilters(); }}
-              className="w-full h-11 pl-10 pr-16 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition-all shadow-2xs"
+              className="w-full h-11 pl-10 pr-16 rounded-xl border-2 border-teal-500/80 bg-white hover:border-teal-600 focus:border-teal-600 focus:ring-4 focus:ring-teal-500/15 text-xs sm:text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none transition-all shadow-xs"
             />
             {filters.code && (
               <button
@@ -2727,7 +2852,7 @@ export default function CruiseSearchPage() {
         </div>
 
         {/* Cruise Line Provider Tabs */}
-        <div className="space-y-1.5">
+        <div className="space-y-1.5 w-full max-w-full min-w-0">
           <div className="flex items-center justify-between">
             <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700">
               <Layers size={14} className="text-teal-600" />
@@ -2743,13 +2868,13 @@ export default function CruiseSearchPage() {
               </button>
             )}
           </div>
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 flex-nowrap scroll-smooth no-scrollbar">
+          <div className="flex items-center gap-2 overflow-x-auto pb-1.5 flex-nowrap scroll-smooth no-scrollbar w-full max-w-full min-w-0">
             <button
               type="button"
               onClick={() => selectVendor("")}
               className={`h-9 px-4 rounded-xl text-xs font-semibold transition-all cursor-pointer shrink-0 whitespace-nowrap ${filters.vendor === ""
-                ? "bg-teal-700 text-white font-bold shadow-xs border border-teal-700"
-                : "bg-slate-50 hover:bg-slate-100 text-slate-700 hover:text-slate-900 border border-slate-200/80 shadow-2xs"
+                ? "bg-teal-50/50 text-teal-950 font-bold border-2 border-teal-600 shadow-xs"
+                : "bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 border border-slate-200/80 shadow-2xs"
                 }`}
             >
               All Providers
@@ -2763,12 +2888,12 @@ export default function CruiseSearchPage() {
                   key={value}
                   onClick={() => selectVendor(value)}
                   className={`h-9 px-3.5 rounded-xl text-xs font-semibold transition-all cursor-pointer shrink-0 whitespace-nowrap ${isSelected
-                    ? "bg-teal-700 text-white font-bold shadow-xs border border-teal-700 scale-[1.01]"
+                    ? "bg-teal-50/50 text-teal-950 font-bold border-2 border-teal-600 shadow-xs scale-[1.01]"
                     : "bg-white text-slate-700 hover:bg-slate-50 hover:text-slate-900 border border-slate-200/80 shadow-2xs"
                     }`}
                 >
                   <span className="inline-flex items-center gap-2">
-                    <span className={`w-2 h-2 rounded-full ${isSelected ? "bg-white ring-2 ring-teal-400" : vStyle.dot}`} />
+                    <span className={`w-2 h-2 rounded-full ${isSelected ? "bg-teal-600 ring-2 ring-teal-400/40" : vStyle.dot}`} />
                     <span>{value}</span>
                   </span>
                 </button>
@@ -2778,7 +2903,7 @@ export default function CruiseSearchPage() {
         </div>
 
         {/* 4 Multi-Select Options Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3.5 w-full min-w-0">
           {[
             { key: "ship", label: "Ship", ph: "Select Ship", mode: "input", values: opts.ships, icon: Ship, iconColor: "text-sky-600" },
             { key: "cruiseLine", label: "Cruise Line", ph: "Select Cruise Line (All)", mode: "select", values: opts.cruiseLines, icon: Compass, iconColor: "text-teal-600" },
@@ -2795,7 +2920,21 @@ export default function CruiseSearchPage() {
                 <SearchableSelect
                   placeholder={field.ph}
                   value={filters[field.key]}
-                  onChange={(value) => setF(field.key, value)}
+                  onChange={(value) => {
+                    if (field.key === "ship" && value) {
+                      const shipVendor = getVendorForShip(value);
+                      if (shipVendor) {
+                        const isOk = checkVendorVerified(shipVendor, () => {
+                          setF(field.key, value);
+                        }, value);
+                        if (!isOk) {
+                          setFilters((prev) => ({ ...prev, [field.key]: value }));
+                          return;
+                        }
+                      }
+                    }
+                    setF(field.key, value);
+                  }}
                   options={field.values}
                   onEnter={applyFilters}
                 />
@@ -2824,8 +2963,8 @@ export default function CruiseSearchPage() {
         </div>
 
         {/* Departure Window */}
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
+        <div className="space-y-1.5 w-full max-w-full min-w-0">
+          <div className="flex items-center justify-between flex-wrap gap-1">
             <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700">
               <CalendarDays size={14} className="text-teal-600" />
               <span>Departure Window</span>
@@ -2836,9 +2975,9 @@ export default function CruiseSearchPage() {
               </span>
             )}
           </div>
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 w-full max-w-full min-w-0">
             {/* Presets */}
-            <div className="flex items-center p-1 bg-slate-100/90 rounded-xl border border-slate-200/70 gap-1 overflow-x-auto no-scrollbar">
+            <div className="flex items-center p-1 bg-slate-100/90 rounded-xl border border-slate-200/70 gap-1 overflow-x-auto no-scrollbar w-full max-w-full min-w-0">
               {[
                 { label: "All Dates", days: null },
                 { label: "Next 7 Days", days: 7 },
@@ -2866,17 +3005,17 @@ export default function CruiseSearchPage() {
             </div>
 
             {/* Custom Date Range Picker */}
-            <div className="flex items-center gap-2 self-start lg:self-auto">
+            <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap sm:flex-nowrap min-w-0">
               <input
                 type="date"
-                className="h-10 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white px-3 text-xs font-semibold text-slate-800 shadow-2xs focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition-all cursor-pointer"
+                className="h-10 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white px-2.5 sm:px-3 text-xs font-semibold text-slate-800 shadow-2xs focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition-all cursor-pointer"
                 value={filters.startDate}
                 onChange={(event) => { setF("startDate", event.target.value); setDatePreset(null); }}
               />
               <span className="text-xs font-medium text-slate-400">to</span>
               <input
                 type="date"
-                className="h-10 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white px-3 text-xs font-semibold text-slate-800 shadow-2xs focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition-all cursor-pointer"
+                className="h-10 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white px-2.5 sm:px-3 text-xs font-semibold text-slate-800 shadow-2xs focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition-all cursor-pointer"
                 value={filters.endDate}
                 onChange={(event) => { setF("endDate", event.target.value); setDatePreset(null); }}
               />
@@ -2885,36 +3024,36 @@ export default function CruiseSearchPage() {
         </div>
 
         {/* Action Buttons Row */}
-        <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-100 flex-wrap">
-          <div className="flex items-center gap-2.5 flex-wrap">
+        <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-100 flex-wrap w-full min-w-0">
+          <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap w-full sm:w-auto">
             <button
               onClick={applyFilters}
               disabled={loading}
-              className="inline-flex items-center gap-2 h-10 px-5 rounded-xl bg-teal-700 hover:bg-teal-800 disabled:opacity-75 text-white text-xs sm:text-sm font-bold shadow-xs hover:shadow active:scale-95 transition-all cursor-pointer"
+              className="inline-flex items-center justify-center gap-2 h-10 px-4 sm:px-5 rounded-xl bg-teal-700 hover:bg-teal-800 disabled:opacity-75 text-white text-xs sm:text-sm font-bold shadow-xs hover:shadow active:scale-95 transition-all cursor-pointer flex-1 sm:flex-initial"
             >
               {loading ? (
                 <RefreshCw size={15} className="animate-spin" />
               ) : (
                 <Search size={15} />
               )}
-              <span>{loading ? "Searching Inventory…" : "Search Inventory"}</span>
+              <span>{loading ? "Searching…" : "Search Inventory"}</span>
             </button>
-            {!loading && rows.length > 0 && (
+            {!loading && (
               <button
                 type="button"
                 onClick={() => scrollToRow(rows[0]?.id)}
-                className="inline-flex items-center gap-1.5 h-10 px-4 rounded-xl border border-teal-200 bg-teal-50/70 hover:bg-teal-100 text-teal-800 text-xs sm:text-sm font-semibold shadow-2xs active:scale-95 transition-all cursor-pointer animate-in fade-in"
+                className="inline-flex items-center justify-center gap-1.5 h-10 px-3.5 sm:px-4 rounded-xl border border-teal-200 bg-teal-50/70 hover:bg-teal-100 text-teal-800 text-xs sm:text-sm font-semibold shadow-2xs active:scale-95 transition-all cursor-pointer animate-in fade-in"
               >
                 <ArrowDown size={14} className="text-teal-600" />
-                <span>Go to 1st Result</span>
+                <span>{rows.length > 0 ? "1st Result" : "0 found"}</span>
               </button>
             )}
             <button
               onClick={reset}
-              className="inline-flex items-center gap-1.5 h-10 px-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs sm:text-sm font-semibold shadow-2xs active:scale-95 transition-all cursor-pointer"
+              className="inline-flex items-center justify-center gap-1.5 h-10 px-3.5 sm:px-4 rounded-xl border border-rose-200/90 bg-rose-50/80 hover:bg-rose-100 text-rose-700 hover:text-rose-800 text-xs sm:text-sm font-bold shadow-2xs active:scale-95 transition-all cursor-pointer"
             >
-              <RotateCcw size={14} className="text-slate-500" />
-              <span>Reset Filters</span>
+              <RotateCcw size={14} className="text-rose-500" />
+              <span>Reset</span>
             </button>
           </div>
           {Object.values(filters).filter(Boolean).length > 0 && (
@@ -2926,14 +3065,255 @@ export default function CruiseSearchPage() {
         </div>
       </div>
 
+      {/* ── Targeted Individual Ship Search & Live Scraper (Accordion) ── */}
+      <div className="rounded-2xl border border-slate-200/90 bg-white shadow-xs hover:shadow-md transition-all duration-300 overflow-hidden w-full max-w-full min-w-0">
+        {/* Accordion Trigger Header */}
+        <button
+          type="button"
+          onClick={() => setTargetedAccordionOpen((prev) => !prev)}
+          className="w-full p-4 sm:p-5 flex items-center justify-between gap-3 sm:gap-4 text-left hover:bg-slate-50/70 transition-colors cursor-pointer min-w-0"
+        >
+          <div className="flex items-center gap-3 sm:gap-3.5 min-w-0 flex-1">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-teal-600 to-teal-800 text-white flex items-center justify-center shadow-sm shadow-teal-700/20 ring-4 ring-teal-50 shrink-0">
+              <Ship size={18} className="stroke-[2.2]" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-xs sm:text-base font-bold text-slate-900 truncate">
+                  Targeted Ship Search & Live Scraper
+                </h3>
+                <span className="inline-flex items-center gap-1 text-[10px] uppercase font-bold text-teal-800 bg-teal-50 border border-teal-200/80 px-2 py-0.5 rounded-full shrink-0">
+                  <Sparkles size={11} className="text-teal-600" />
+                  Ship + Scraper
+                </span>
+              </div>
+              <p className="text-[11px] sm:text-xs font-medium text-slate-500 mt-0.5 truncate">
+                {targetVendor ? (
+                  <span>
+                    Target: <strong className="text-teal-900 font-semibold">{targetVendor}</strong>
+                    {targetShipName ? ` · ${targetShipName}` : " · All Ships"} · {targetHorizonDays} Day{targetHorizonDays > 1 ? "s" : ""} Horizon
+                  </span>
+                ) : (
+                  "Query specific ship sailings by date & horizon window or trigger live scrapers."
+                )}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-xs font-semibold text-teal-700 hidden md:inline-block">
+              {targetedAccordionOpen ? "Hide Options" : "Open Tools"}
+            </span>
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center border transition-all ${
+              targetedAccordionOpen
+                ? "bg-teal-50 text-teal-700 border-teal-200"
+                : "bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200"
+            }`}>
+              <ChevronDown
+                size={16}
+                className={`transition-transform duration-200 ${targetedAccordionOpen ? "rotate-180" : ""}`}
+              />
+            </div>
+          </div>
+        </button>
+
+        {/* Accordion Body Content */}
+        {targetedAccordionOpen && (
+          <div className="p-4 sm:p-6 pt-0 border-t border-slate-100 space-y-4 animate-in fade-in slide-in-from-top-2 duration-200 w-full max-w-full min-w-0 overflow-hidden">
+            {/* Active Query JSON preview badge */}
+            <div className="flex items-center justify-between gap-3 pt-4">
+              <p className="text-xs font-medium text-slate-500">
+                Select a cruise line and ship fleet to query specific departure windows or dispatch on-demand scraper workers.
+              </p>
+              <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900 text-slate-200 font-mono text-[11px] shadow-sm border border-slate-800 shrink-0">
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-teal-400 animate-pulse"></span>
+                <span className="text-teal-400 font-bold">query:</span>
+                <span className="text-slate-300">{`{ startDate: "${targetStartDate}", horizonDays: ${targetHorizonDays}${targetShipName ? `, shipName: "${targetShipName}"` : ""} }`}</span>
+              </div>
+            </div>
+
+            {/* 4 Main Inputs Grid: Vendor first (mandatory), then Ship (auto-fetched), Start Date, Search Horizon */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3.5 items-end w-full min-w-0">
+              {/* 1. Vendor / Cruise Line Provider (Mandatory) */}
+              <div className="sm:col-span-1 lg:col-span-3 space-y-1.5 min-w-0">
+                <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                  <Building2 size={13} className="text-teal-600" />
+                  <span>Cruise Line / Vendor <span className="text-rose-500">*</span></span>
+                </label>
+                <select
+                  value={targetVendor}
+                  onChange={(e) => setTargetVendor(e.target.value)}
+                  required
+                  className="w-full h-10 px-3.5 rounded-xl border border-teal-300/80 bg-white hover:bg-slate-50 focus:bg-white text-xs sm:text-sm font-semibold text-slate-900 shadow-2xs focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition-all cursor-pointer"
+                >
+                  {opts.vendors.length === 0 ? (
+                    <option value="">Loading providers…</option>
+                  ) : (
+                    opts.vendors.map((v) => (
+                      <option key={v} value={v}>
+                        {v}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </div>
+
+              {/* 2. Ship Name (Search & Select from Auto-fetched Fleet) */}
+              <div className="sm:col-span-1 lg:col-span-3 space-y-1.5 min-w-0">
+                <div className="flex items-center justify-between">
+                  <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                    <Ship size={13} className="text-teal-600" />
+                    <span>Ship Name <span className="text-rose-500">*</span></span>
+                  </label>
+                  <span className="text-[10.5px] font-semibold text-teal-700">
+                    {targetShipsLoading ? "Loading…" : `${targetVendorShips.length} ship${targetVendorShips.length === 1 ? "" : "s"}`}
+                  </span>
+                </div>
+                <SearchableSelect
+                  placeholder={targetShipsLoading ? "Loading fleet ships…" : `Type or select ship (${targetVendorShips.length})`}
+                  value={targetShipName}
+                  onChange={(val) => setTargetShipName(val)}
+                  options={targetVendorShips}
+                  onEnter={handleTargetedSearch}
+                />
+              </div>
+
+              {/* 3. Start Date */}
+              <div className="sm:col-span-1 lg:col-span-2 space-y-1.5 min-w-0">
+                <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                  <CalendarDays size={13} className="text-teal-600" />
+                  <span>Start Date</span>
+                </label>
+                <input
+                  type="date"
+                  value={targetStartDate}
+                  onChange={(e) => setTargetStartDate(e.target.value)}
+                  className="w-full h-10 px-3 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white text-xs sm:text-sm font-semibold text-slate-900 shadow-2xs focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition-all cursor-pointer"
+                />
+              </div>
+
+              {/* 4. Horizon Days Selector */}
+              <div className="sm:col-span-2 lg:col-span-4 space-y-1.5 min-w-0">
+                <div className="flex items-center justify-between">
+                  <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                    <Compass size={13} className="text-teal-600" />
+                    <span>Search Horizon</span>
+                  </label>
+                  <span className="text-[11px] font-semibold text-slate-500">{targetHorizonDays} Days Horizon</span>
+                </div>
+                <div className="flex items-center p-1 bg-slate-100/90 rounded-xl border border-slate-200/70 gap-1 overflow-x-auto no-scrollbar w-full max-w-full min-w-0">
+                  {[
+                    { label: "1 Day", days: 1 },
+                    { label: "7 Days", days: 7 },
+                    { label: "30 Days", days: 30 },
+                    { label: "60 Days", days: 60 },
+                    { label: "3 Months", days: 90 },
+                  ].map((opt) => (
+                    <button
+                      type="button"
+                      key={opt.days}
+                      onClick={() => setTargetHorizonDays(opt.days)}
+                      className={`h-8 px-2.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex-1 min-w-[54px] shrink-0 ${targetHorizonDays === opt.days
+                        ? "bg-white text-teal-800 font-bold shadow-xs border border-slate-200/90"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
+                        }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Action Row & Live Scraper Trigger */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-3 border-t border-slate-100 w-full min-w-0">
+              {/* Active selection summary badge */}
+              <div className="flex items-center gap-2 text-xs font-semibold text-slate-600 py-1 min-w-0">
+                <span className="w-2 h-2 rounded-full bg-teal-600 animate-pulse shrink-0" />
+                <span className="truncate">
+                  Targeting: <strong className="text-teal-900">{targetVendor || "Select Vendor"}</strong> · <strong className="text-slate-900">{targetShipName || "All Ships"}</strong>
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
+                <button
+                  type="button"
+                  onClick={handleTargetedSearch}
+                  disabled={loading || !targetVendor}
+                  className="inline-flex items-center justify-center gap-2 h-10 px-4 sm:px-5 rounded-xl bg-teal-700 hover:bg-teal-800 disabled:opacity-75 text-white text-xs sm:text-sm font-bold shadow-xs hover:shadow-sm active:scale-95 transition-all cursor-pointer flex-1 sm:flex-initial"
+                >
+                  {loading ? (
+                    <RefreshCw size={15} className="animate-spin" />
+                  ) : (
+                    <Search size={15} />
+                  )}
+                  <span>{loading ? "Searching…" : "Search Ship Inventory"}</span>
+                </button>
+
+                {!loading && (
+                  <button
+                    type="button"
+                    onClick={() => scrollToRow(rows[0]?.id)}
+                    className="inline-flex items-center justify-center gap-1.5 h-10 px-3.5 sm:px-4 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-900 text-xs sm:text-sm font-bold shadow-2xs hover:shadow-xs active:scale-95 transition-all cursor-pointer animate-in fade-in slide-in-from-top-1"
+                    title="Scroll down to view search output"
+                  >
+                    <ArrowDown size={14} className="text-emerald-700 animate-bounce" />
+                    <span className="truncate">
+                      {rows.length > 0 
+                        ? `Go to Sailing` 
+                        : "View Results"}
+                    </span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleTriggerScraper}
+                  disabled={scraperLoading || !targetVendor}
+                  className="inline-flex items-center justify-center gap-2 h-10 px-4 sm:px-5 rounded-xl bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 hover:from-orange-600 hover:via-amber-600 hover:to-orange-700 disabled:opacity-50 text-white text-xs sm:text-sm font-bold shadow-xs hover:shadow-sm hover:shadow-orange-500/20 active:scale-95 transition-all cursor-pointer flex-1 sm:flex-initial"
+                  title="Dispatch scraper worker with { startDate, horizonDays, shipName }"
+                >
+                  {scraperLoading ? (
+                    <RefreshCw size={15} className="animate-spin" />
+                  ) : (
+                    <Zap size={15} className="text-amber-100" />
+                  )}
+                  <span>{scraperLoading ? "Triggering…" : "Run Live Scraper"}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Live Scraper feedback alert if triggered */}
+            {scraperStatus && (
+              <div className={`p-3 rounded-xl text-xs font-semibold flex items-center justify-between gap-2 shadow-2xs ${scraperStatus.ok
+                ? "bg-emerald-50 text-emerald-900 border border-emerald-200/80"
+                : "bg-rose-50 text-rose-900 border border-rose-200/80"
+                }`}>
+                <div className="flex items-center gap-2 min-w-0">
+                  {scraperStatus.ok ? <CheckCircle2 size={16} className="text-emerald-600 shrink-0" /> : <AlertCircle size={16} className="text-rose-600 shrink-0" />}
+                  <span className="truncate">{scraperStatus.msg}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setScraperStatus(null)}
+                  className="text-slate-400 hover:text-slate-700 text-xs font-bold cursor-pointer transition-colors shrink-0"
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* ── Results Status Toolbar ──────────────────────────────────────── */}
-      <div className="rounded-xl border border-slate-200/90 bg-slate-50/80 px-4 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
-        <div className="inline-flex items-center gap-2">
-          <span className="relative flex h-2 w-2">
+      <div id="cruise-results-section" className="rounded-xl border border-slate-200/90 bg-slate-50/80 px-4 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs scroll-mt-6 w-full max-w-full min-w-0">
+        <div className="inline-flex items-center gap-2 min-w-0">
+          <span className="relative flex h-2 w-2 shrink-0">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
             <span className="relative inline-flex rounded-full h-2 w-2 bg-teal-600"></span>
           </span>
-          <span className="text-xs font-bold text-slate-900">
+          <span className="text-xs font-bold text-slate-900 truncate">
             {loading ? "Searching inventory…" : `${(pagination?.total ?? rows.length).toLocaleString()} sailings found`}
           </span>
         </div>
@@ -2971,7 +3351,7 @@ export default function CruiseSearchPage() {
         <>
           {/* ── Mobile / Tablet Separated Card View (block lg:hidden) ─── */}
           <div className="block lg:hidden space-y-3.5">
-            {rows.map((row) => {
+            {rows.map((row, index) => {
               const validPrices = (row.cabinCategories || [])
                 .map((cabin) => Number(cabin.cabinPrice ?? cabin.price ?? 0))
                 .filter((p) => Number.isFinite(p) && p > 0);
@@ -2987,7 +3367,7 @@ export default function CruiseSearchPage() {
 
               return (
                 <div
-                  key={row.id}
+                  key={`cruise-card-${row.id || index}-${row.startDate || row.sailDate || ""}-${index}`}
                   id={`cruise-card-${row.id}`}
                   className={`rounded-2xl border bg-white p-4 sm:p-5 shadow-xs hover:shadow-md transition-all duration-300 space-y-3.5 ${highlightedRowId === row.id
                       ? "ring-2 ring-teal-500 bg-teal-50/90 border-teal-400 shadow-md scale-[1.01]"
@@ -3134,7 +3514,7 @@ export default function CruiseSearchPage() {
 
                     return (
                       <tr
-                        key={row.id}
+                        key={`cruise-row-${row.id || index}-${row.startDate || row.sailDate || ""}-${index}`}
                         id={`cruise-row-${row.id}`}
                         className={`transition-all duration-300 ${highlightedRowId === row.id
                             ? "ring-2 ring-teal-500 bg-teal-100/60 font-semibold shadow-sm"
@@ -3257,7 +3637,7 @@ export default function CruiseSearchPage() {
 
 
       {/* ── Modern Pagination Bar ─────────────────────────────────────────── */}
-      <div className="flex flex-col md:flex-row items-center justify-between gap-4 p-4 rounded-xl border border-slate-200/90 bg-white shadow-2xs">
+      <div className="flex flex-col md:flex-row items-center justify-between gap-4 p-4 rounded-xl border border-slate-200/90 bg-white shadow-2xs w-full max-w-full min-w-0">
         <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
           <span>
             Showing page <strong className="text-slate-900 font-bold">{pagination?.page ?? 1}</strong> of{" "}
@@ -3348,6 +3728,21 @@ export default function CruiseSearchPage() {
           onCreate={handleCreateTag}
           onUpdate={handleUpdateTag}
           onDelete={handleDeleteTag}
+        />
+      )}
+
+      {authModalConfig.isOpen && (
+        <VendorAuthRequiredModal
+          isOpen={authModalConfig.isOpen}
+          vendorName={authModalConfig.vendorName}
+          shipName={authModalConfig.shipName}
+          onClose={() => setAuthModalConfig((prev) => ({ ...prev, isOpen: false }))}
+          onVerified={() => {
+            if (authModalConfig.onProceed) {
+              authModalConfig.onProceed();
+            }
+          }}
+          setVendorAuthResults={setVendorAuthResults}
         />
       )}
     </div>

@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useDebounce } from "@/hooks/use-debounce"
 import Link from "next/link"
+import { toast } from "sonner"
 import {
   Activity,
   AlertTriangle,
@@ -258,6 +259,37 @@ export default function OpsConsolePage() {
   const [scraperRuns, setScraperRuns] = useState([])
   const [schedules, setSchedules] = useState([])
   const [authResults, setAuthResults] = useState({})
+
+  // Load auth cache on client mount to prevent SSR hydration mismatch
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("ops_vendor_auth_results")
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (parsed && typeof parsed === "object") {
+          setAuthResults(parsed)
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to load auth cache:", e)
+    }
+  }, [])
+
+  // Persist auth validation results across page and status refreshes
+  useEffect(() => {
+    if (typeof window !== "undefined" && Object.keys(authResults).length > 0) {
+      const hasRealStatus = Object.values(authResults).some(
+        (v) => v && (v.status === "ok" || v.status === "failed" || v.status === "skipped")
+      )
+      if (hasRealStatus) {
+        try {
+          localStorage.setItem("ops_vendor_auth_results", JSON.stringify(authResults))
+        } catch (e) {
+          console.warn("Failed to save auth cache:", e)
+        }
+      }
+    }
+  }, [authResults])
   const [authRunning, setAuthRunning] = useState(false)
   const [singleAuthChecking, setSingleAuthChecking] = useState({})
   const [triggerState, setTriggerState] = useState({})
@@ -420,17 +452,120 @@ export default function OpsConsolePage() {
   async function runAuthCheck() {
     setAuthRunning(true)
     const effectiveSchedules = schedules.length ? schedules : DEFAULT_PRODUCTION_SCHEDULES
-    const checking = {}
-    for (const vendorKey of new Set(effectiveSchedules.map((s) => s.vendorKey)))
-      checking[vendorKey] = { status: "checking" }
-    setAuthResults(checking)
+    const allKeys = [...new Set(effectiveSchedules.map((s) => s.vendorKey))]
+
+    // Set checking status
+    setAuthResults((prev) => {
+      const next = { ...prev }
+      allKeys.forEach((k) => {
+        next[k] = { status: "checking" }
+      })
+      return next
+    })
+
     try {
       const res = await checkAllVendorAuth()
       const map = {}
-      for (const v of res.vendors ?? []) map[v.key] = v
-      setAuthResults(map)
+
+      const rawList = res?.vendors || res?.data || res?.results || (Array.isArray(res) ? res : [])
+      if (Array.isArray(rawList) && rawList.length > 0) {
+        for (const v of rawList) {
+          const key = v.key || v.vendorKey || v.slug || v.vendor || v.id
+          if (key) {
+            const status = v.status ? String(v.status).toLowerCase() : (v.ok || v.valid || v.success ? "ok" : "failed")
+            map[key] = { ...v, status }
+          }
+        }
+      } else if (res && typeof res === "object" && !res.error && !res.message) {
+        Object.entries(res).forEach(([k, v]) => {
+          if (v && typeof v === "object") {
+            const status = v.status ? String(v.status).toLowerCase() : (v.ok || v.valid || v.success ? "ok" : "failed")
+            map[k] = { ...v, status }
+          }
+        })
+      }
+
+      // If batch endpoint didn't provide individual statuses, test each vendor endpoint in parallel
+      if (Object.keys(map).length === 0) {
+        const results = await Promise.allSettled(
+          allKeys.map(async (key) => {
+            const r = await checkVendorAuth(key)
+            return {
+              key,
+              status: r?.status ? String(r.status).toLowerCase() : (r?.ok || r?.valid || r?.success ? "ok" : "failed"),
+              latencyMs: r?.latencyMs,
+              message: r?.message
+            }
+          })
+        )
+        results.forEach((settled, idx) => {
+          const key = allKeys[idx]
+          if (settled.status === "fulfilled" && settled.value) {
+            map[key] = settled.value
+          } else {
+            map[key] = { status: "failed", message: settled.reason?.message || "Auth error" }
+          }
+        })
+      }
+
+      setAuthResults((prev) => ({ ...prev, ...map }))
+
+      // Determine verification outcome for user notification
+      const okCount = allKeys.filter((k) => {
+        const s = map[k]?.status ? String(map[k].status).toLowerCase() : ""
+        return s === "ok" || s === "valid" || s === "verified" || s === "success" || s === "healthy"
+      }).length
+
+      if (okCount === allKeys.length) {
+        toast.success("All vendors verified", {
+          description: `All ${allKeys.length} vendor API credentials authenticated successfully.`
+        })
+      } else if (okCount > 0) {
+        toast.warning(`${okCount} of ${allKeys.length} vendors verified`, {
+          description: `${allKeys.length - okCount} vendor(s) failed authentication.`
+        })
+      } else {
+        toast.error("Vendor verification failed", {
+          description: "Could not authenticate vendor credentials."
+        })
+      }
     } catch (err) {
-      setAuthResults({ _error: err.message })
+      console.warn("Batch auth check failed, attempting individual vendor checks:", err)
+      const map = {}
+      await Promise.allSettled(
+        allKeys.map(async (key) => {
+          try {
+            const r = await checkVendorAuth(key)
+            map[key] = {
+              status: r?.status ? String(r.status).toLowerCase() : (r?.ok || r?.valid || r?.success ? "ok" : "failed"),
+              latencyMs: r?.latencyMs,
+              message: r?.message
+            }
+          } catch (singleErr) {
+            map[key] = { status: "failed", message: singleErr?.message || "Auth error" }
+          }
+        })
+      )
+      setAuthResults((prev) => ({ ...prev, ...map }))
+
+      const okCount = allKeys.filter((k) => {
+        const s = map[k]?.status ? String(map[k].status).toLowerCase() : ""
+        return s === "ok" || s === "valid" || s === "verified" || s === "success" || s === "healthy"
+      }).length
+
+      if (okCount === allKeys.length) {
+        toast.success("All vendors verified", {
+          description: `All ${allKeys.length} vendor API credentials authenticated successfully.`
+        })
+      } else if (okCount > 0) {
+        toast.warning(`${okCount} of ${allKeys.length} vendors verified`, {
+          description: `${allKeys.length - okCount} vendor(s) failed authentication.`
+        })
+      } else {
+        toast.error("Vendor verification failed", {
+          description: "Could not authenticate vendor credentials."
+        })
+      }
     } finally {
       setAuthRunning(false)
     }
@@ -441,19 +576,34 @@ export default function OpsConsolePage() {
     setAuthResults((prev) => ({ ...prev, [vendorKey]: { status: "checking" } }))
     try {
       const res = await checkVendorAuth(vendorKey)
+      const status = res?.status ? String(res.status).toLowerCase() : (res?.ok || res?.valid || res?.success ? "ok" : "failed")
       setAuthResults((prev) => ({
         ...prev,
         [vendorKey]: {
-          status: res?.status || (res?.ok ? "ok" : "failed"),
+          status,
           latencyMs: res?.latencyMs,
           message: res?.message
         }
       }))
+      const vName = VENDOR_NAMES[vendorKey]?.name || vendorKey
+      if (status === "ok" || status === "valid" || status === "verified" || status === "success") {
+        toast.success(`${vName} verified`, {
+          description: res?.message || "Credentials authenticated successfully."
+        })
+      } else {
+        toast.error(`${vName} verification failed`, {
+          description: res?.message || "Authentication error."
+        })
+      }
     } catch (err) {
       setAuthResults((prev) => ({
         ...prev,
         [vendorKey]: { status: "failed", message: err?.message || "Auth error" }
       }))
+      const vName = VENDOR_NAMES[vendorKey]?.name || vendorKey
+      toast.error(`${vName} verification failed`, {
+        description: err?.message || "Authentication error."
+      })
     } finally {
       setSingleAuthChecking((prev) => ({ ...prev, [vendorKey]: false }))
     }
@@ -479,12 +629,26 @@ export default function OpsConsolePage() {
           msg: res.result?.status ?? (ok ? "Queued in live worker engine" : res.error ?? "Triggered")
         }
       }))
+      const vName = VENDOR_NAMES[vendorKey]?.name || vendorKey
+      if (ok) {
+        toast.success(`Extraction queued for ${vName}`, {
+          description: options.shipName ? `Targeting vessel: ${options.shipName}` : "Fleet full inventory extraction queued."
+        })
+      } else {
+        toast.error(`Extraction failed for ${vName}`, {
+          description: res.error || "Unable to queue worker extraction run."
+        })
+      }
       if (!ok) setRunningVendor(null)
     } catch (err) {
       setTriggerState((prev) => ({
         ...prev,
         [vendorKey]: { loading: false, ok: false, msg: err.message }
       }))
+      const vName = VENDOR_NAMES[vendorKey]?.name || vendorKey
+      toast.error(`Extraction failed for ${vName}`, {
+        description: err.message || "Failed to trigger scraper."
+      })
       setRunningVendor(null)
     }
   }
@@ -498,13 +662,13 @@ export default function OpsConsolePage() {
       if (!byVendor.has(sch.vendorKey)) byVendor.set(sch.vendorKey, sch)
     }
     return [...byVendor.values()].map((sch) => {
-      const scraperRun = scraperRuns.find((v) => v.key === sch.vendorKey)
+      const scraperRun = scraperRuns.find((v) => v.key === sch.vendorKey || v.vendorKey === sch.vendorKey)
       const availableShips = vendorShipsMap[sch.vendorKey] || []
       const vendorConfig = VENDOR_NAMES[sch.vendorKey] || {}
       return {
         ...sch,
         lastRun: scraperRun?.lastRun ?? null,
-        auth: authResults[sch.vendorKey] ?? null,
+        auth: authResults[sch.vendorKey] ?? authResults[sch.vendorKey.toLowerCase()] ?? null,
         trigger: triggerState[sch.vendorKey] ?? null,
         availableShips,
         hasAvailableShips: availableShips.length > 0,
@@ -527,7 +691,8 @@ export default function OpsConsolePage() {
         return card.hasAvailableShips || card.supportsShipSearch
       }
       if (filterMode === "auth_ok") {
-        return card.auth?.status === "ok"
+        const s = String(card.auth?.status || "").toLowerCase()
+        return s === "ok" || s === "success" || card.auth?.ok === true || card.auth?.valid === true
       }
       if (filterMode === "failed") {
         return (
@@ -550,10 +715,13 @@ export default function OpsConsolePage() {
   // Summary telemetry metrics
   const stats = useMemo(() => {
     const total = vendorCards.length
-    const authOk = vendorCards.filter((v) => v.auth?.status === "ok").length
+    const authOk = vendorCards.filter((v) => {
+      const s = String(v.auth?.status || "").toLowerCase()
+      return s === "ok" || s === "success" || v.auth?.ok === true || v.auth?.valid === true
+    }).length
     const shipsTargetable = vendorCards.filter((v) => v.hasAvailableShips || v.supportsShipSearch).length
     const recentlyFailed = vendorCards.filter(
-      (v) => v.lastRun?.status === "failed" || v.lastRun?.status === "error"
+      (v) => v.lastRun?.status === "failed" || v.lastRun?.status === "error" || v.auth?.status === "failed"
     ).length
     const activeRuns = vendorCards.filter(
       (v) => v.lastRun?.status === "running" || v.lastRun?.status === "queued"
@@ -562,15 +730,18 @@ export default function OpsConsolePage() {
   }, [vendorCards])
 
   function scrollToVendorCard(vendorKey) {
-    window.history.pushState(null, "", `#${vendorKey}`)
+    if (typeof window === "undefined" || !vendorKey) return
     document.getElementById(`vendor-card-${vendorKey}`)?.scrollIntoView({ behavior: "smooth", block: "start" })
   }
 
   useEffect(() => {
-    if (loading) return
-    const vendorKey = window.location.hash.slice(1)
+    if (loading || typeof window === "undefined") return
+    const vendorKey = window.location.hash ? window.location.hash.slice(1) : null
     if (!vendorKey) return
-    document.getElementById(`vendor-card-${vendorKey}`)?.scrollIntoView({ behavior: "smooth", block: "start" })
+    const timer = setTimeout(() => {
+      document.getElementById(`vendor-card-${vendorKey}`)?.scrollIntoView({ behavior: "smooth", block: "start" })
+    }, 150)
+    return () => clearTimeout(timer)
   }, [loading])
 
   return (
@@ -651,40 +822,50 @@ export default function OpsConsolePage() {
 
       {/* ── Metric Summary Cards ─────────────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="rounded-xl border border-slate-200/80 bg-white p-3.5 shadow-2xs">
+        <div className="rounded-xl border border-indigo-200/70 bg-gradient-to-br from-indigo-50/50 via-white to-white p-3.5 shadow-2xs hover:shadow-xs transition">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Total Scrapers</span>
-            <Server className="size-4 text-teal-600" />
+            <span className="text-[11px] font-bold text-indigo-700 uppercase tracking-wider">Total Scrapers</span>
+            <div className="p-1 rounded-lg bg-indigo-100/80 text-indigo-600">
+              <Server className="size-4" />
+            </div>
           </div>
-          <div className="mt-1 text-xl font-black text-slate-900">{stats.total}</div>
-          <div className="text-[11px] text-slate-400 font-medium">Configured pipelines</div>
+          <div className="mt-1.5 text-2xl font-black text-indigo-950">{stats.total}</div>
+          <div className="text-[11px] text-indigo-600/80 font-medium">Configured pipelines</div>
         </div>
 
-        <div className="rounded-xl border border-slate-200/80 bg-white p-3.5 shadow-2xs">
+        <div className="rounded-xl border border-sky-200/70 bg-gradient-to-br from-sky-50/50 via-white to-white p-3.5 shadow-2xs hover:shadow-xs transition">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Ship Capable</span>
-            <Ship className="size-4 text-teal-600" />
+            <span className="text-[11px] font-bold text-sky-700 uppercase tracking-wider">Ship Capable</span>
+            <div className="p-1 rounded-lg bg-sky-100/80 text-sky-600">
+              <Ship className="size-4" />
+            </div>
           </div>
-          <div className="mt-1 text-xl font-black text-slate-900">{stats.shipsTargetable}</div>
-          <div className="text-[11px] text-teal-700 font-medium">Single ship targeting</div>
+          <div className="mt-1.5 text-2xl font-black text-sky-950">{stats.shipsTargetable}</div>
+          <div className="text-[11px] text-sky-600/80 font-medium">Single ship targeting</div>
         </div>
 
-        <div className="rounded-xl border border-slate-200/80 bg-white p-3.5 shadow-2xs">
+        <div className="rounded-xl border border-emerald-200/70 bg-gradient-to-br from-emerald-50/50 via-white to-white p-3.5 shadow-2xs hover:shadow-xs transition">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Auth Validated</span>
-            <ShieldCheck className="size-4 text-emerald-600" />
+            <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider">Auth Validated</span>
+            <div className="p-1 rounded-lg bg-emerald-100/80 text-emerald-600">
+              <ShieldCheck className="size-4" />
+            </div>
           </div>
-          <div className="mt-1 text-xl font-black text-slate-900">{stats.authOk} / {stats.total}</div>
-          <div className="text-[11px] text-emerald-700 font-medium">Credentials verified</div>
+          <div className="mt-1.5 text-2xl font-black text-emerald-950">
+            {stats.authOk} <span className="text-sm font-semibold text-emerald-600">/ {stats.total}</span>
+          </div>
+          <div className="text-[11px] text-emerald-600/80 font-medium">Credentials verified</div>
         </div>
 
-        <div className="rounded-xl border border-slate-200/80 bg-white p-3.5 shadow-2xs">
+        <div className="rounded-xl border border-amber-200/70 bg-gradient-to-br from-amber-50/50 via-white to-white p-3.5 shadow-2xs hover:shadow-xs transition">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Active Workers</span>
-            <Activity className="size-4 text-sky-600" />
+            <span className="text-[11px] font-bold text-amber-700 uppercase tracking-wider">Active Workers</span>
+            <div className="p-1 rounded-lg bg-amber-100/80 text-amber-600">
+              <Activity className="size-4" />
+            </div>
           </div>
-          <div className="mt-1 text-xl font-black text-slate-900">{stats.activeRuns}</div>
-          <div className="text-[11px] text-sky-700 font-medium">Queued or extracting</div>
+          <div className="mt-1.5 text-2xl font-black text-amber-950">{stats.activeRuns}</div>
+          <div className="text-[11px] text-amber-600/80 font-medium">Queued or extracting</div>
         </div>
       </div>
 
@@ -712,10 +893,10 @@ export default function OpsConsolePage() {
         <div className="flex items-center gap-1.5 flex-wrap">
           <button
             onClick={() => setFilterMode("all")}
-            className={`inline-flex items-center gap-1.5 h-8.5 px-3 rounded-xl text-xs font-bold transition shadow-2xs cursor-pointer ${
+            className={`inline-flex items-center gap-1.5 h-8.5 px-3.5 rounded-xl text-xs font-bold transition cursor-pointer ${
               filterMode === "all"
-                ? "bg-teal-800 text-white shadow-sm shadow-teal-900/15"
-                : "border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
+                ? "border-2 border-emerald-600 bg-emerald-50/80 text-emerald-900 shadow-2xs"
+                : "border border-slate-200 bg-white text-slate-700 hover:border-emerald-300 hover:bg-emerald-50/30 hover:text-emerald-800"
             }`}
           >
             <span>All ({vendorCards.length})</span>
@@ -723,46 +904,46 @@ export default function OpsConsolePage() {
 
           <button
             onClick={() => setFilterMode("ship_search")}
-            className={`inline-flex items-center gap-1.5 h-8.5 px-3 rounded-xl text-xs font-bold transition shadow-2xs cursor-pointer ${
+            className={`inline-flex items-center gap-1.5 h-8.5 px-3.5 rounded-xl text-xs font-bold transition cursor-pointer ${
               filterMode === "ship_search"
-                ? "bg-teal-800 text-white shadow-sm shadow-teal-900/15"
-                : "border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
+                ? "border-2 border-sky-600 bg-sky-50/80 text-sky-900 shadow-2xs"
+                : "border border-slate-200 bg-white text-slate-700 hover:border-sky-300 hover:bg-sky-50/30 hover:text-sky-800"
             }`}
           >
-            <Ship className="size-3.5" />
+            <Ship className={`size-3.5 ${filterMode === "ship_search" ? "text-sky-700" : "text-slate-400"}`} />
             <span>Ship Filter Capable</span>
           </button>
 
           <button
             onClick={() => setFilterMode("auth_ok")}
-            className={`inline-flex items-center gap-1.5 h-8.5 px-3 rounded-xl text-xs font-bold transition shadow-2xs cursor-pointer ${
+            className={`inline-flex items-center gap-1.5 h-8.5 px-3.5 rounded-xl text-xs font-bold transition cursor-pointer ${
               filterMode === "auth_ok"
-                ? "bg-teal-800 text-white shadow-sm shadow-teal-900/15"
-                : "border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
+                ? "border-2 border-teal-600 bg-teal-50/80 text-teal-900 shadow-2xs"
+                : "border border-slate-200 bg-white text-slate-700 hover:border-teal-300 hover:bg-teal-50/30 hover:text-teal-800"
             }`}
           >
-            <ShieldCheck className="size-3.5" />
+            <ShieldCheck className={`size-3.5 ${filterMode === "auth_ok" ? "text-teal-700" : "text-slate-400"}`} />
             <span>Auth OK</span>
           </button>
 
           <button
             onClick={() => setFilterMode("failed")}
-            className={`inline-flex items-center gap-1.5 h-8.5 px-3 rounded-xl text-xs font-bold transition shadow-2xs cursor-pointer ${
+            className={`inline-flex items-center gap-1.5 h-8.5 px-3.5 rounded-xl text-xs font-bold transition cursor-pointer ${
               filterMode === "failed"
-                ? "bg-rose-700 text-white shadow-sm shadow-rose-900/15"
-                : "border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
+                ? "border-2 border-rose-600 bg-rose-50/80 text-rose-900 shadow-2xs"
+                : "border border-slate-200 bg-white text-slate-700 hover:border-rose-300 hover:bg-rose-50/30 hover:text-rose-800"
             }`}
           >
-            <AlertTriangle className="size-3.5" />
+            <AlertTriangle className={`size-3.5 ${filterMode === "failed" ? "text-rose-700" : "text-slate-400"}`} />
             <span>Recent Issues</span>
           </button>
 
           <Link
             href="/dashboard/vendor-sites"
-            className="inline-flex items-center gap-1.5 h-8.5 px-3 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 hover:bg-slate-50 hover:text-slate-900 shadow-2xs transition ml-1"
+            className="inline-flex items-center gap-1.5 h-8.5 px-3.5 rounded-xl border border-indigo-200 bg-indigo-50/40 text-xs font-bold text-indigo-700 hover:bg-indigo-100/60 hover:border-indigo-300 shadow-2xs transition ml-1"
           >
             <span>Vendor Sites</span>
-            <ExternalLink className="size-3 text-slate-400" />
+            <ExternalLink className="size-3 text-indigo-400" />
           </Link>
         </div>
       </div>
@@ -1098,7 +1279,7 @@ function VendorCard({ vendor, dbShips = [], onTrigger, onCheckAuth, isAuthChecki
   }
 
   const [runDate, setRunDate] = useState(todayISO)
-  const [runHorizon, setRunHorizon] = useState(horizonDays || 30)
+  const [runHorizon, setRunHorizon] = useState(1)
   const [shipName, setShipName] = useState("")
   const [lastScrapedShip, setLastScrapedShip] = useState("")
   const [showShipResult, setShowShipResult] = useState(false)
@@ -1217,11 +1398,31 @@ function VendorCard({ vendor, dbShips = [], onTrigger, onCheckAuth, isAuthChecki
           </div>
         </div>
 
-        {/* Telemetry / Last Run Box */}
-        <div className="rounded-xl border border-teal-200/80 bg-gradient-to-r from-teal-500/10 via-sky-500/5 to-teal-500/10 p-3.5 text-xs shadow-2xs space-y-2">
+        {/* Telemetry / Last Run Box with Status-Adaptive Theme */}
+        <div
+          className={`rounded-xl border p-3.5 text-xs shadow-2xs space-y-2 transition-colors ${
+            lastRunStatus === "completed" || lastRunStatus === "success"
+              ? "border-emerald-200/90 bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-teal-500/10"
+              : lastRunStatus === "failed" || lastRunStatus === "error"
+              ? "border-rose-200/90 bg-gradient-to-r from-rose-500/10 via-rose-500/5 to-amber-500/10"
+              : lastRunStatus === "running" || lastRunStatus === "queued" || lastRunStatus === "in_progress"
+              ? "border-sky-200/90 bg-gradient-to-r from-sky-500/10 via-sky-500/5 to-indigo-500/10"
+              : "border-slate-200/80 bg-slate-50/70"
+          }`}
+        >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-teal-900 uppercase tracking-wider flex items-center gap-1.5">
-              <Activity className="size-3.5 text-teal-700" />
+            <span
+              className={`text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 ${
+                lastRunStatus === "completed" || lastRunStatus === "success"
+                  ? "text-emerald-900"
+                  : lastRunStatus === "failed" || lastRunStatus === "error"
+                  ? "text-rose-900"
+                  : lastRunStatus === "running" || lastRunStatus === "queued" || lastRunStatus === "in_progress"
+                  ? "text-sky-900"
+                  : "text-slate-600"
+              }`}
+            >
+              <Activity className="size-3.5" />
               Last Extraction Run
             </span>
             {lastRunStatus ? (
@@ -1241,13 +1442,13 @@ function VendorCard({ vendor, dbShips = [], onTrigger, onCheckAuth, isAuthChecki
 
           <div className="flex items-center justify-between pt-0.5">
             <div className="flex items-center gap-1.5">
-              <Calendar className="size-3 text-teal-700" />
+              <Calendar className="size-3 text-slate-500" />
               <span className="font-bold text-slate-900 text-xs">{fmtDT(lastRunTime)}</span>
               {lastRunTime && (
                 <span className="text-[10px] text-slate-500">({timeAgo(lastRunTime)})</span>
               )}
             </div>
-            <span className="text-[11px] font-mono font-semibold text-slate-700 bg-white/90 px-2 py-0.5 rounded-md border border-teal-200/80 shadow-2xs">
+            <span className="text-[11px] font-mono font-semibold text-slate-700 bg-white/90 px-2 py-0.5 rounded-md border border-slate-200/80 shadow-2xs">
               Duration: {fmtMs(lastRun?.durationMs)}
             </span>
           </div>
@@ -1266,21 +1467,21 @@ function VendorCard({ vendor, dbShips = [], onTrigger, onCheckAuth, isAuthChecki
                 <button
                   type="button"
                   onClick={() => setRunDate(todayISO())}
-                  className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600 hover:bg-teal-50 hover:text-teal-800 transition"
+                  className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200/60 hover:bg-teal-100 hover:text-teal-800 transition cursor-pointer"
                 >
                   Today
                 </button>
                 <button
                   type="button"
                   onClick={() => setRunDate(addDaysISO(7))}
-                  className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600 hover:bg-teal-50 hover:text-teal-800 transition"
+                  className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-sky-50 text-sky-700 border border-sky-200/60 hover:bg-sky-100 hover:text-sky-800 transition cursor-pointer"
                 >
                   +7d
                 </button>
                 <button
                   type="button"
                   onClick={() => setRunDate(addDaysISO(30))}
-                  className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600 hover:bg-teal-50 hover:text-teal-800 transition"
+                  className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200/60 hover:bg-indigo-100 hover:text-indigo-800 transition cursor-pointer"
                 >
                   +30d
                 </button>
@@ -1302,7 +1503,7 @@ function VendorCard({ vendor, dbShips = [], onTrigger, onCheckAuth, isAuthChecki
                 {runHorizon} Days
               </span>
             </div>
-            <div className="grid grid-cols-5 gap-1 p-1 bg-slate-100 rounded-xl border border-slate-200/60">
+            <div className="grid grid-cols-5 gap-1 p-1 bg-slate-100/90 rounded-xl border border-slate-200/70">
               {DURATION_OPTIONS.map((opt) => (
                 <button
                   key={opt.horizonDays}
@@ -1310,7 +1511,7 @@ function VendorCard({ vendor, dbShips = [], onTrigger, onCheckAuth, isAuthChecki
                   onClick={() => setRunHorizon(opt.horizonDays)}
                   className={`h-7 rounded-lg text-xs font-bold transition cursor-pointer ${
                     runHorizon === opt.horizonDays
-                      ? "bg-teal-800 text-white shadow-xs"
+                      ? "border-2 border-teal-700 bg-white text-teal-900 shadow-2xs"
                       : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
                   }`}
                 >

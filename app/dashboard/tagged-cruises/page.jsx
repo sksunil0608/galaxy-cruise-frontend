@@ -769,9 +769,9 @@ export default function TaggedCruisesPage() {
             onClick={togglePriceDropFilter}
             className={`inline-flex items-center gap-1.5 h-10 px-4 rounded-xl border text-xs sm:text-sm font-semibold active:scale-95 transition cursor-pointer ${
               priceDropOnly
-                ? "bg-emerald-700 text-white border-emerald-800 shadow-sm"
+                ? "border-2 border-emerald-600 bg-emerald-50/90 text-emerald-900 shadow-2xs"
                 : summary.drops > 0
-                  ? "bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100"
+                  ? "bg-emerald-50/60 text-emerald-800 border-emerald-300 hover:bg-emerald-100"
                   : "bg-slate-50 text-slate-400 border-slate-200 opacity-60"
             }`}
           >
@@ -868,7 +868,7 @@ export default function TaggedCruisesPage() {
 
               return (
                 <div
-                  key={row.id}
+                  key={`tagged-${row.id || index}-${row.startDate || row.sailDate || ""}-${index}`}
                   className={`rounded-2xl border transition-all p-4 sm:p-5 duration-200 ${
                     hasPriceDrop
                       ? "border-emerald-300 bg-gradient-to-br from-emerald-50/40 via-white to-teal-50/20 shadow-xs ring-1 ring-emerald-400/30"

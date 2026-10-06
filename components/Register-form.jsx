@@ -61,7 +61,7 @@ export function RegisterForm({ className, ...props }) {
 
         <CardHeader className="text-center">
           <CardTitle className="text-xl">Register</CardTitle>
-          <CardDescription>Create Cruise Saga account</CardDescription>
+          <CardDescription>Create Galaxy Cruise account</CardDescription>
         </CardHeader>
 
         <CardContent>

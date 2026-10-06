@@ -432,19 +432,19 @@ export default function OperationalHealthPage() {
             </div>
 
             {/* Status Filter Segment */}
-            <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white p-0.5 text-xs font-bold shadow-2xs">
+            <div className="flex items-center gap-1.5 flex-wrap text-xs font-bold">
               {[
-                { key: "all", label: "All" },
-                { key: "completed", label: "Success" },
-                { key: "failed", label: "Failed" }
+                { key: "all", label: "All", active: "border-2 border-emerald-600 bg-emerald-50/80 text-emerald-900" },
+                { key: "completed", label: "Success", active: "border-2 border-teal-600 bg-teal-50/80 text-teal-900" },
+                { key: "failed", label: "Failed", active: "border-2 border-rose-600 bg-rose-50/80 text-rose-900" }
               ].map(f => (
                 <button
                   key={f.key}
                   onClick={() => setStatusFilter(f.key)}
-                  className={`rounded-md px-2.5 py-1 text-[11px] transition cursor-pointer ${
+                  className={`rounded-lg px-3 py-1.5 text-[11px] transition cursor-pointer shadow-2xs ${
                     statusFilter === f.key
-                      ? "bg-slate-900 text-white shadow-2xs"
-                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                      ? f.active
+                      : "border border-slate-200 bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-50"
                   }`}
                 >
                   {f.label}

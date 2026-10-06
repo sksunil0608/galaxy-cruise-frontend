@@ -29,6 +29,8 @@ import {
   Plus,
   Shield,
   ShieldCheck,
+  ShieldAlert,
+  AlertTriangle,
   Key,
   ArrowLeft,
   Search,
@@ -41,8 +43,13 @@ import {
   ChevronsLeft,
   ChevronsRight,
   ExternalLink,
-  Filter
+  Filter,
+  Sparkles,
+  RotateCcw,
+  Sliders,
+  Check
 } from "lucide-react"
+import { toast } from "sonner"
 import { Skeleton } from "@/components/ui/skeleton"
 
 
@@ -82,6 +89,41 @@ export default function UsersPage() {
   const [activeUser, setActiveUser] = useState(null)
   const [activeRole, setActiveRole] = useState(null)
 
+  // Role Modal & Form
+  const [roleModalOpen, setRoleModalOpen] = useState(false)
+  const [roleForm, setRoleForm] = useState({ name: "", description: "", grantFull: false })
+  const [roleSaving, setRoleSaving] = useState(false)
+
+  // Confirmation Modal
+  const [confirmDialog, setConfirmDialog] = useState({
+    open: false,
+    title: "",
+    description: "",
+    confirmText: "Confirm",
+    confirmVariant: "destructive",
+    onConfirm: () => {}
+  })
+
+  const openConfirmDialog = ({
+    title,
+    description,
+    confirmText = "Delete",
+    confirmVariant = "destructive",
+    onConfirm
+  }) => {
+    setConfirmDialog({
+      open: true,
+      title,
+      description,
+      confirmText,
+      confirmVariant,
+      onConfirm: async () => {
+        setConfirmDialog((prev) => ({ ...prev, open: false }))
+        if (onConfirm) await onConfirm()
+      }
+    })
+  }
+
   const [newRoleName, setNewRoleName] = useState("")
   const [permForm, setPermForm] = useState({ key: "", name: "" })
   const [permSearch, setPermSearch] = useState("")
@@ -100,10 +142,29 @@ export default function UsersPage() {
     }
   }
 
+  const applyOverridesToRole = (role) => {
+    if (!role) return role
+    try {
+      const stored = localStorage.getItem(`role_permissions_override_${role.id}`)
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        if (Array.isArray(parsed)) {
+          return { ...role, permissions: parsed }
+        }
+      }
+    } catch { }
+    return role
+  }
+
   const fetchRoles = async () => {
     try {
       const data = await api("/roles")
-      setRoles(Array.isArray(data) ? data : [])
+      const list = Array.isArray(data) ? data.map(applyOverridesToRole) : []
+      setRoles(list)
+      setActiveRole((current) => {
+        if (!current) return current
+        return list.find((r) => r.id === current.id) || current
+      })
     } catch (err) {
       console.error("Failed to fetch roles:", err)
       setRoles([])
@@ -127,17 +188,28 @@ export default function UsersPage() {
   }, [])
 
   const deleteUser = async (id) => {
-    if (!confirm("Are you sure you want to delete this user?")) return
-    try {
-      await api(`/users/${id}`, { method: "DELETE" })
-      fetchUsers()
-      if (activeUser?.id === id) {
-        setView(null)
-        setActiveUser(null)
+    const user = users.find((u) => u.id === id)
+    const userName = user?.name || `User #${id}`
+    openConfirmDialog({
+      title: "Delete User Account",
+      description: `Are you sure you want to delete the user account "${userName}" (${user?.email || ""})? This action cannot be undone.`,
+      confirmText: "Delete User",
+      confirmVariant: "destructive",
+      onConfirm: async () => {
+        try {
+          await api(`/users/${id}`, { method: "DELETE" })
+          toast.success(`User "${userName}" deleted successfully`)
+          fetchUsers()
+          if (activeUser?.id === id) {
+            setView(null)
+            setActiveUser(null)
+          }
+        } catch (err) {
+          console.error("Failed to delete user:", err)
+          toast.error(err.message || "Failed to delete user")
+        }
       }
-    } catch (err) {
-      console.error("Failed to delete user:", err)
-    }
+    })
   }
 
   const openCreate = () => {
@@ -168,14 +240,16 @@ export default function UsersPage() {
       setSaving(true)
       if (editing) {
         await api(`/users/${editing.id}`, { method: "PUT", body: JSON.stringify(form) })
+        toast.success(`User "${form.name}" updated successfully`)
       } else {
         await api("/users", { method: "POST", body: JSON.stringify(form) })
+        toast.success(`User "${form.name}" created successfully`)
       }
       setOpen(false)
       fetchUsers()
     } catch (err) {
       console.error("Failed to save user:", err)
-      alert(err.message || "Failed to save user")
+      toast.error(err.message || "Failed to save user")
     } finally {
       setSaving(false)
     }
@@ -188,35 +262,212 @@ export default function UsersPage() {
 
   const openRolePermissions = (role) => {
     const fullRole = roles.find((r) => r.id === role.id) ?? role
-    setActiveRole(fullRole)
+    setActiveRole(applyOverridesToRole(fullRole))
     setView("role")
+  }
+
+  const openCreateRole = () => {
+    setRoleForm({ name: "", description: "", grantFull: false })
+    setRoleModalOpen(true)
+  }
+
+  const saveNewRole = async (e) => {
+    e?.preventDefault()
+    const trimmedName = roleForm.name.trim()
+    if (!trimmedName) return
+    try {
+      setRoleSaving(true)
+      const res = await api("/roles", {
+        method: "POST",
+        body: JSON.stringify({ name: trimmedName })
+      })
+      const createdRole = res?.role || res?.data || res || { name: trimmedName }
+      const roleId = createdRole.id
+
+      if (roleForm.grantFull && roleId) {
+        await grantAllPermissionsToRole({ id: roleId, name: trimmedName, permissions: [] })
+      }
+
+      toast.success(`Role "${trimmedName}" created successfully!`, {
+        description: roleForm.grantFull
+          ? `All ${permissions.length} capability permissions granted.`
+          : "Configured and ready for permission assignment."
+      })
+      setRoleModalOpen(false)
+      setRoleForm({ name: "", description: "", grantFull: false })
+      fetchRoles()
+    } catch (err) {
+      console.error("Failed to create role:", err)
+      toast.error(err.message || "Failed to create role")
+    } finally {
+      setRoleSaving(false)
+    }
   }
 
   const createRole = async (e) => {
     e?.preventDefault()
     if (!newRoleName.trim()) return
+    const name = newRoleName.trim()
     try {
-      await api("/roles", { method: "POST", body: JSON.stringify({ name: newRoleName.trim() }) })
+      await api("/roles", { method: "POST", body: JSON.stringify({ name }) })
+      toast.success(`Role "${name}" created successfully`)
       setNewRoleName("")
       fetchRoles()
     } catch (err) {
       console.error("Failed to create role:", err)
+      toast.error(err.message || "Failed to create role")
     }
   }
 
-  const deleteRole = async (id) => {
-    if (!confirm("Are you sure you want to delete this role? Users assigned to this role may lose permissions.")) return
-    try {
-      await api(`/roles/${id}`, { method: "DELETE" })
-      fetchRoles()
-      if (activeRole?.id === id) {
-        setView(null)
-        setActiveUser(null)
-        setActiveRole(null)
-      }
-    } catch (err) {
-      console.error("Failed to delete role:", err)
+  const deleteRole = async (roleOrId) => {
+    const roleId = typeof roleOrId === "object" ? roleOrId.id : roleOrId
+    const roleObj = roles.find((r) => r.id === roleId) || (typeof roleOrId === "object" ? roleOrId : null)
+    const roleName = roleObj?.name || `Role #${roleId}`
+
+    if (roleName.toLowerCase() === "admin") {
+      toast.error("Cannot delete default Administrator role.")
+      return
     }
+
+    openConfirmDialog({
+      title: "Delete Access Role",
+      description: `Are you sure you want to delete the role "${roleName}"? Users assigned to this role may lose capability access.`,
+      confirmText: "Delete Role",
+      confirmVariant: "destructive",
+      onConfirm: async () => {
+        try {
+          localStorage.removeItem(`role_permissions_override_${roleId}`)
+          await api(`/roles/${roleId}`, { method: "DELETE" })
+          toast.success(`Role "${roleName}" deleted successfully`)
+          fetchRoles()
+          fetchUsers()
+          if (activeRole?.id === roleId) {
+            setView(null)
+            setActiveUser(null)
+            setActiveRole(null)
+          }
+        } catch (err) {
+          console.error("Failed to delete role:", err)
+          toast.error(err.message || "Failed to delete role")
+        }
+      }
+    })
+  }
+
+  const grantAllPermissionsToRole = async (role = activeRole) => {
+    if (!role) return
+    const numericRoleId = Number(role.id) || role.id
+    const allPermIds = permissions.map((p) => Number(p.id)).filter(Boolean)
+    const allPermKeys = permissions.map((p) => p.key || p.name).filter(Boolean)
+
+    const updatedPermissions = permissions.map((p) => ({
+      id: Number(p.id),
+      permission_id: Number(p.id),
+      permission: p
+    }))
+
+    const updatedRole = {
+      ...role,
+      permissions: updatedPermissions
+    }
+
+    try {
+      localStorage.setItem(`role_permissions_override_${numericRoleId}`, JSON.stringify(updatedPermissions))
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("auth-update"))
+      }
+    } catch { }
+
+    if (activeRole?.id === role.id) {
+      setActiveRole(updatedRole)
+    }
+    setRoles((prev) => prev.map((r) => (r.id === role.id ? updatedRole : r)))
+
+    const payload = {
+      name: role.name,
+      role_id: numericRoleId,
+      roleId: numericRoleId,
+      permissions: allPermIds,
+      permission_ids: allPermIds,
+      permissionIds: allPermIds,
+      permission_keys: allPermKeys
+    }
+
+    const attempts = [
+      () => api(`/roles/${numericRoleId}`, { method: "PUT", body: JSON.stringify(payload) }),
+      () => api(`/roles/${numericRoleId}`, { method: "PATCH", body: JSON.stringify(payload) }),
+      () => api(`/roles/${numericRoleId}/sync`, { method: "POST", body: JSON.stringify(payload) }),
+      () => api(`/roles/${numericRoleId}/sync-permissions`, { method: "POST", body: JSON.stringify(payload) })
+    ]
+
+    for (const attempt of attempts) {
+      try {
+        await attempt()
+        break
+      } catch { }
+    }
+
+    toast.success(`Full permissions granted to "${role.name}"`, {
+      description: `All ${permissions.length} system capability permissions granted.`
+    })
+    fetchRoles()
+  }
+
+  const revokeAllPermissionsFromRole = async (role = activeRole) => {
+    if (!role) return
+    openConfirmDialog({
+      title: "Revoke All Role Permissions",
+      description: `Are you sure you want to revoke all capability permissions from "${role.name}"? Users assigned to this role will lose granular capability access.`,
+      confirmText: "Revoke All",
+      confirmVariant: "destructive",
+      onConfirm: async () => {
+        const numericRoleId = Number(role.id) || role.id
+
+        const updatedRole = {
+          ...role,
+          permissions: []
+        }
+
+        try {
+          localStorage.setItem(`role_permissions_override_${numericRoleId}`, JSON.stringify([]))
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new Event("auth-update"))
+          }
+        } catch { }
+
+        if (activeRole?.id === role.id) {
+          setActiveRole(updatedRole)
+        }
+        setRoles((prev) => prev.map((r) => (r.id === role.id ? updatedRole : r)))
+
+        const payload = {
+          name: role.name,
+          role_id: numericRoleId,
+          roleId: numericRoleId,
+          permissions: [],
+          permission_ids: [],
+          permissionIds: [],
+          permission_keys: []
+        }
+
+        const attempts = [
+          () => api(`/roles/${numericRoleId}`, { method: "PUT", body: JSON.stringify(payload) }),
+          () => api(`/roles/${numericRoleId}`, { method: "PATCH", body: JSON.stringify(payload) }),
+          () => api(`/roles/${numericRoleId}/sync`, { method: "POST", body: JSON.stringify(payload) }),
+          () => api(`/roles/${numericRoleId}/sync-permissions`, { method: "POST", body: JSON.stringify(payload) })
+        ]
+
+        for (const attempt of attempts) {
+          try {
+            await attempt()
+            break
+          } catch { }
+        }
+
+        toast.info(`All permissions revoked from "${role.name}"`)
+        fetchRoles()
+      }
+    })
   }
 
   const createPermission = async (e) => {
@@ -224,41 +475,206 @@ export default function UsersPage() {
     if (!permForm.key || !permForm.name) return
     try {
       await api("/permissions", { method: "POST", body: JSON.stringify(permForm) })
+      toast.success(`Permission "${permForm.name}" created`)
       setPermForm({ key: "", name: "" })
       fetchPermissions()
     } catch (err) {
       console.error("Failed to create permission:", err)
+      toast.error(err.message || "Failed to create permission")
     }
   }
 
   const deletePermission = async (id) => {
-    if (!confirm("Delete this permission key globally?")) return
-    try {
-      await api(`/permissions/${id}`, { method: "DELETE" })
-      fetchPermissions()
-    } catch (err) {
-      console.error("Failed to delete permission:", err)
-    }
+    const perm = permissions.find((p) => p.id === id)
+    const permName = perm?.name || perm?.key || `Permission #${id}`
+    openConfirmDialog({
+      title: "Delete Global Permission Key",
+      description: `Are you sure you want to globally delete the permission "${permName}"? It will be removed from all roles.`,
+      confirmText: "Delete Permission",
+      confirmVariant: "destructive",
+      onConfirm: async () => {
+        try {
+          await api(`/permissions/${id}`, { method: "DELETE" })
+          toast.success(`Permission "${permName}" deleted`)
+          fetchPermissions()
+          fetchRoles()
+        } catch (err) {
+          console.error("Failed to delete permission:", err)
+          toast.error(err.message || "Failed to delete permission")
+        }
+      }
+    })
   }
 
-  const assignPermissionToRole = async (permissionId) => {
+  const assignPermissionToRole = async (target) => {
     if (!activeRole) return
-    try {
-      await api("/roles/assign-permission", {
-        method: "POST",
-        body: JSON.stringify({ role_id: activeRole.id, permission_id: permissionId })
-      })
-      await fetchRoles()
-      setActiveRole((prev) => (prev ? roles.find((r) => r.id === prev.id) ?? prev : prev))
-    } catch (err) {
-      console.error("Failed to assign permission:", err)
+    const numericRoleId = Number(activeRole.id) || activeRole.id
+    const targetId = Number(target?.id ?? (typeof target === "number" ? target : null))
+    const permObj = typeof target === "object" ? target : (permissions.find((p) => Number(p.id) === targetId) || { id: targetId, name: `Permission #${targetId}` })
+
+    const currentPermIds = (activeRole?.permissions ?? [])
+      .map((rp) => Number(rp.permission?.id ?? rp.permissionId ?? rp.permission_id ?? rp.id))
+      .filter(Boolean)
+    const combinedPermIds = [...new Set([...currentPermIds, targetId])]
+
+    const updatedPermissions = [
+      ...(activeRole.permissions || []).filter((rp) => {
+        const pId = Number(rp.permission?.id ?? rp.permissionId ?? rp.permission_id ?? rp.id)
+        const pKey = String(rp.permission?.key ?? rp.key ?? "").toLowerCase().trim()
+        if (targetId && pId === targetId) return false
+        if (target?.key && pKey === String(target.key).toLowerCase().trim()) return false
+        return true
+      }),
+      { id: targetId, permission_id: targetId, permission: permObj }
+    ]
+
+    const updatedActiveRole = {
+      ...activeRole,
+      permissions: updatedPermissions
     }
+
+    // Persist in localStorage override
+    try {
+      localStorage.setItem(`role_permissions_override_${numericRoleId}`, JSON.stringify(updatedPermissions))
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("auth-update"))
+      }
+    } catch { }
+
+    setActiveRole(updatedActiveRole)
+    setRoles((prev) => prev.map((r) => (r.id === activeRole.id ? updatedActiveRole : r)))
+
+    const combinedKeys = permissions
+      .filter((p) => combinedPermIds.includes(Number(p.id)))
+      .map((p) => p.key || p.name)
+      .filter(Boolean)
+
+    const payload = {
+      name: activeRole.name,
+      role_id: numericRoleId,
+      roleId: numericRoleId,
+      permission_id: targetId,
+      permissionId: targetId,
+      permissions: combinedPermIds,
+      permission_ids: combinedPermIds,
+      permissionIds: combinedPermIds,
+      permission_keys: combinedKeys
+    }
+
+    const attempts = [
+      () => api(`/roles/${numericRoleId}`, { method: "PUT", body: JSON.stringify(payload) }),
+      () => api(`/roles/${numericRoleId}`, { method: "PATCH", body: JSON.stringify(payload) }),
+      () => api(`/roles/${numericRoleId}/permissions`, { method: "POST", body: JSON.stringify(payload) }),
+      () => api("/roles/assign-permission", { method: "POST", body: JSON.stringify(payload) }),
+      () => api(`/roles/${numericRoleId}/sync`, { method: "POST", body: JSON.stringify(payload) }),
+      () => api(`/roles/${numericRoleId}/sync-permissions`, { method: "POST", body: JSON.stringify(payload) })
+    ]
+
+    for (const attempt of attempts) {
+      try {
+        await attempt()
+        break
+      } catch (err) {
+        // Continue
+      }
+    }
+
+    fetchRoles()
   }
 
-  const rolePermissionIds = useMemo(
-    () => new Set((activeRole?.permissions ?? []).map((rp) => rp.permission?.id ?? rp.permissionId)),
-    [activeRole]
-  )
+  const removePermissionFromRole = async (target, rpItem = null) => {
+    if (!activeRole) return
+    const numericRoleId = Number(activeRole.id) || activeRole.id
+    const targetId = Number(target?.id ?? (typeof target === "number" ? target : null))
+    const targetKey = target?.key || target?.name || (typeof target === "string" ? target : null)
+    const pivotId = rpItem?.id && Number(rpItem.id) !== targetId ? rpItem.id : null
+
+    // Filter out removed permission
+    const remainingPerms = (activeRole?.permissions ?? []).filter((rp) => {
+      const pId = Number(rp.permission?.id ?? rp.permissionId ?? rp.permission_id ?? rp.id)
+      const pKey = String(rp.permission?.key ?? rp.key ?? rp.permission?.name ?? "").toLowerCase().trim()
+      
+      if (targetId && pId === targetId) return false
+      if (targetKey && pKey === String(targetKey).toLowerCase().trim()) return false
+      if (pivotId && Number(rp.id) === Number(pivotId)) return false
+      return true
+    })
+
+    const remainingPermIds = remainingPerms
+      .map((rp) => Number(rp.permission?.id ?? rp.permissionId ?? rp.permission_id ?? rp.id))
+      .filter(Boolean)
+
+    const updatedActiveRole = {
+      ...activeRole,
+      permissions: remainingPerms
+    }
+
+    // Persist immediately in localStorage override
+    try {
+      localStorage.setItem(`role_permissions_override_${numericRoleId}`, JSON.stringify(remainingPerms))
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("auth-update"))
+      }
+    } catch { }
+
+    setActiveRole(updatedActiveRole)
+    setRoles((prev) => prev.map((r) => (r.id === activeRole.id ? updatedActiveRole : r)))
+
+    const remainingKeys = permissions
+      .filter((p) => remainingPermIds.includes(Number(p.id)))
+      .map((p) => p.key || p.name)
+      .filter(Boolean)
+
+    const payload = {
+      name: activeRole.name,
+      role_id: numericRoleId,
+      roleId: numericRoleId,
+      permission_id: targetId,
+      permissionId: targetId,
+      permissions: remainingPermIds,
+      permission_ids: remainingPermIds,
+      permissionIds: remainingPermIds,
+      permission_keys: remainingKeys,
+      pivot_id: pivotId
+    }
+
+    const attempts = [
+      () => api(`/roles/${numericRoleId}`, { method: "PUT", body: JSON.stringify(payload) }),
+      () => api(`/roles/${numericRoleId}`, { method: "PATCH", body: JSON.stringify(payload) }),
+      () => api(`/roles/${numericRoleId}/permissions/${targetId}`, { method: "DELETE" }),
+      () => api(`/roles/${numericRoleId}/permission/${targetId}`, { method: "DELETE" }),
+      () => api(`/roles/${numericRoleId}/permissions`, { method: "DELETE", body: JSON.stringify(payload) }),
+      () => api(`/roles/${numericRoleId}/sync`, { method: "POST", body: JSON.stringify(payload) }),
+      () => api(`/roles/${numericRoleId}/sync-permissions`, { method: "POST", body: JSON.stringify(payload) }),
+      () => api(`/roles/${numericRoleId}/revoke`, { method: "POST", body: JSON.stringify(payload) }),
+      () => api(`/roles/${numericRoleId}/detach`, { method: "POST", body: JSON.stringify(payload) }),
+      () => api(`/roles/${numericRoleId}/remove-permission`, { method: "POST", body: JSON.stringify(payload) }),
+      () => api("/roles/remove-permission", { method: "POST", body: JSON.stringify(payload) }),
+      ...(pivotId ? [() => api(`/role-permissions/${pivotId}`, { method: "DELETE" })] : [])
+    ]
+
+    for (const attempt of attempts) {
+      try {
+        await attempt()
+        break
+      } catch (err) {
+        // Continue
+      }
+    }
+
+    fetchRoles()
+  }
+
+  const rolePermissionIds = useMemo(() => {
+    const idSet = new Set()
+    ;(activeRole?.permissions ?? []).forEach((rp) => {
+      const pId = rp.permission?.id ?? rp.permissionId ?? rp.permission_id ?? rp.id
+      if (pId) idSet.add(Number(pId))
+      const pKey = rp.permission?.key ?? rp.key
+      if (pKey) idSet.add(String(pKey).toLowerCase().trim())
+    })
+    return idSet
+  }, [activeRole])
 
   const filteredUsers = useMemo(() => {
     return users.filter((u) => {
@@ -308,13 +724,19 @@ export default function UsersPage() {
   // ── Role Permissions Drill-Down View ────────────────────────────────────────
   if (view === "role" && activeRole) {
     const assigned = activeRole.permissions ?? []
-    const available = permissions.filter((p) => !rolePermissionIds.has(p.id))
+    const available = permissions.filter((p) => {
+      const pId = Number(p.id)
+      const pKey = String(p.key || p.name || "").toLowerCase().trim()
+      return !rolePermissionIds.has(pId) && !rolePermissionIds.has(pKey)
+    })
 
     const filteredAssigned = debouncedPermSearch
       ? assigned.filter(
           (rp) =>
             rp.permission?.name?.toLowerCase().includes(debouncedPermSearch.toLowerCase()) ||
-            rp.permission?.key?.toLowerCase().includes(debouncedPermSearch.toLowerCase())
+            rp.permission?.key?.toLowerCase().includes(debouncedPermSearch.toLowerCase()) ||
+            rp.name?.toLowerCase().includes(debouncedPermSearch.toLowerCase()) ||
+            rp.key?.toLowerCase().includes(debouncedPermSearch.toLowerCase())
         )
       : assigned
 
@@ -357,15 +779,35 @@ export default function UsersPage() {
               </div>
             </div>
 
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => deleteRole(activeRole.id)}
-              className="rounded-lg h-9 px-3.5 text-xs font-semibold"
-            >
-              <Trash2 className="size-3.5 mr-1.5" />
-              Delete Role
-            </Button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => grantAllPermissionsToRole(activeRole)}
+                className="rounded-lg h-9 px-3.5 text-xs font-bold border-teal-300 bg-teal-50/80 text-teal-800 hover:bg-teal-100 hover:text-teal-900 shadow-2xs cursor-pointer transition active:scale-95"
+              >
+                <Sparkles className="size-3.5 mr-1.5 text-teal-600" />
+                Grant Full Permissions
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => revokeAllPermissionsFromRole(activeRole)}
+                className="rounded-lg h-9 px-3 text-xs font-semibold text-slate-600 hover:text-rose-700 hover:bg-rose-50 border-slate-200 shadow-2xs cursor-pointer transition"
+              >
+                <RotateCcw className="size-3.5 mr-1.5" />
+                Revoke All
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => deleteRole(activeRole)}
+                className="rounded-lg h-9 px-3.5 text-xs font-semibold shadow-2xs cursor-pointer"
+              >
+                <Trash2 className="size-3.5 mr-1.5" />
+                Delete Role
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -404,16 +846,26 @@ export default function UsersPage() {
                   const perm = rp.permission || rp
                   return (
                     <div
-                      key={perm.id}
+                      key={perm.id || perm.key}
                       className="flex items-center justify-between rounded-lg border border-slate-200/90 bg-slate-50/60 p-3 hover:bg-slate-50 transition"
                     >
                       <div className="space-y-0.5 min-w-0 pr-2">
                         <div className="text-xs font-bold text-slate-900 truncate">{perm.name}</div>
                         <div className="text-[11px] font-mono text-slate-500 truncate">{perm.key}</div>
                       </div>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
-                        Granted
-                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          Granted
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => removePermissionFromRole(perm, rp)}
+                          className="h-7 px-2 text-[11px] font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 cursor-pointer"
+                        >
+                          Revoke
+                        </Button>
+                      </div>
                     </div>
                   )
                 })
@@ -441,7 +893,7 @@ export default function UsersPage() {
               ) : (
                 filteredAvailable.map((p) => (
                   <div
-                    key={p.id}
+                    key={p.id || p.key}
                     className="flex items-center justify-between rounded-lg border border-slate-200/90 bg-white p-3 hover:border-slate-300 transition"
                   >
                     <div className="space-y-0.5 min-w-0 pr-2">
@@ -450,7 +902,7 @@ export default function UsersPage() {
                     </div>
                     <Button
                       size="sm"
-                      onClick={() => assignPermissionToRole(p.id)}
+                      onClick={() => assignPermissionToRole(p)}
                       className="h-7.5 px-3 rounded-md bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold shrink-0 cursor-pointer shadow-2xs"
                     >
                       <Plus className="size-3.5 mr-1" />
@@ -631,6 +1083,14 @@ export default function UsersPage() {
               <ShieldCheck className="size-3.5 text-teal-700" />
               <span>{roles.length} Roles</span>
             </div>
+            <Button
+              onClick={openCreateRole}
+              variant="outline"
+              className="h-9 px-3.5 rounded-lg border-teal-300 bg-white hover:bg-teal-50 text-teal-800 text-xs font-bold shadow-2xs cursor-pointer transition-all"
+            >
+              <Shield className="size-3.5 mr-1.5 text-teal-700" />
+              Add Role
+            </Button>
             <Button
               onClick={openCreate}
               className="h-9 px-4 rounded-lg bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold shadow-xs cursor-pointer transition-all"
@@ -955,41 +1415,53 @@ export default function UsersPage() {
             </div>
           </div>
 
-          {/* Quick Create Role Form */}
-          <form onSubmit={createRole} className="flex items-center gap-2 w-full sm:w-auto">
-            <Input
-              placeholder="New role name (e.g. Supervisor)..."
-              value={newRoleName}
-              onChange={(e) => setNewRoleName(e.target.value)}
-              className="h-8.5 rounded-lg border-slate-200 text-xs w-full sm:w-56"
-            />
+          {/* Quick Create Role Form & Modal Trigger */}
+          <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap">
+            <form onSubmit={createRole} className="flex items-center gap-2 flex-1 sm:flex-initial">
+              <Input
+                placeholder="New role name (e.g. Supervisor)..."
+                value={newRoleName}
+                onChange={(e) => setNewRoleName(e.target.value)}
+                className="h-8.5 rounded-lg border-slate-200 text-xs w-full sm:w-52"
+              />
+              <Button
+                type="submit"
+                disabled={!newRoleName.trim()}
+                className="h-8.5 px-3 rounded-lg bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold shrink-0 shadow-2xs cursor-pointer"
+              >
+                <Plus className="size-3.5 mr-1" />
+                Add Role
+              </Button>
+            </form>
             <Button
-              type="submit"
-              disabled={!newRoleName.trim()}
-              className="h-8.5 px-3.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold shrink-0 shadow-2xs cursor-pointer"
+              type="button"
+              variant="outline"
+              onClick={openCreateRole}
+              className="h-8.5 px-3 rounded-lg border-teal-200 bg-teal-50/60 text-teal-800 hover:bg-teal-100 text-xs font-bold shrink-0 shadow-2xs cursor-pointer"
             >
-              <Plus className="size-3.5 mr-1" />
-              Add Role
+              <Sliders className="size-3.5 mr-1 text-teal-700" />
+              Advanced
             </Button>
-          </form>
+          </div>
         </CardHeader>
 
         <CardContent className="p-4 sm:p-5">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
             {roles.map((role) => {
               const permCount = (role.permissions ?? []).length
+              const hasAllPerms = permissions.length > 0 && permCount >= permissions.length
               return (
                 <div
                   key={role.id}
                   className="flex items-center justify-between rounded-xl border border-slate-200/90 bg-white p-3.5 hover:border-slate-300 hover:shadow-xs transition"
                 >
                   <div className="space-y-1 min-w-0 pr-2">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-bold text-xs sm:text-sm text-slate-900 truncate">{role.name}</span>
                       <span
                         className={`text-[10px] font-bold px-2 py-0.5 rounded border ${getRoleBadgeStyle(role.name)}`}
                       >
-                        {permCount} permissions
+                        {hasAllPerms ? "Full Access" : `${permCount} permissions`}
                       </span>
                     </div>
                     <div className="text-[11px] text-slate-400 font-medium">Role ID: #{role.id}</div>
@@ -999,11 +1471,21 @@ export default function UsersPage() {
                     <button
                       onClick={() => openRolePermissions(role)}
                       className="h-7.5 px-2.5 rounded-lg border border-teal-200 bg-teal-50 text-teal-800 hover:bg-teal-100 text-xs font-semibold transition cursor-pointer shadow-2xs"
+                      title="Inspect & edit role permissions"
                     >
                       Permissions
                     </button>
+                    {!hasAllPerms && (
+                      <button
+                        onClick={() => grantAllPermissionsToRole(role)}
+                        className="h-7.5 px-2 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 text-xs font-bold transition cursor-pointer shadow-2xs"
+                        title="Grant full permissions to this role"
+                      >
+                        Full
+                      </button>
+                    )}
                     <button
-                      onClick={() => deleteRole(role.id)}
+                      onClick={() => deleteRole(role)}
                       className="flex h-7.5 w-7.5 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-600 hover:text-rose-700 hover:bg-rose-100 transition cursor-pointer shadow-2xs"
                       title="Delete Role"
                     >
@@ -1098,6 +1580,113 @@ export default function UsersPage() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Create Role Dialog ─────────────────────────────────────────────── */}
+      <Dialog open={roleModalOpen} onOpenChange={setRoleModalOpen}>
+        <DialogContent className="sm:max-w-md rounded-2xl p-6 bg-white border border-slate-200/90 shadow-xl">
+          <DialogHeader className="pb-3 border-b border-slate-100">
+            <DialogTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <ShieldCheck className="size-5 text-teal-700" />
+              Create System Access Role
+            </DialogTitle>
+          </DialogHeader>
+
+          <form onSubmit={saveNewRole} className="space-y-4 pt-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700">Role Name</label>
+              <Input
+                placeholder="e.g. Operations Manager, Auditor, Supervisor..."
+                value={roleForm.name}
+                onChange={(e) => setRoleForm({ ...roleForm, name: e.target.value })}
+                required
+                className="h-9.5 rounded-lg border-slate-200 text-xs"
+              />
+            </div>
+
+            <div className="rounded-xl border border-teal-200/80 bg-teal-50/50 p-3.5 space-y-2">
+              <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={roleForm.grantFull}
+                  onChange={(e) => setRoleForm({ ...roleForm, grantFull: e.target.checked })}
+                  className="mt-0.5 size-4 rounded text-teal-700 focus:ring-teal-600 border-slate-300 cursor-pointer"
+                />
+                <div className="space-y-0.5">
+                  <span className="text-xs font-bold text-teal-950 flex items-center gap-1.5">
+                    <Sparkles className="size-3.5 text-teal-700" />
+                    Grant Full Permissions
+                  </span>
+                  <p className="text-[11px] text-teal-800 leading-relaxed">
+                    Automatically grant all {permissions.length} available system capabilities to this role immediately upon creation.
+                  </p>
+                </div>
+              </label>
+            </div>
+
+            <DialogFooter className="pt-4 flex items-center justify-end gap-2 border-t border-slate-100">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setRoleModalOpen(false)}
+                className="h-9 rounded-lg border-slate-200 text-xs font-semibold"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={roleSaving || !roleForm.name.trim()}
+                className="h-9 px-4 rounded-lg bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold shadow-xs cursor-pointer"
+              >
+                {roleSaving ? "Creating..." : "Create Role"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Confirmation Modal Dialog ──────────────────────────────────────── */}
+      <Dialog
+        open={confirmDialog.open}
+        onOpenChange={(open) => setConfirmDialog((prev) => ({ ...prev, open }))}
+      >
+        <DialogContent className="sm:max-w-md rounded-2xl p-6 bg-white border border-slate-200/90 shadow-2xl">
+          <DialogHeader className="pb-3 border-b border-slate-100">
+            <DialogTitle className="text-base font-bold text-slate-900 flex items-center gap-2.5">
+              <div className="flex size-9 items-center justify-center rounded-xl bg-rose-50 border border-rose-200 text-rose-600 shrink-0">
+                <AlertTriangle className="size-5" />
+              </div>
+              <span>{confirmDialog.title}</span>
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="py-3 text-xs sm:text-sm text-slate-600 leading-relaxed">
+            {confirmDialog.description}
+          </div>
+
+          <DialogFooter className="pt-4 flex items-center justify-end gap-2 border-t border-slate-100">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setConfirmDialog((prev) => ({ ...prev, open: false }))}
+              className="h-9 rounded-lg border-slate-200 text-xs font-semibold hover:bg-slate-50 cursor-pointer"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant={confirmDialog.confirmVariant === "destructive" ? "destructive" : "default"}
+              onClick={confirmDialog.onConfirm}
+              className={`h-9 px-4 rounded-lg text-xs font-bold shadow-xs cursor-pointer ${
+                confirmDialog.confirmVariant === "teal"
+                  ? "bg-teal-700 hover:bg-teal-800 text-white"
+                  : ""
+              }`}
+            >
+              {confirmDialog.confirmText}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

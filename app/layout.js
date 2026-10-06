@@ -9,7 +9,7 @@ const inter = Inter({
 });
 
 export const metadata = {
-  title: "Cruise Saga | Fleet Operations & Cruise Intelligence",
+  title: "Galaxy Cruise | Fleet Operations & Cruise Intelligence",
   description: "Real-time cruise inventory, scraper health monitoring, and deck plan management.",
   icons: {
     icon: "/favicon.svg",

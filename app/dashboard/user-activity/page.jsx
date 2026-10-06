@@ -148,20 +148,20 @@ export default function UserActivityPage() {
       {/* Controls & Filter Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         {/* Segmented Filter Buttons */}
-        <div className="flex items-center gap-1 rounded-xl border border-slate-200/90 bg-white p-1 shadow-2xs">
+        <div className="flex items-center gap-1.5 flex-wrap">
           {[
-            { key: "all",           label: "All Events" },
-            { key: "login",         label: "Logins" },
-            { key: "search_cruise", label: "Searches" },
-            { key: "refresh_cabin", label: "Cabin Refreshes" }
+            { key: "all",           label: "All Events", activeBorder: "border-2 border-emerald-600 bg-emerald-50/80 text-emerald-900" },
+            { key: "login",         label: "Logins", activeBorder: "border-2 border-teal-600 bg-teal-50/80 text-teal-900" },
+            { key: "search_cruise", label: "Searches", activeBorder: "border-2 border-sky-600 bg-sky-50/80 text-sky-900" },
+            { key: "refresh_cabin", label: "Cabin Refreshes", activeBorder: "border-2 border-amber-600 bg-amber-50/80 text-amber-900" }
           ].map(f => (
             <button
               key={f.key}
               onClick={() => applyFilter(f.key)}
-              className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-all cursor-pointer ${
+              className={`rounded-xl px-3.5 py-1.5 text-xs font-bold transition-all cursor-pointer shadow-2xs ${
                 filter === f.key
-                  ? "bg-teal-700 text-white shadow-xs"
-                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                  ? f.activeBorder
+                  : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
               }`}
             >
               {f.label}

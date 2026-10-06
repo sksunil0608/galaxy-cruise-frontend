@@ -25,6 +25,7 @@ import {
   deletePortAlias
 } from "../api"
 import { Skeleton } from "@/components/ui/skeleton"
+import { toast } from "sonner"
 
 
 function Modal({ children, onClose, maxWidth = "max-w-xl" }) {
@@ -382,13 +383,15 @@ export default function ItineraryManagerPage() {
     try {
       if (deleteTarget.kind === "itinerary") {
         await deleteItinerary(deleteTarget.id)
+        toast.success("Itinerary deleted successfully")
         loadItineraries()
       } else {
         await deletePortAlias(deleteTarget.id)
+        toast.success("Port alias deleted successfully")
         loadAliases()
       }
     } catch (err) {
-      alert(err.message || "Delete failed")
+      toast.error(err.message || "Delete failed")
     } finally {
       setDeleteTarget(null)
     }
@@ -488,8 +491,8 @@ export default function ItineraryManagerPage() {
                 No itineraries found.
               </div>
             ) : (
-              itineraries.map((row) => (
-                <div key={row.id} className="p-4 bg-white hover:bg-slate-50/70 transition space-y-3">
+              itineraries.map((row, index) => (
+                <div key={`itin-card-${row.id || index}-${index}`} className="p-4 bg-white hover:bg-slate-50/70 transition space-y-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 space-y-1">
                       <div className="inline-flex items-center gap-1.5 text-slate-900 font-bold text-sm">
@@ -599,8 +602,8 @@ export default function ItineraryManagerPage() {
                     </td>
                   </tr>
                 ) : (
-                  itineraries.map((row) => (
-                    <tr key={row.id} className="hover:bg-slate-50/70 transition group">
+                  itineraries.map((row, index) => (
+                    <tr key={`itin-row-${row.id || index}-${index}`} className="hover:bg-slate-50/70 transition group">
                       <td className="px-4 py-3.5 font-bold text-slate-900 whitespace-nowrap">
                         <div className="flex items-center gap-2">
                           <div className="rounded-lg bg-teal-50 p-1.5 text-teal-700 border border-teal-100/80 shrink-0">
@@ -741,8 +744,8 @@ export default function ItineraryManagerPage() {
                 No port aliases found.
               </div>
             ) : (
-              aliases.map((row) => (
-                <div key={row.id} className="p-4 bg-white hover:bg-slate-50/70 transition space-y-3">
+              aliases.map((row, index) => (
+                <div key={`alias-card-${row.id || index}-${index}`} className="p-4 bg-white hover:bg-slate-50/70 transition space-y-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="space-y-1 min-w-0">
                       <span className="inline-block rounded-md border border-teal-200 bg-teal-50 px-2 py-0.5 text-[11px] font-bold text-teal-800 font-mono">
@@ -822,8 +825,8 @@ export default function ItineraryManagerPage() {
                     </td>
                   </tr>
                 ) : (
-                  aliases.map((row) => (
-                    <tr key={row.id} className="hover:bg-slate-50/70 transition group">
+                  aliases.map((row, index) => (
+                    <tr key={`alias-row-${row.id || index}-${index}`} className="hover:bg-slate-50/70 transition group">
                       <td className="px-4 py-3.5 whitespace-nowrap">
                         <span className="rounded-md border border-teal-200/80 bg-teal-50 px-2 py-0.5 text-[11px] font-bold text-teal-800 font-mono">
                           {row.aliasKey}
