@@ -29,7 +29,11 @@ import {
   Radio,
   Check,
   CheckCheck,
-  Zap
+  Zap,
+  Eye,
+  Search,
+  Layers,
+  Ship
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -123,6 +127,9 @@ export default function TaggedCruisesPage() {
   // Tag Management modal state
   const [tagModalCruise, setTagModalCruise] = useState(null)
   const [savingTag, setSavingTag] = useState(false)
+
+  // Cabin Categories Modal state
+  const [cabinModalCruise, setCabinModalCruise] = useState(null)
 
   const [filters, setFilters] = useState({
     tag: "",
@@ -352,10 +359,11 @@ export default function TaggedCruisesPage() {
       setRefreshJobs(prev => ({ ...prev, [row.id]: { status: "error", error: "Vendor unknown — cannot refresh." } }))
       return
     }
+    setRefreshJobs(prev => ({ ...prev, [row.id]: { status: "started", estimatedMs: 45000, remaining: 45000 } }))
     try {
       const result = await refreshCruiseCabins(cruiseCode, vendorKey)
       const rem = result.remaining ?? result.estimatedMs ?? 45000
-      setRefreshJobs(prev => ({ ...prev, [row.id]: { status: result.status, estimatedMs: result.estimatedMs ?? rem, remaining: rem } }))
+      setRefreshJobs(prev => ({ ...prev, [row.id]: { status: result.status || "in_progress", estimatedMs: result.estimatedMs ?? rem, remaining: rem } }))
       if (result.status === "started" || result.status === "in_progress") {
         startPolling(row.id, cruiseCode)
       } else if (result.status === "cooldown" || result.status === "completed" || rem <= 0) {
@@ -663,6 +671,7 @@ export default function TaggedCruisesPage() {
             value={summary.drops}
             highlight={summary.drops > 0}
             active={priceDropOnly}
+            variant="amber"
             onClick={togglePriceDropFilter}
             subtext={summary.drops > 0 ? (priceDropOnly ? "Filtering drops (click to show all)" : "Click to filter & expand drops") : "All fares steady"}
             icon={Flame}
@@ -760,22 +769,22 @@ export default function TaggedCruisesPage() {
           </button>
           <button
             onClick={resetFilters}
-            className="inline-flex items-center gap-2 h-10 px-5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs sm:text-sm font-medium active:scale-95 transition cursor-pointer"
+            className="inline-flex items-center gap-2 h-10 px-5 rounded-xl border border-rose-200/90 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs sm:text-sm font-semibold active:scale-95 transition cursor-pointer shadow-2xs"
           >
-            <RotateCcw size={14} />
+            <RotateCcw size={14} className="text-rose-600" />
             <span>Reset</span>
           </button>
           <button
             onClick={togglePriceDropFilter}
             className={`inline-flex items-center gap-1.5 h-10 px-4 rounded-xl border text-xs sm:text-sm font-semibold active:scale-95 transition cursor-pointer ${
               priceDropOnly
-                ? "border-2 border-emerald-600 bg-emerald-50/90 text-emerald-900 shadow-2xs"
+                ? "border-2 border-orange-500 bg-gradient-to-r from-amber-100 via-orange-50 to-amber-100 text-orange-950 shadow-xs ring-2 ring-orange-400/30 font-bold"
                 : summary.drops > 0
-                  ? "bg-emerald-50/60 text-emerald-800 border-emerald-300 hover:bg-emerald-100"
+                  ? "bg-gradient-to-r from-amber-50 via-orange-50/70 to-amber-50 text-amber-950 border-amber-300 hover:border-amber-400 hover:bg-amber-100/80 shadow-2xs font-bold"
                   : "bg-slate-50 text-slate-400 border-slate-200 opacity-60"
             }`}
           >
-            <Flame size={14} className={summary.drops > 0 ? "text-amber-500" : ""} />
+            <Flame size={15} className={summary.drops > 0 ? "text-amber-600 fill-amber-500/30 animate-pulse" : "text-slate-400"} />
             <span>{priceDropOnly ? "Showing Drops Only" : `Price Drops (${summary.drops})`}</span>
           </button>
 
@@ -814,7 +823,7 @@ export default function TaggedCruisesPage() {
           </div>
         ) : (
           <div className="grid gap-4">
-            {displayedRows.map(row => {
+            {displayedRows.map((row, index) => {
               const availPrices = (row.cabinCategories || [])
                 .filter(c => c.avlResult === "OK" || c.status === "Available" || (Number(c.avail ?? c.available ?? 0) > 0) || !c.avlResult)
                 .map(c => Number(c.cabinPrice ?? c.price ?? 0))
@@ -871,7 +880,7 @@ export default function TaggedCruisesPage() {
                   key={`tagged-${row.id || index}-${row.startDate || row.sailDate || ""}-${index}`}
                   className={`rounded-2xl border transition-all p-4 sm:p-5 duration-200 ${
                     hasPriceDrop
-                      ? "border-emerald-300 bg-gradient-to-br from-emerald-50/40 via-white to-teal-50/20 shadow-xs ring-1 ring-emerald-400/30"
+                      ? "border-amber-300/90 bg-gradient-to-br from-amber-50/40 via-white to-orange-50/25 shadow-xs ring-1 ring-amber-400/30"
                       : "border-slate-200/80 bg-slate-50/30 hover:bg-slate-50/70"
                   }`}
                 >
@@ -894,9 +903,9 @@ export default function TaggedCruisesPage() {
                           Load {loadFactor}%
                         </span>
                         {hasPriceDrop && (
-                          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-3 py-0.5 text-xs font-semibold text-white shadow-xs animate-pulse">
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-rose-500 via-orange-500 to-amber-500 px-3 py-0.5 text-xs font-bold text-white shadow-xs animate-pulse border border-rose-400/30">
                             <TrendingDown size={13} />
-                            Price Drop Active
+                            <span>Price Drop Active</span>
                           </span>
                         )}
                         {isLowAvailability && (
@@ -995,8 +1004,8 @@ export default function TaggedCruisesPage() {
                         <div className="mt-1">
                           {priceDiff !== null ? (
                             priceDiff < 0 ? (
-                              <div className="flex items-center gap-1.5 text-emerald-700 font-bold text-xs tabular-nums">
-                                <ArrowDownRight size={14} className="shrink-0" />
+                              <div className="flex items-center gap-1.5 text-rose-700 font-bold text-xs tabular-nums">
+                                <ArrowDownRight size={14} className="shrink-0 text-rose-600" />
                                 <span>-{formatCurrency(Math.abs(priceDiff), row.currency)} ({percentDiff}%)</span>
                               </div>
                             ) : priceDiff > 0 ? (
@@ -1020,20 +1029,20 @@ export default function TaggedCruisesPage() {
 
                   {/* Dynamic Price Drop & Team Mention Notification Banner */}
                   {hasPriceDrop && (
-                    <div className="mt-4 rounded-xl border border-emerald-300 bg-gradient-to-r from-emerald-50/80 via-teal-50/40 to-emerald-50/80 p-3.5 text-sm text-emerald-950 shadow-2xs">
+                    <div className="mt-4 rounded-xl border border-amber-300/90 bg-gradient-to-r from-amber-50/95 via-orange-50/70 to-rose-50/50 p-3.5 text-sm text-slate-900 shadow-2xs">
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <div className="flex items-start sm:items-center gap-3">
-                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-600 text-white shadow-xs">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-r from-rose-500 to-amber-500 text-white shadow-xs">
                             <TrendingDown size={18} />
                           </div>
                           <div>
                             <div className="font-bold text-slate-900 flex flex-wrap items-center gap-2">
                               <span className="inline-flex items-center gap-1.5">
-                                <Flame size={16} className="text-amber-500 shrink-0" />
+                                <Flame size={16} className="text-amber-600 fill-amber-500/30 shrink-0" />
                                 <span>Price Drop Confirmed on {shipName}!</span>
                               </span>
                               {priceDiff && priceDiff < 0 ? (
-                                <span className="rounded-full bg-emerald-200/90 px-2.5 py-0.5 text-xs font-bold text-emerald-950 border border-emerald-300 shadow-2xs tabular-nums">
+                                <span className="rounded-full bg-rose-100/90 px-2.5 py-0.5 text-xs font-bold text-rose-900 border border-rose-300 shadow-2xs tabular-nums">
                                   Save {formatCurrency(Math.abs(priceDiff), row.currency)} ({percentDiff}% off)
                                 </span>
                               ) : null}
@@ -1047,7 +1056,7 @@ export default function TaggedCruisesPage() {
                               ) : null}
                               <span>
                                 Tag <strong>"{primaryDropTag?.label || "Priority"}"</strong> hit a new low of{" "}
-                                <strong className="text-emerald-800 font-bold tabular-nums">
+                                <strong className="text-rose-700 font-bold tabular-nums">
                                   {formatCurrency(lowest || primaryDropTag?.trackedLowestPrice, row.currency)}
                                 </strong>
                               </span>
@@ -1113,139 +1122,27 @@ export default function TaggedCruisesPage() {
                     )
                   })()}
 
-                  {/* Cabin Categories Expanded Grid with Dynamic Drop Highlighting */}
-                  {cabinGroups.length > 0 && (
-                    <div className="mt-3.5 pt-3 border-t border-slate-200/80">
-                      <button
-                        onClick={() => toggleExpand(row.id)}
-                        className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 hover:text-slate-900 cursor-pointer"
-                      >
-                        {isExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-                        <span>{isExpanded ? "Hide" : "Show"} cabin categories ({(row.cabinCategories || []).length})</span>
-                      </button>
-
-                      {isExpanded && (
-                        <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                          {cabinGroups.map(group => {
-                            const groupPrices = group.categories
-                              .map(c => Number(c.cabinPrice || c.price || 0))
-                              .filter(p => Number.isFinite(p) && p > 0)
-                            const groupMin = groupPrices.length > 0 ? Math.min(...groupPrices) : null
-                            const groupMax = groupPrices.length > 0 ? Math.max(...groupPrices) : null
-
-                            return (
-                              <div key={group.group} className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-2xs">
-                                {/* Header with From - To Range */}
-                                <div className="mb-2.5 flex items-center justify-between pb-2 border-b border-slate-100">
-                                  <span className="text-xs font-bold uppercase tracking-wider text-slate-800">{group.group}</span>
-                                  {groupMin !== null ? (
-                                    <span className="rounded-full bg-teal-50 border border-teal-200/80 px-2.5 py-0.5 text-xs font-semibold text-teal-800 shadow-2xs tabular-nums">
-                                      {groupMax && groupMax > groupMin
-                                        ? `from ${formatCurrency(groupMin, row.currency)} to ${formatCurrency(groupMax, row.currency)}`
-                                        : `from ${formatCurrency(groupMin, row.currency)}`}
-                                    </span>
-                                  ) : (
-                                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500 font-medium">WTL</span>
-                                  )}
-                                </div>
-
-                                {/* Column Headers */}
-                                <div className="grid grid-cols-12 items-center text-[10px] font-semibold uppercase tracking-wider text-slate-400 pb-2 px-1.5 border-b border-slate-100 select-none">
-                                  <span className="col-span-4">Category</span>
-                                  <span className="col-span-4 text-right pr-2">Live Fare</span>
-                                  <span className="col-span-4 text-right">Avail</span>
-                                </div>
-
-                                <div className="space-y-1 mt-1.5">
-                                  {group.categories.map(cat => {
-                                    const catPrice = Number(cat.cabinPrice || cat.price || 0)
-                                    const catAvail = Number(cat.avail ?? cat.available ?? 0)
-                                    const isCatSoldOut = catAvail === 0 || cat.avlResult === "WTL"
-                                    const isCatLow = catAvail > 0 && catAvail <= 2
-                                    const isLowestInGroup = catPrice > 0 && groupMin !== null && catPrice === groupMin
-                                    const isCruiseDroppedPrice = catPrice > 0 && lowest !== null && catPrice === lowest && hasPriceDrop
-
-                                    return (
-                                      <div
-                                        key={cat.code}
-                                        className={`grid grid-cols-12 items-center text-xs py-1.5 px-1.5 border-b border-slate-50 last:border-0 rounded-lg transition-colors ${
-                                          isCruiseDroppedPrice
-                                            ? "bg-emerald-100/90 border-emerald-400 shadow-xs ring-1 ring-emerald-400/60"
-                                            : isLowestInGroup
-                                              ? "bg-emerald-50/70 border-emerald-200/80 shadow-2xs"
-                                              : "hover:bg-slate-50/70"
-                                        }`}
-                                      >
-                                        {/* Col 1: Category */}
-                                        <div className="col-span-4 flex items-center gap-1.5 min-w-0">
-                                          <span className={`font-semibold truncate ${
-                                            isCruiseDroppedPrice
-                                              ? "text-emerald-950 font-bold"
-                                              : isLowestInGroup
-                                                ? "text-emerald-950 font-bold"
-                                                : "text-slate-900"
-                                          }`}>
-                                            {cat.code}
-                                          </span>
-                                          {isCruiseDroppedPrice ? (
-                                            <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-950 bg-emerald-300/90 border border-emerald-500 px-1.5 py-0.2 rounded shrink-0 animate-pulse">
-                                              <TrendingDown size={11} className="shrink-0" />
-                                              <span>Drop</span>
-                                            </span>
-                                          ) : isLowestInGroup ? (
-                                            <span className="text-[9px] font-semibold text-emerald-800 bg-emerald-100/90 border border-emerald-300 px-1 py-0.2 rounded shrink-0">
-                                              Lowest
-                                            </span>
-                                          ) : null}
-                                        </div>
-
-                                        {/* Col 2: Live Fare */}
-                                        <div className="col-span-4 text-right pr-2">
-                                          {catPrice > 0 ? (
-                                            <span className={`text-xs tabular-nums ${
-                                              isCruiseDroppedPrice
-                                                ? "font-bold text-emerald-950 bg-emerald-200/90 px-1.5 py-0.5 rounded border border-emerald-400"
-                                                : isLowestInGroup
-                                                  ? "font-bold text-emerald-800"
-                                                  : "font-semibold text-slate-900"
-                                            }`}>
-                                              {formatCurrency(catPrice, row.currency)}
-                                            </span>
-                                          ) : (
-                                            <span className="text-[11px] text-slate-400 font-medium">
-                                              {cat.avlResult === "WTL" ? "WTL" : cat.avlResult || cat.status || "N/A"}
-                                            </span>
-                                          )}
-                                        </div>
-
-                                        {/* Col 3: Availability */}
-                                        <div className="col-span-4 text-right">
-                                          {isCatSoldOut ? (
-                                            <span className="inline-flex items-center text-[10px] font-semibold text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200/80 whitespace-nowrap">
-                                              0 avail (WTL)
-                                            </span>
-                                          ) : isCatLow ? (
-                                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/80 whitespace-nowrap">
-                                              <Zap size={11} className="text-amber-600 shrink-0" />
-                                              <span>{catAvail} left</span>
-                                            </span>
-                                          ) : (
-                                            <span className="text-[11px] font-normal text-slate-500 whitespace-nowrap tabular-nums">
-                                              {catAvail} avail.
-                                            </span>
-                                          )}
-                                        </div>
-                                      </div>
-                                    )
-                                  })}
-                                </div>
-                              </div>
-                            )
-                          })}
-                        </div>
+                  {/* Cabin Categories Modal Trigger */}
+                  <div className="mt-3.5 pt-3 border-t border-slate-200/80 flex items-center justify-between flex-wrap gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setCabinModalCruise(row)}
+                      className="inline-flex items-center gap-2 text-xs font-bold text-teal-900 bg-gradient-to-r from-teal-50 via-emerald-50/70 to-teal-50 hover:from-teal-100 hover:to-emerald-100 border border-teal-300/90 px-3.5 sm:px-4 py-2 rounded-xl transition-all cursor-pointer shadow-2xs hover:shadow-xs active:scale-[0.98]"
+                    >
+                      <Eye size={14} className="text-teal-700 shrink-0" />
+                      <span>View Cabin Categories ({(row.cabinCategories || []).length})</span>
+                      {lowest !== null && (
+                        <span className="rounded-md bg-white/95 border border-teal-200/80 px-2 py-0.5 text-[11px] font-mono font-bold text-teal-800 shadow-2xs">
+                          from {formatCurrency(lowest, row.currency)}
+                        </span>
                       )}
+                    </button>
+
+                    <div className="text-[11px] text-slate-500 font-medium flex items-center gap-1.5">
+                      <Sparkles size={12} className="text-teal-600 shrink-0" />
+                      <span>Click to view live staterooms, availability & fare breakdown in modal</span>
                     </div>
-                  )}
+                  </div>
                 </div>
               )
             })}
@@ -1281,9 +1178,15 @@ export default function TaggedCruisesPage() {
 
       {/* ── Slide-Over / Modal: Price Alerts Feed ────────────────────────────── */}
       {showAlertsPanel && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-2 sm:p-4 md:p-6 animate-in fade-in duration-200 font-sans">
-          <div className="relative w-full max-w-2xl rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[85vh] min-w-0">
-            <div className="flex items-center justify-between p-4 sm:px-6 sm:py-4 border-b border-slate-100 bg-slate-50/50 gap-3">
+        <div
+          onClick={() => setShowAlertsPanel(false)}
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-xs p-0 sm:p-4 md:p-6 animate-in fade-in duration-200 font-sans cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative w-full max-w-2xl rounded-t-2xl sm:rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden flex flex-col h-[85dvh] sm:h-auto max-h-[88dvh] sm:max-h-[85vh] min-w-0 cursor-default"
+          >
+            <div className="flex items-center justify-between p-3.5 sm:px-6 sm:py-4 border-b border-slate-100 bg-slate-50/50 gap-3 shrink-0">
               <div className="flex items-center gap-2.5 min-w-0 flex-1">
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-rose-600 text-white shadow-xs">
                   <Flame size={18} />
@@ -1301,7 +1204,7 @@ export default function TaggedCruisesPage() {
               </button>
             </div>
 
-            <div className="p-4 sm:p-6 overflow-y-auto space-y-3 flex-1 min-w-0">
+            <div className="p-3.5 sm:p-6 overflow-y-auto overscroll-contain touch-pan-y space-y-3 flex-1 min-w-0">
               {priceAlerts.length === 0 ? (
                 <div className="text-center py-12 text-slate-500 space-y-2">
                   <CheckCheck size={36} className="mx-auto text-emerald-500 opacity-80" />
@@ -1384,6 +1287,16 @@ export default function TaggedCruisesPage() {
         </div>
       )}
 
+      {/* ── Modal: View Cabin Categories ────────────────────────────────────── */}
+      {cabinModalCruise && (
+        <CabinCategoriesModal
+          row={rows.find(r => r.id === cabinModalCruise.id) || cabinModalCruise}
+          onClose={() => setCabinModalCruise(null)}
+          onRefresh={() => handleGetFullDetails(rows.find(r => r.id === cabinModalCruise.id) || cabinModalCruise)}
+          refreshJob={refreshJobs[cabinModalCruise.id]}
+        />
+      )}
+
       {/* ── Modal: Manage Cruise Tags ───────────────────────────────────────── */}
       {tagModalCruise && (
         <TagManagementModal
@@ -1400,7 +1313,9 @@ export default function TaggedCruisesPage() {
   )
 }
 
-function StatCard({ label, value, highlight = false, active = false, onClick, subtext, icon: Icon }) {
+function StatCard({ label, value, highlight = false, active = false, onClick, subtext, icon: Icon, variant = "teal" }) {
+  const isAmber = variant === "amber"
+
   return (
     <div
       onClick={onClick}
@@ -1408,28 +1323,46 @@ function StatCard({ label, value, highlight = false, active = false, onClick, su
         onClick ? "cursor-pointer active:scale-98" : ""
       } ${
         active
-          ? "border-emerald-500 bg-gradient-to-br from-white via-emerald-50/70 to-emerald-100/40 ring-2 ring-emerald-500/40 shadow-xs"
+          ? isAmber
+            ? "border-orange-500 bg-gradient-to-br from-white via-amber-50/90 to-orange-100/70 ring-2 ring-orange-500/40 shadow-xs"
+            : "border-emerald-500 bg-gradient-to-br from-white via-emerald-50/70 to-emerald-100/40 ring-2 ring-emerald-500/40 shadow-xs"
           : highlight
-            ? "border-emerald-300 bg-gradient-to-br from-white via-emerald-50/40 to-teal-50/50 hover:border-emerald-400 hover:shadow-emerald-500/10"
+            ? isAmber
+              ? "border-amber-300 bg-gradient-to-br from-white via-amber-50/50 to-orange-50/40 hover:border-amber-400 hover:shadow-orange-500/10"
+              : "border-emerald-300 bg-gradient-to-br from-white via-emerald-50/40 to-teal-50/50 hover:border-emerald-400 hover:shadow-emerald-500/10"
             : "border-teal-200/80 bg-gradient-to-br from-white via-teal-50/30 to-teal-100/20 hover:border-teal-300 hover:shadow-teal-500/10"
       }`}
     >
-      <div className="pointer-events-none absolute -right-6 -top-6 h-20 w-20 rounded-full bg-teal-500/10 blur-xl" />
+      <div className={`pointer-events-none absolute -right-6 -top-6 h-20 w-20 rounded-full blur-xl ${
+        isAmber ? "bg-amber-500/15" : "bg-teal-500/10"
+      }`} />
 
       <div className="relative z-10 flex items-center justify-between gap-2">
-        <div className="text-[11px] font-semibold uppercase tracking-wider text-teal-800/90 truncate flex items-center gap-1.5">
-          {Icon && <Icon size={13} className="text-teal-600" />}
+        <div className={`text-[11px] font-semibold uppercase tracking-wider truncate flex items-center gap-1.5 ${
+          isAmber ? "text-amber-900" : "text-teal-800/90"
+        }`}>
+          {Icon && <Icon size={13} className={isAmber ? "text-amber-600 fill-amber-500/20" : "text-teal-600"} />}
           <span>{label}</span>
         </div>
         {active && (
-          <span className="text-[9px] font-bold uppercase text-emerald-800 bg-emerald-200/90 px-2 py-0.5 rounded-full shadow-2xs">
+          <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full shadow-2xs ${
+            isAmber ? "text-orange-950 bg-amber-200 border border-amber-300" : "text-emerald-800 bg-emerald-200/90"
+          }`}>
             Active
           </span>
         )}
       </div>
-      <div className="relative z-10 mt-2 text-2xl sm:text-3xl font-bold text-teal-950 tabular-nums tracking-tight">{value}</div>
+      <div className={`relative z-10 mt-2 text-2xl sm:text-3xl font-bold tabular-nums tracking-tight ${
+        isAmber ? "text-slate-950" : "text-teal-950"
+      }`}>
+        {value}
+      </div>
       {subtext && (
-        <div className="relative z-10 mt-1.5 text-[11px] font-semibold text-emerald-700 truncate">{subtext}</div>
+        <div className={`relative z-10 mt-1.5 text-[11px] font-semibold truncate ${
+          isAmber ? "text-amber-800" : "text-emerald-700"
+        }`}>
+          {subtext}
+        </div>
       )}
     </div>
   )
@@ -1525,12 +1458,26 @@ function TagManagementModal({
     resetForm()
   }
 
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") onClose?.()
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [onClose])
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-2 sm:p-4 md:p-6 animate-in fade-in duration-200 font-sans">
-      <div className="relative w-full max-w-2xl rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh] min-w-0">
-        <div className="flex items-start justify-between p-4 sm:px-6 sm:py-4 border-b border-slate-100 bg-slate-50/50 gap-3">
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-xs p-0 sm:p-4 md:p-6 animate-in fade-in duration-200 font-sans cursor-pointer"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="relative w-full max-w-2xl rounded-t-2xl sm:rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden flex flex-col h-[88dvh] sm:h-auto max-h-[92dvh] sm:max-h-[90vh] min-w-0 cursor-default"
+      >
+        <div className="flex items-start justify-between p-3.5 sm:px-6 sm:py-4 border-b border-slate-100 bg-slate-50/50 gap-3 shrink-0">
           <div className="min-w-0 flex-1">
-            <div className="text-[11px] font-semibold text-teal-800 uppercase tracking-wider bg-teal-50 border border-teal-200/80 px-2 py-0.5 rounded-full inline-block">Cruise Tag & Mention Management</div>
+            <div className="text-[10.5px] sm:text-[11px] font-semibold text-teal-800 uppercase tracking-wider bg-teal-50 border border-teal-200/80 px-2 py-0.5 rounded-full inline-block">Cruise Tag & Mention Management</div>
             <h2 className="text-sm sm:text-base md:text-lg font-bold text-slate-900 mt-1 break-words leading-snug">{row.package || row.code}</h2>
             <div className="text-xs text-slate-500 font-medium truncate mt-0.5">{row.ship} · {getCruiseDisplayId(row)}</div>
           </div>
@@ -1542,7 +1489,7 @@ function TagManagementModal({
           </button>
         </div>
 
-        <div className="p-4 sm:p-6 overflow-y-auto grid md:grid-cols-2 gap-4 sm:gap-6 flex-1 min-w-0">
+        <div className="p-3.5 sm:p-6 overflow-y-auto overscroll-contain touch-pan-y grid md:grid-cols-2 gap-4 sm:gap-6 flex-1 min-w-0">
           {/* Left Column: Existing Tags */}
           <div className="space-y-3 min-w-0">
             <div className="text-xs font-semibold text-slate-800 uppercase tracking-wider">Active Tags ({tags.length})</div>
@@ -1712,6 +1659,446 @@ function TagManagementModal({
           >
             Done
           </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function CabinCategoriesModal({
+  row,
+  onClose,
+  onRefresh,
+  refreshJob
+}) {
+  const [activeGroup, setActiveGroup] = useState("all")
+  const [searchQuery, setSearchQuery] = useState("")
+  const [filterAvailOnly, setFilterAvailOnly] = useState(false)
+  const [filterDropsOnly, setFilterDropsOnly] = useState(false)
+  const [localRefreshing, setLocalRefreshing] = useState(false)
+
+  const cabinCategories = useMemo(() => row.cabinCategories || [], [row.cabinCategories])
+  const cabinGroups = useMemo(() => buildCabinGroups(cabinCategories), [cabinCategories])
+
+  const availPrices = useMemo(() => {
+    return cabinCategories
+      .filter(c => c.avlResult === "OK" || c.status === "Available" || (Number(c.avail ?? c.available ?? 0) > 0) || !c.avlResult)
+      .map(c => Number(c.cabinPrice ?? c.price ?? 0))
+      .filter(p => Number.isFinite(p) && p > 0)
+  }, [cabinCategories])
+
+  const lowestPrice = availPrices.length > 0 ? Math.min(...availPrices) : (row.lowestPrice ? Number(row.lowestPrice) : null)
+
+  const shipName = row.ship || row.shipName || "Cruise Ship"
+  const seatsAvailable = Number(row.seatsAvailable ?? 0)
+  const totalCapacity = Number(row.totalCapacity ?? 0)
+  const loadFactor = getLoadFactor(row)
+
+  const isRunning = refreshJob?.status === "started" || refreshJob?.status === "in_progress"
+  const isCooldown = refreshJob?.status === "cooldown"
+  const remainingSec = isRunning ? Math.ceil((refreshJob.remaining ?? 0) / 1000) : isCooldown ? (refreshJob.retryAfter ?? 0) : 0
+  const isRefreshingActive = isRunning || localRefreshing
+
+  const handleTriggerRefresh = async () => {
+    setLocalRefreshing(true)
+    try {
+      await onRefresh?.()
+    } finally {
+      setTimeout(() => setLocalRefreshing(false), 2500)
+    }
+  }
+
+  // Filter groups and categories
+  const filteredGroups = useMemo(() => {
+    return cabinGroups
+      .map(group => {
+        if (activeGroup !== "all" && group.group !== activeGroup) return null
+
+        const filteredCategories = group.categories.filter(cat => {
+          const codeMatch = !searchQuery.trim() ||
+            (cat.code || "").toLowerCase().includes(searchQuery.toLowerCase().trim()) ||
+            (cat.name || cat.description || "").toLowerCase().includes(searchQuery.toLowerCase().trim())
+          if (!codeMatch) return false
+
+          const catAvail = Number(cat.avail ?? cat.available ?? 0)
+          const isAvail = cat.avlResult === "OK" || cat.status === "Available" || catAvail > 0
+          if (filterAvailOnly && !isAvail) return false
+
+          const catPrice = Number(cat.cabinPrice || cat.price || 0)
+          const isDrop = catPrice > 0 && lowestPrice !== null && catPrice === lowestPrice
+          if (filterDropsOnly && !isDrop) return false
+
+          return true
+        })
+
+        if (filteredCategories.length === 0) return null
+
+        const groupPrices = filteredCategories
+          .map(c => Number(c.cabinPrice || c.price || 0))
+          .filter(p => Number.isFinite(p) && p > 0)
+        const groupMin = groupPrices.length > 0 ? Math.min(...groupPrices) : null
+        const groupMax = groupPrices.length > 0 ? Math.max(...groupPrices) : null
+
+        return {
+          ...group,
+          categories: filteredCategories,
+          groupMin,
+          groupMax
+        }
+      })
+      .filter(Boolean)
+  }, [cabinGroups, activeGroup, searchQuery, filterAvailOnly, filterDropsOnly, lowestPrice])
+
+  const totalVisibleCategories = filteredGroups.reduce((acc, g) => acc + g.categories.length, 0)
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") onClose?.()
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [onClose])
+
+  return (
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-xs p-0 sm:p-4 md:p-6 animate-in fade-in duration-200 font-sans cursor-pointer"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="relative w-full max-w-5xl rounded-t-2xl sm:rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden flex flex-col h-[92dvh] sm:h-[88vh] max-h-[92dvh] sm:max-h-[88vh] min-w-0 cursor-default"
+      >
+        {/* Live Scanner Banner */}
+        {isRefreshingActive && (
+          <div className="bg-gradient-to-r from-teal-500/15 via-emerald-500/20 to-teal-500/15 border-b border-teal-200/90 px-3 sm:px-4 py-2 flex items-center justify-between gap-2 text-xs font-semibold text-teal-950 animate-pulse shrink-0">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="relative flex h-2.5 w-2.5 shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-600"></span>
+              </span>
+              <RefreshCw size={13} className="animate-spin text-teal-700 shrink-0" />
+              <span className="truncate">Live Scanner Active: Scraping live cabin rates for {shipName}…</span>
+            </div>
+            {remainingSec > 0 && (
+              <span className="font-mono text-[10.5px] font-bold text-teal-800 bg-white/90 border border-teal-200 px-2 py-0.5 rounded shadow-2xs shrink-0">
+                ~{fmtSeconds(remainingSec)}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Compact Modal Top Bar */}
+        <div className="px-3.5 sm:px-5 py-2.5 sm:py-3 border-b border-slate-100 bg-white flex items-center justify-between gap-2.5 shrink-0">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <div className="flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-lg bg-teal-50 border border-teal-200/80 text-teal-700 shrink-0">
+              <Sparkles size={14} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <h2 className="text-xs sm:text-sm md:text-base font-bold text-slate-900 truncate">
+                  {row.package || row.code}
+                </h2>
+                <span className="rounded-md bg-slate-100 px-1.5 py-0.2 text-[10px] font-semibold text-slate-700 shrink-0">
+                  {shipName}
+                </span>
+              </div>
+              <p className="text-[10.5px] text-slate-500 font-medium truncate hidden sm:block">
+                {row.vendor?.name || "Vendor"} · {getCruiseRouteLabel(row)} · {row.nights}N
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={onClose}
+            className="h-8 w-8 shrink-0 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+            aria-label="Close"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Scrollable Modal Body Container (Everything scrolls together on mobile & desktop) */}
+        <div className="p-3 sm:p-5 overflow-y-auto overscroll-contain touch-pan-y space-y-3.5 flex-1 min-w-0 bg-slate-50/60">
+          {/* Cruise Metadata & Badges Card */}
+          <div className="rounded-xl border border-slate-200/90 bg-white p-3 sm:p-4 shadow-2xs space-y-2">
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+              <span className="inline-flex items-center gap-1 text-[10px] sm:text-[10.5px] font-bold uppercase tracking-wider text-teal-900 bg-teal-100/70 border border-teal-300 px-2.5 py-0.5 rounded-full shadow-2xs">
+                <Sparkles size={11} className="text-teal-700 shrink-0" />
+                <span>Live Stateroom Inventory</span>
+              </span>
+              <span className="rounded-full bg-slate-900 px-2.5 py-0.5 text-[10.5px] font-semibold text-white">
+                {row.vendor?.name || "Vendor"}
+              </span>
+              <span className="rounded-full bg-white border border-slate-200 px-2.5 py-0.5 text-[10.5px] font-semibold text-slate-700">
+                {getCruiseDisplayId(row)}
+              </span>
+              <span className={`rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold ${
+                loadFactor >= 85
+                  ? "bg-rose-100 text-rose-800 border border-rose-200"
+                  : loadFactor >= 60
+                    ? "bg-amber-100 text-amber-800 border border-amber-200"
+                    : "bg-teal-100 text-teal-800 border border-teal-200"
+              }`}>
+                Load {loadFactor}% ({seatsAvailable.toLocaleString()} / {totalCapacity.toLocaleString()} avail)
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap text-xs text-slate-600 pt-0.5">
+              <span className="font-bold text-slate-900">{shipName}</span>
+              <span>·</span>
+              <span>{getCruiseRouteLabel(row)}</span>
+              <span>·</span>
+              <span className="font-semibold">{row.nights} Nights</span>
+              <span>·</span>
+              <span>{formatDate(row.startDate)} to {formatDate(row.endDate)}</span>
+            </div>
+          </div>
+
+          {/* Group Tabs & Filter Bar in Body */}
+          <div className="rounded-xl border border-slate-200/90 bg-white p-3 shadow-2xs space-y-2.5">
+            {/* Group Tabs */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+              <button
+                type="button"
+                onClick={() => setActiveGroup("all")}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
+                  activeGroup === "all"
+                    ? "bg-teal-700 text-white shadow-xs"
+                    : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-50"
+                }`}
+              >
+                All Groups ({cabinCategories.length})
+              </button>
+              {cabinGroups.map((group) => {
+                const groupPrices = group.categories
+                  .map(c => Number(c.cabinPrice || c.price || 0))
+                  .filter(p => Number.isFinite(p) && p > 0)
+                const minP = groupPrices.length > 0 ? Math.min(...groupPrices) : null
+                const isActive = activeGroup === group.group
+                return (
+                  <button
+                    key={group.group}
+                    type="button"
+                    onClick={() => setActiveGroup(group.group)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
+                      isActive
+                        ? "bg-teal-700 text-white shadow-xs"
+                        : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-50"
+                    }`}
+                  >
+                    <span>{group.group}</span>
+                    <span className={`text-[10px] font-semibold px-1.5 py-0.2 rounded ${
+                      isActive ? "bg-teal-800 text-teal-100" : "bg-slate-100 text-slate-500"
+                    }`}>
+                      {minP ? formatCurrency(minP, row.currency) : "WTL"}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Search & Filter Bar */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 text-xs">
+              <div className="relative flex-1 min-w-[180px]">
+                <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search category code e.g. SL1, BA, IS..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full h-8 pl-8 pr-3 rounded-lg border border-slate-200 bg-white text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-600"
+                />
+              </div>
+
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setFilterAvailOnly(!filterAvailOnly)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition cursor-pointer ${
+                    filterAvailOnly
+                      ? "bg-emerald-50 text-emerald-800 border-emerald-300 shadow-2xs font-bold"
+                      : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                  }`}
+                >
+                  In Stock Only
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterDropsOnly(!filterDropsOnly)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition cursor-pointer ${
+                    filterDropsOnly
+                      ? "bg-amber-100 text-amber-950 border-amber-400 shadow-2xs font-bold"
+                      : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                  }`}
+                >
+                  Lowest / Drop Fare
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Categories Cards Grid */}
+          {filteredGroups.length === 0 ? (
+            <div className="text-center py-10 text-slate-500 space-y-2 bg-white rounded-xl border border-dashed border-slate-200">
+              <div className="font-semibold text-sm text-slate-800">No categories found</div>
+              <div className="text-xs text-slate-500 font-normal">
+                Try resetting your search query or switching category group filter.
+              </div>
+            </div>
+          ) : (
+            <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
+              {filteredGroups.map((group) => (
+                <div key={group.group} className="rounded-xl border border-slate-200 bg-white p-3.5 sm:p-4 shadow-2xs flex flex-col justify-between">
+                  <div>
+                    {/* Group Header */}
+                    <div className="mb-2.5 flex items-center justify-between pb-2 border-b border-slate-100">
+                      <span className="text-xs font-bold uppercase tracking-wider text-slate-900">{group.group}</span>
+                      {group.groupMin !== null ? (
+                        <span className="rounded-full bg-teal-50 border border-teal-200/80 px-2.5 py-0.5 text-xs font-bold text-teal-800 shadow-2xs tabular-nums">
+                          {group.groupMax && group.groupMax > group.groupMin
+                            ? `from ${formatCurrency(group.groupMin, row.currency)} to ${formatCurrency(group.groupMax, row.currency)}`
+                            : `from ${formatCurrency(group.groupMin, row.currency)}`}
+                        </span>
+                      ) : (
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500 font-medium">WTL</span>
+                      )}
+                    </div>
+
+                    {/* Table Headers */}
+                    <div className="grid grid-cols-12 items-center text-[10px] font-bold uppercase tracking-wider text-slate-400 pb-1.5 px-1 border-b border-slate-100 select-none">
+                      <span className="col-span-4">Category</span>
+                      <span className="col-span-4 text-right pr-2">Live Fare</span>
+                      <span className="col-span-4 text-right">Avail</span>
+                    </div>
+
+                    {/* Rows */}
+                    <div className="space-y-1 mt-1.5">
+                      {group.categories.map((cat) => {
+                        const catPrice = Number(cat.cabinPrice || cat.price || 0)
+                        const catAvail = Number(cat.avail ?? cat.available ?? 0)
+                        const isCatSoldOut = catAvail === 0 || cat.avlResult === "WTL"
+                        const isCatLow = catAvail > 0 && catAvail <= 2
+                        const isLowestInGroup = catPrice > 0 && group.groupMin !== null && catPrice === group.groupMin
+                        const isCruiseLowest = catPrice > 0 && lowestPrice !== null && catPrice === lowestPrice
+
+                        return (
+                          <div
+                            key={cat.code}
+                            className={`grid grid-cols-12 items-center text-xs py-1.5 px-1.5 sm:px-2 rounded-lg border transition-colors ${
+                              isCruiseLowest
+                                ? "bg-amber-50/90 border-amber-300 shadow-xs"
+                                : isLowestInGroup
+                                  ? "bg-teal-50/50 border-teal-200/80"
+                                  : "border-slate-50 hover:bg-slate-50/70"
+                            }`}
+                          >
+                            {/* Col 1: Category */}
+                            <div className="col-span-4 flex items-center gap-1 min-w-0">
+                              <span className={`font-semibold truncate text-[11px] sm:text-xs ${
+                                isCruiseLowest ? "text-amber-950 font-bold" : isLowestInGroup ? "text-teal-950 font-bold" : "text-slate-900"
+                              }`}>
+                                {cat.code}
+                              </span>
+                              {isCruiseLowest ? (
+                                <span className="inline-flex items-center gap-0.5 text-[8.5px] sm:text-[9px] font-bold text-amber-950 bg-amber-200 border border-amber-400 px-1 py-0.2 rounded shrink-0">
+                                  <TrendingDown size={9} className="shrink-0" />
+                                  <span>Drop</span>
+                                </span>
+                              ) : isLowestInGroup ? (
+                                <span className="text-[8.5px] sm:text-[9px] font-semibold text-teal-800 bg-teal-100 border border-teal-300 px-1 py-0.2 rounded shrink-0">
+                                  Low
+                                </span>
+                              ) : null}
+                            </div>
+
+                            {/* Col 2: Fare */}
+                            <div className="col-span-4 text-right pr-2">
+                              {catPrice > 0 ? (
+                                <span className={`text-xs tabular-nums ${
+                                  isCruiseLowest
+                                    ? "font-bold text-amber-950 bg-amber-100 px-1.5 py-0.5 rounded"
+                                    : isLowestInGroup
+                                      ? "font-bold text-teal-900"
+                                      : "font-semibold text-slate-800"
+                                }`}>
+                                  {formatCurrency(catPrice, row.currency)}
+                                </span>
+                              ) : (
+                                <span className="text-[10.5px] text-slate-400 font-medium">
+                                  {cat.avlResult === "WTL" ? "WTL" : cat.avlResult || cat.status || "N/A"}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Col 3: Avail */}
+                            <div className="col-span-4 text-right">
+                              {isCatSoldOut ? (
+                                <span className="inline-flex items-center text-[9.5px] sm:text-[10px] font-semibold text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200 whitespace-nowrap">
+                                  0 (WTL)
+                                </span>
+                              ) : isCatLow ? (
+                                <span className="inline-flex items-center gap-0.5 text-[9.5px] sm:text-[10px] font-semibold text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 whitespace-nowrap">
+                                  <Zap size={9} className="text-amber-600 shrink-0" />
+                                  <span>{catAvail} left</span>
+                                </span>
+                              ) : (
+                                <span className="text-[10.5px] sm:text-[11px] font-normal text-slate-500 whitespace-nowrap tabular-nums">
+                                  {catAvail} avail
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-3.5 sm:px-6 py-2.5 sm:py-3 border-t border-slate-100 bg-white flex flex-wrap items-center justify-between gap-2.5 shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs text-slate-600 font-medium">
+            <span><strong>{totalVisibleCategories}</strong> categories</span>
+            <span>·</span>
+            <span>Low: <strong className="text-emerald-700 font-bold">{lowestPrice ? formatCurrency(lowestPrice, row.currency) : "WTL"}</strong></span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {onRefresh ? (
+              <button
+                type="button"
+                onClick={handleTriggerRefresh}
+                disabled={isRefreshingActive}
+                className={`h-8.5 sm:h-9.5 px-3 sm:px-4 rounded-xl border transition-all cursor-pointer shadow-2xs flex items-center gap-1.5 sm:gap-2 text-xs font-bold ${
+                  isRefreshingActive
+                    ? "bg-teal-50 border-teal-300 text-teal-900 ring-2 ring-teal-500/20"
+                    : "border-teal-600/90 bg-teal-50 hover:bg-teal-100/90 text-teal-800 hover:text-teal-950 active:scale-95"
+                }`}
+              >
+                <RefreshCw
+                  size={13}
+                  className={`text-teal-700 transition-transform ${
+                    isRefreshingActive ? "animate-spin" : "group-hover:rotate-45"
+                  }`}
+                />
+                <span>
+                  {isRefreshingActive
+                    ? `Scanning… ${remainingSec > 0 ? `(~${fmtSeconds(remainingSec)})` : ""}`
+                    : "Refresh Live Cabins"}
+                </span>
+              </button>
+            ) : null}
+
+            <button
+              onClick={onClose}
+              className="h-8.5 sm:h-9.5 px-3.5 sm:px-4 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs font-semibold text-slate-700 transition cursor-pointer"
+            >
+              Close
+            </button>
+          </div>
         </div>
       </div>
     </div>

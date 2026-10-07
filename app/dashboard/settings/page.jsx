@@ -556,7 +556,7 @@ export default function SettingsPage() {
   const envKeyCount = Object.keys(envData).length
 
   return (
-    <div className="w-full min-h-screen bg-slate-50/50 px-3 sm:px-6 py-5 space-y-6 max-w-full overflow-x-hidden min-w-0">
+    <div className="w-full min-h-screen bg-slate-50/50 px-3 sm:px-6 py-5 space-y-6 max-w-full overflow-x-clip min-w-0">
       {/* ── Top Header Banner ──────────────────────────────────────────────── */}
       <div className="relative overflow-hidden rounded-2xl border border-teal-200/80 bg-gradient-to-r from-teal-500/10 via-sky-500/5 to-teal-500/10 p-5 sm:p-6 shadow-xs">
         <div className="pointer-events-none absolute -right-12 -top-12 h-48 w-48 rounded-full bg-teal-500/10 blur-3xl" />

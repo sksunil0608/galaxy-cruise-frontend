@@ -76,9 +76,9 @@ export default function DashboardLayout({ children }) {
     >
       <AppSidebar variant="sidebar" />
 
-      <SidebarInset className="bg-[#f8fafc] min-h-screen flex flex-col m-0 rounded-none shadow-none w-full max-w-full min-w-0 overflow-x-hidden">
+      <SidebarInset className="bg-[#f8fafc] min-h-screen flex flex-col m-0 rounded-none shadow-none w-full max-w-full min-w-0 overflow-x-clip">
         <SiteHeader title={title} />
-        <div className="flex-1 w-full max-w-full min-w-0 overflow-x-hidden">
+        <div className="flex-1 w-full max-w-full min-w-0 overflow-x-clip">
           {!authorized && normalizedPathname !== "/dashboard" ? (
             <div className="flex min-h-[60vh] flex-col items-center justify-center p-6 text-center">
               <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-rose-50 border border-rose-200 text-rose-600 mb-4 shadow-xs">

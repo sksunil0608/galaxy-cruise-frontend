@@ -1339,49 +1339,49 @@ function VendorCard({ vendor, dbShips = [], onTrigger, onCheckAuth, isAuthChecki
     <div className="flex flex-col justify-between rounded-2xl border border-slate-200/90 bg-white p-5 shadow-2xs hover:shadow-md hover:border-teal-500/40 transition-all duration-200">
       <div className="space-y-4">
         {/* Title, Brand Badge & Live Auth Status */}
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-3">
+        <div className="flex items-start justify-between gap-2.5">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
             <div
-              className={`flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br ${info.gradient} text-white font-black text-xs tracking-wider uppercase shadow-md`}
+              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${info.gradient} text-white font-black text-xs tracking-wider uppercase shadow-md`}
             >
               {info.code.slice(0, 3)}
             </div>
-            <div>
-              <div className="font-bold text-slate-900 text-sm sm:text-base tracking-tight leading-tight">
+            <div className="min-w-0 flex-1">
+              <div className="font-bold text-slate-900 text-sm sm:text-base tracking-tight leading-tight truncate" title={info.name}>
                 {info.name}
               </div>
               <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium mt-0.5">
-                <span className="font-mono font-semibold text-slate-600">{vendorKey}</span>
-                <span>·</span>
-                <span className="inline-flex items-center gap-1">
-                  <Clock className="size-3 text-slate-400" />
+                <span className="font-mono font-semibold text-slate-600 truncate max-w-[120px]" title={vendorKey}>{vendorKey}</span>
+                <span className="text-slate-300">·</span>
+                <span className="inline-flex items-center gap-1 shrink-0 whitespace-nowrap text-slate-500">
+                  <Clock className="size-3 text-slate-400 shrink-0" />
                   Every {intervalDays}d · {String(startHour).padStart(2, "0")}:00 UTC
                 </span>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 shrink-0 pt-0.5">
             {auth && (
               <span
-                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10.5px] font-bold ${authStatusStyle(
+                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10.5px] font-bold whitespace-nowrap shrink-0 select-none ${authStatusStyle(
                   auth.status
                 )}`}
               >
                 {auth.status === "ok" ? (
                   <>
-                    <span className="relative flex h-1.5 w-1.5">
+                    <span className="relative flex h-1.5 w-1.5 shrink-0">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                       <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-600"></span>
                     </span>
-                    <span>Auth OK</span>
+                    <span className="whitespace-nowrap">Auth OK</span>
                   </>
                 ) : auth.status === "checking" ? (
-                  <span>Checking…</span>
+                  <span className="whitespace-nowrap">Checking…</span>
                 ) : (
                   <>
-                    <AlertTriangle className="size-3 text-rose-600" />
-                    <span>{auth.status}</span>
+                    <AlertTriangle className="size-3 text-rose-600 shrink-0" />
+                    <span className="whitespace-nowrap">{auth.status}</span>
                   </>
                 )}
               </span>
@@ -1391,7 +1391,7 @@ function VendorCard({ vendor, dbShips = [], onTrigger, onCheckAuth, isAuthChecki
               onClick={onCheckAuth}
               disabled={isAuthChecking}
               title="Test vendor authentication"
-              className="p-1 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs transition cursor-pointer disabled:opacity-50"
+              className="p-1 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs transition cursor-pointer disabled:opacity-50 shrink-0"
             >
               <RefreshCcw className={`size-3 ${isAuthChecking ? "animate-spin text-teal-600" : ""}`} />
             </button>
