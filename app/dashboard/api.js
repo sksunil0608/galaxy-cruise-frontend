@@ -238,11 +238,25 @@ export async function saveFrontendEnv(payload) {
 
 
 async function scraperFetch(path, options = {}) {
-  const res = await fetch(getScraperEndpoint(path), {
-    headers: { "Content-Type": "application/json" },
-    ...options
-  })
-  return res.json()
+  const timeoutMs = options.timeout || 6000
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+
+  try {
+    const res = await fetch(getScraperEndpoint(path), {
+      headers: { "Content-Type": "application/json" },
+      signal: options.signal || controller.signal,
+      ...options
+    })
+    return await res.json()
+  } catch (err) {
+    if (err.name === "AbortError") {
+      console.warn(`Scraper fetch timed out after ${timeoutMs}ms on ${path}`)
+    }
+    throw err
+  } finally {
+    clearTimeout(timeoutId)
+  }
 }
 
 export async function checkAllVendorAuth() {

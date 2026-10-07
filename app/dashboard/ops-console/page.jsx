@@ -257,21 +257,29 @@ export default function OpsConsolePage() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [scraperRuns, setScraperRuns] = useState([])
-  const [schedules, setSchedules] = useState([])
+  const [schedules, setSchedules] = useState(DEFAULT_PRODUCTION_SCHEDULES)
   const [authResults, setAuthResults] = useState({})
 
-  // Load auth cache on client mount to prevent SSR hydration mismatch
+  // Load auth cache and last runs cache on client mount for instant 0ms paint
   useEffect(() => {
     try {
-      const saved = localStorage.getItem("ops_vendor_auth_results")
-      if (saved) {
-        const parsed = JSON.parse(saved)
+      const savedAuth = localStorage.getItem("ops_vendor_auth_results")
+      if (savedAuth) {
+        const parsed = JSON.parse(savedAuth)
         if (parsed && typeof parsed === "object") {
           setAuthResults(parsed)
         }
       }
+      const savedRuns = localStorage.getItem("ops_scraper_runs_cache")
+      if (savedRuns) {
+        const parsedRuns = JSON.parse(savedRuns)
+        if (Array.isArray(parsedRuns) && parsedRuns.length > 0) {
+          setScraperRuns(parsedRuns)
+          setLoading(false)
+        }
+      }
     } catch (e) {
-      console.warn("Failed to load auth cache:", e)
+      console.warn("Failed to load ops cache:", e)
     }
   }, [])
 
@@ -315,25 +323,49 @@ export default function OpsConsolePage() {
   const loadData = useCallback(async (isRefresh = false) => {
     try {
       if (isRefresh) setRefreshing(true)
-      else setLoading(true)
 
-      const [scraperRunsRes, schedulesRes, shipsRes, vendorsRes] = await Promise.all([
-        getScraperVendorLastRuns().catch(() => ({ vendors: [] })),
-        getVendorSchedules().catch(() => ({ schedules: [] })),
-        fetchShips({ limit: 500 }).catch(() => []),
-        fetchVendors({ limit: 100 }).catch(() => [])
-      ])
+      // Fetch scraper runs and schedules (fast endpoints)
+      const fetchRunsAndSchedules = async () => {
+        try {
+          const [scraperRunsRes, schedulesRes] = await Promise.all([
+            getScraperVendorLastRuns().catch(() => ({ vendors: [] })),
+            getVendorSchedules().catch(() => ({ schedules: [] }))
+          ])
+          const runs = scraperRunsRes?.vendors ?? []
+          const schs = schedulesRes?.schedules?.length ? schedulesRes.schedules : DEFAULT_PRODUCTION_SCHEDULES
+          setScraperRuns(runs)
+          setSchedules(schs)
+          if (runs.length > 0) {
+            try {
+              localStorage.setItem("ops_scraper_runs_cache", JSON.stringify(runs))
+            } catch {}
+          }
+        } catch (err) {
+          console.warn("Scraper backend status load issue:", err?.message || err)
+        } finally {
+          setLoading(false)
+          setRefreshing(false)
+          setLastChecked(new Date())
+        }
+      }
 
-      const runs = scraperRunsRes.vendors ?? []
-      const schs = schedulesRes.schedules?.length ? schedulesRes.schedules : DEFAULT_PRODUCTION_SCHEDULES
-      const rawShips = Array.isArray(shipsRes) ? shipsRes : (shipsRes?.data || shipsRes?.ships || [])
-      const rawVendors = Array.isArray(vendorsRes) ? vendorsRes : (vendorsRes?.data || vendorsRes?.vendors || [])
+      // Fetch background DB lookups without blocking UI render
+      const fetchDbLookups = async () => {
+        try {
+          const [shipsRes, vendorsRes] = await Promise.all([
+            fetchShips({ limit: 500 }).catch(() => []),
+            fetchVendors({ limit: 100 }).catch(() => [])
+          ])
+          const rawShips = Array.isArray(shipsRes) ? shipsRes : (shipsRes?.data || shipsRes?.ships || [])
+          const rawVendors = Array.isArray(vendorsRes) ? vendorsRes : (vendorsRes?.data || vendorsRes?.vendors || [])
+          setDbShips(rawShips)
+          setDbVendors(rawVendors)
+        } catch (e) {
+          console.warn("DB ships/vendors lookup non-blocking error:", e)
+        }
+      }
 
-      setScraperRuns(runs)
-      setSchedules(schs)
-      setDbShips(rawShips)
-      setDbVendors(rawVendors)
-      setLastChecked(new Date())
+      await Promise.allSettled([fetchRunsAndSchedules(), fetchDbLookups()])
 
       if (isRefresh) {
         setRunningVendor(null)
