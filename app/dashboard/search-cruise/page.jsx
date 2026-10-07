@@ -199,7 +199,7 @@ function SearchableSelect({ placeholder, value, onChange, options, onEnter }) {
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     debounceTimerRef.current = setTimeout(() => {
       onChange(newVal);
-    }, 300);
+    }, 650);
   };
 
   const handleKeyDown = (event) => {
@@ -2129,7 +2129,55 @@ export default function CruiseSearchPage() {
         setVendorAuthResults(JSON.parse(cached));
       }
     } catch {}
+
+    // Synchronize latest live vendor auth statuses in background
+    checkAllVendorAuth()
+      .then((res) => {
+        if (res && typeof res === "object") {
+          const authMap = res.results || res.data || res;
+          setVendorAuthResults((prev) => {
+            const next = { ...prev, ...authMap };
+            try {
+              localStorage.setItem("ops_vendor_auth_results", JSON.stringify(next));
+            } catch {}
+            return next;
+          });
+        }
+      })
+      .catch(() => {});
   }, []);
+
+  const KNOWN_VENDOR_ALIASES = useMemo(() => ({
+    "cruisingpower": "CruisingPower",
+    "cruising power": "CruisingPower",
+    "royal caribbean": "CruisingPower",
+    "royalcaribbean": "CruisingPower",
+    "royal caribbean international": "CruisingPower",
+    "celebrity": "CruisingPower",
+    "celebrity cruises": "CruisingPower",
+    "silversea": "CruisingPower",
+    "msc": "MSC Cruises",
+    "msc cruises": "MSC Cruises",
+    "gohal": "Holland America (gohal)",
+    "holland america": "Holland America (gohal)",
+    "holland": "Holland America (gohal)",
+    "complete cruise solution a": "Complete Cruise Solution A",
+    "complete cruise solution b": "Complete Cruise Solution B",
+    "complete cruise solution": "Complete Cruise Solution A",
+    "completecruisesolution": "Complete Cruise Solution A",
+    "firstmates": "FirstMates",
+    "first mates": "FirstMates",
+    "virgin": "FirstMates",
+    "virgin voyages": "FirstMates",
+    "azamara": "Azamara",
+    "goccl": "GOCCL",
+    "carnival": "GOCCL",
+    "carnival cruise": "GOCCL",
+    "seawebagents": "Seawebagents",
+    "seaweb": "Seawebagents",
+    "celestyal": "Celestyal",
+    "cordelia": "Cordelia",
+  }), []);
 
   const checkVendorVerified = (vendorName, onVerifiedProceed, shipName = "") => {
     if (!vendorName) return true;
@@ -2152,13 +2200,11 @@ export default function CruiseSearchPage() {
     if (!shipName) return null;
     const clean = String(shipName).trim().toLowerCase();
 
-    // 1. If user already selected a vendor in filter, return it
-    if (filters.vendor) return filters.vendor;
-
-    // 2. Check in lookupOptions.allShips
-    const shipObj = lookupOptions.allShips.find(
-      (s) => (s.name || "").trim().toLowerCase() === clean
-    );
+    // 1. Check in lookupOptions.allShips
+    const shipObj = lookupOptions.allShips.find((s) => {
+      const sName = (s.name || "").trim().toLowerCase();
+      return sName === clean || (sName.length >= 3 && clean.length >= 3 && (sName.includes(clean) || clean.includes(sName)));
+    });
     if (shipObj) {
       if (shipObj.vendorName) return shipObj.vendorName;
       if (shipObj.vendor?.name) return shipObj.vendor.name;
@@ -2169,16 +2215,85 @@ export default function CruiseSearchPage() {
       }
     }
 
-    // 3. Check in loaded cruises data
-    const cruiseMatch = data.find(
-      (c) => (c.ship || c.shipName || "").trim().toLowerCase() === clean
-    );
-    if (cruiseMatch?.vendor?.name) return cruiseMatch.vendor.name;
-    if (typeof cruiseMatch?.vendor === "string" && cruiseMatch.vendor) return cruiseMatch.vendor;
+    // 2. Check in loaded cruises data
+    const cruiseMatch = data.find((c) => {
+      const cShip = (c.ship || c.shipName || "").trim().toLowerCase();
+      return cShip === clean || (cShip.length >= 3 && clean.length >= 3 && (cShip.includes(clean) || clean.includes(cShip)));
+    });
+    if (cruiseMatch) {
+      if (cruiseMatch.vendor?.name) return cruiseMatch.vendor.name;
+      if (typeof cruiseMatch?.vendor === "string" && cruiseMatch.vendor) return cruiseMatch.vendor;
+    }
 
-    // 4. Check in targetVendorShips if targeted vendor selected
+    // 3. Check in targetVendorShips if targeted vendor selected
     if (targetVendor && targetVendorShips.some((s) => s.trim().toLowerCase() === clean)) {
       return targetVendor;
+    }
+
+    // 4. Fallback to filters.vendor if set
+    if (filters.vendor) return filters.vendor;
+
+    return null;
+  };
+
+  const detectVendorFromSearchQuery = (query) => {
+    if (!query || typeof query !== "string") return null;
+    const clean = query.trim().toLowerCase();
+    if (clean.length < 2) return null;
+
+    // 1. Check known vendor aliases
+    for (const [alias, vName] of Object.entries(KNOWN_VENDOR_ALIASES)) {
+      if (clean === alias || clean.includes(alias) || (alias.length >= 4 && alias.includes(clean))) {
+        return { vendorName: vName, shipName: "" };
+      }
+    }
+
+    // 2. Check vendor list in VENDOR_SCRAPER_MAP or lookupOptions.vendors
+    const matchedVendorKey = Object.keys(VENDOR_SCRAPER_MAP).find((v) => {
+      const vClean = v.toLowerCase();
+      return clean === vClean || clean.includes(vClean) || (clean.length >= 4 && vClean.includes(clean));
+    });
+    if (matchedVendorKey) {
+      return { vendorName: matchedVendorKey, shipName: "" };
+    }
+
+    const matchedVendorObj = lookupOptions.vendors.find((v) => {
+      const vName = (v.name || "").toLowerCase();
+      return clean === vName || clean.includes(vName) || (clean.length >= 4 && vName.includes(clean));
+    });
+    if (matchedVendorObj?.name) {
+      return { vendorName: matchedVendorObj.name, shipName: "" };
+    }
+
+    // 3. Check ship matches in lookupOptions.allShips
+    const matchedShip = lookupOptions.allShips.find((s) => {
+      const sName = (s.name || "").trim().toLowerCase();
+      if (!sName || sName.length < 3) return false;
+      return clean === sName || clean.includes(sName) || (clean.length >= 4 && sName.includes(clean));
+    });
+    if (matchedShip) {
+      const vName = matchedShip.vendorName ||
+        matchedShip.vendor?.name ||
+        (typeof matchedShip.vendor === "string" ? matchedShip.vendor : null) ||
+        (matchedShip.vendorId ? lookupOptions.vendors.find((v) => v.id === matchedShip.vendorId)?.name : null);
+      if (vName) {
+        return { vendorName: vName, shipName: matchedShip.name };
+      }
+    }
+
+    // 4. Check loaded cruises data for ship or cruise code match
+    const matchedCruise = data.find((c) => {
+      const cShip = (c.ship || c.shipName || "").trim().toLowerCase();
+      const cCode = (c.code || c.cruiseCode || c.sailingId || "").trim().toLowerCase();
+      if (cShip && (clean === cShip || clean.includes(cShip) || (clean.length >= 4 && cShip.includes(clean)))) return true;
+      if (cCode && (clean === cCode || clean.includes(cCode))) return true;
+      return false;
+    });
+    if (matchedCruise) {
+      const vName = matchedCruise.vendor?.name || (typeof matchedCruise.vendor === "string" ? matchedCruise.vendor : null);
+      if (vName) {
+        return { vendorName: vName, shipName: matchedCruise.ship || matchedCruise.shipName || "" };
+      }
     }
 
     return null;
@@ -2476,6 +2591,50 @@ export default function CruiseSearchPage() {
     });
   }, [data, sortBy]);
 
+  const searchDebounceTimerRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (searchDebounceTimerRef.current) {
+        clearTimeout(searchDebounceTimerRef.current);
+      }
+    };
+  }, []);
+
+  const triggerDebouncedSearch = (nextFilters) => {
+    if (searchDebounceTimerRef.current) {
+      clearTimeout(searchDebounceTimerRef.current);
+    }
+    searchDebounceTimerRef.current = setTimeout(() => {
+      // 1. Check ship verification if ship is entered
+      if (nextFilters.ship) {
+        const shipVendor = getVendorForShip(nextFilters.ship);
+        if (shipVendor) {
+          const isOk = checkVendorVerified(shipVendor, () => {
+            setAppliedFilters(nextFilters);
+            setPage(1);
+          }, nextFilters.ship);
+          if (!isOk) return;
+        }
+      }
+
+      // 2. Check keyword query verification if keyword is entered
+      if (nextFilters.code) {
+        const detected = detectVendorFromSearchQuery(nextFilters.code);
+        if (detected?.vendorName) {
+          const isOk = checkVendorVerified(detected.vendorName, () => {
+            setAppliedFilters(nextFilters);
+            setPage(1);
+          }, detected.shipName || "");
+          if (!isOk) return;
+        }
+      }
+
+      setAppliedFilters(nextFilters);
+      setPage(1);
+    }, 650);
+  };
+
   const setF = (key, value) => {
     setFilters((current) => {
       const next = { ...current, [key]: value };
@@ -2486,7 +2645,12 @@ export default function CruiseSearchPage() {
           next.endDate = end.toISOString().slice(0, 10);
         }
       }
-      if (key !== "code" && key !== "ship") {
+      if (key === "code" || key === "ship") {
+        triggerDebouncedSearch(next);
+      } else {
+        if (searchDebounceTimerRef.current) {
+          clearTimeout(searchDebounceTimerRef.current);
+        }
         setAppliedFilters(next);
         setPage(1);
       }
@@ -2495,6 +2659,9 @@ export default function CruiseSearchPage() {
   };
 
   const selectVendor = (vendorName) => {
+    if (searchDebounceTimerRef.current) {
+      clearTimeout(searchDebounceTimerRef.current);
+    }
     if (vendorName) {
       const isOk = checkVendorVerified(vendorName, () => {
         setFilters((current) => {
@@ -2515,6 +2682,9 @@ export default function CruiseSearchPage() {
   };
 
   const applyDatePreset = (preset) => {
+    if (searchDebounceTimerRef.current) {
+      clearTimeout(searchDebounceTimerRef.current);
+    }
     setDatePreset(preset.label);
     let startDate = filters.startDate || new Date().toISOString().slice(0, 10);
     let endDate = "";
@@ -2538,6 +2708,9 @@ export default function CruiseSearchPage() {
   };
 
   const reset = () => {
+    if (searchDebounceTimerRef.current) {
+      clearTimeout(searchDebounceTimerRef.current);
+    }
     const empty = { code: "", vendor: "", ship: "", cruiseLine: "", startDate: "", endDate: "", horizonDays: null, nights: "", route: "", portFrom: "", portTo: "" };
     setFilters(empty);
     setAppliedFilters(empty);
@@ -2546,13 +2719,26 @@ export default function CruiseSearchPage() {
   };
 
   const applyFilters = () => {
+    if (searchDebounceTimerRef.current) {
+      clearTimeout(searchDebounceTimerRef.current);
+    }
     const shipVendor = filters.ship ? getVendorForShip(filters.ship) : null;
-    const vendorToCheck = filters.vendor || shipVendor;
+    let vendorToCheck = filters.vendor || shipVendor;
+    let shipToCheck = filters.ship || "";
+
+    if (!vendorToCheck && filters.code) {
+      const detected = detectVendorFromSearchQuery(filters.code);
+      if (detected?.vendorName) {
+        vendorToCheck = detected.vendorName;
+        shipToCheck = detected.shipName || "";
+      }
+    }
+
     if (vendorToCheck) {
       const isOk = checkVendorVerified(vendorToCheck, () => {
         setAppliedFilters(filters);
         setPage(1);
-      }, filters.ship);
+      }, shipToCheck);
       if (!isOk) return;
     }
     setAppliedFilters(filters);
@@ -2637,35 +2823,6 @@ export default function CruiseSearchPage() {
     }
     executeTriggerScraper();
   };
-
-  // Debounce keyword and ship search inputs so typing naturally filters after short delay
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (filters.code !== appliedFilters.code || filters.ship !== appliedFilters.ship) {
-        if (filters.ship && filters.ship !== appliedFilters.ship) {
-          const shipVendor = getVendorForShip(filters.ship);
-          if (shipVendor) {
-            const isOk = checkVendorVerified(shipVendor, () => {
-              setAppliedFilters((current) => ({
-                ...current,
-                code: filters.code,
-                ship: filters.ship
-              }));
-              setPage(1);
-            }, filters.ship);
-            if (!isOk) return;
-          }
-        }
-        setAppliedFilters((current) => ({
-          ...current,
-          code: filters.code,
-          ship: filters.ship
-        }));
-        setPage(1);
-      }
-    }, 400);
-    return () => clearTimeout(timer);
-  }, [filters.code, filters.ship, appliedFilters.code, appliedFilters.ship]);
 
   const replaceCruiseInState = (updatedCruise) => {
     if (!updatedCruise) {
