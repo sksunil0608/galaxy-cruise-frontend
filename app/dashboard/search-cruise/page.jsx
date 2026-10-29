@@ -20,6 +20,7 @@ import {
   logActivity,
   fetchCruise,
   triggerVendorScrapeFetch,
+  getVendorRunStatus,
   checkVendorAuth,
   checkAllVendorAuth
 } from "../api";
@@ -443,7 +444,14 @@ function VendorAuthRequiredModal({
       setVerifying(true);
       setErrorMsg("");
       setSuccessMsg("");
-      const res = await checkVendorAuth(vendorKey);
+      // The scraper runs the login in the background and answers 202 "checking"
+      // until it finishes, so keep polling until a final status comes back.
+      let res = await checkVendorAuth(vendorKey);
+      const pollUntil = Date.now() + 5 * 60 * 1000;
+      while (String(res?.status || "").toLowerCase() === "checking" && Date.now() < pollUntil) {
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+        res = await checkVendorAuth(vendorKey);
+      }
       const statusStr = String(res?.status || "").toLowerCase();
       const isOk = statusStr === "ok" || statusStr === "success" || res?.ok === true || res?.valid === true;
 
@@ -533,7 +541,7 @@ function VendorAuthRequiredModal({
             </div>
           </div>
           <p className="text-xs text-slate-500">
-            Searches and live scraper jobs cannot be executed for this provider until authentication credentials are verified.
+            Searches and live lookups cannot be executed for this provider until authentication credentials are verified.
           </p>
         </div>
 
@@ -962,7 +970,7 @@ function RefreshBanner({ job, onRefresh }) {
             {isRunning
               ? "Querying carrier booking portal for open cabin numbers..."
               : isError
-                ? (job?.retryAfter ? `Retry available in ${fmtSeconds(job.retryAfter)}` : "Click below to retry scraper worker.")
+                ? (job?.retryAfter ? `Retry available in ${fmtSeconds(job.retryAfter)}` : "Click below to retry.")
                 : "Fetch real-time cabin numbers, deck locations, and availability."}
           </div>
         </div>
@@ -1186,7 +1194,7 @@ function LeadInDetailsPanel({ job, minPrice, currency, onGetDetails, hasAttempte
             </span>
             {isFinalizing
               ? "Finalizing data from vendor… Almost ready"
-              : `Scraper active in background (~${fmtSeconds(remainingSec)} remaining)`}
+              : `Fetching live data in background (~${fmtSeconds(remainingSec)} remaining)`}
           </div>
           <div className="text-[11px] text-slate-500 font-mono">
             {job?.elapsed ? `Elapsed: ${fmtSeconds(Math.ceil(job.elapsed / 1000))} · ` : ""}Est. {fmtSeconds(Math.ceil((job?.estimatedMs ?? 90000) / 1000))} total
@@ -1479,7 +1487,7 @@ function PricingModal({ row: initialRow, onClose, onRefreshComplete }) {
       if (result.status === "started" || result.status === "in_progress") startPolling(catCode);
     } catch (err) {
       const offline = err.message?.toLowerCase().includes("fetch") || err.message?.toLowerCase().includes("network");
-      setRefreshJob({ status: "error", error: offline ? "Scraper server is offline." : err.message, retryAfter: err.retryAfter });
+      setRefreshJob({ status: "error", error: offline ? "Live data server is offline." : err.message, retryAfter: err.retryAfter });
       setHasAttemptedFetch(true);
     }
   }
@@ -1524,7 +1532,7 @@ function PricingModal({ row: initialRow, onClose, onRefreshComplete }) {
       startPolling(null, onRefreshComplete);
     } catch (err) {
       const offline = err.message?.toLowerCase().includes("fetch") || err.message?.toLowerCase().includes("network");
-      setRefreshJob({ status: "error", error: offline ? "Scraper server is offline." : err.message, retryAfter: err.retryAfter });
+      setRefreshJob({ status: "error", error: offline ? "Live data server is offline." : err.message, retryAfter: err.retryAfter });
       setHasAttemptedFetch(true);
     }
   }
@@ -2130,11 +2138,28 @@ export default function CruiseSearchPage() {
       }
     } catch {}
 
-    // Synchronize latest live vendor auth statuses in background
-    checkAllVendorAuth()
-      .then((res) => {
-        if (res && typeof res === "object") {
-          const authMap = res.results || res.data || res;
+    // Synchronize latest live vendor auth statuses in background. The scraper
+    // returns { status: "checking", vendors: [{ key, name, status }] } while the
+    // check runs, so index the list by key and name and poll until it is done.
+    let cancelled = false;
+    let pollTimer = null;
+    const pollUntil = Date.now() + 15 * 60 * 1000;
+
+    const syncAuth = () => {
+      checkAllVendorAuth()
+        .then((res) => {
+          if (cancelled || !res || typeof res !== "object") return;
+          const list = Array.isArray(res.vendors) ? res.vendors : null;
+          const authMap = {};
+          if (list) {
+            for (const v of list) {
+              if (!v?.key || v.status === "pending" || v.status === "running") continue;
+              authMap[v.key] = v;
+              if (v.name) authMap[v.name] = v;
+            }
+          } else {
+            Object.assign(authMap, res.results || res.data || res);
+          }
           setVendorAuthResults((prev) => {
             const next = { ...prev, ...authMap };
             try {
@@ -2142,9 +2167,18 @@ export default function CruiseSearchPage() {
             } catch {}
             return next;
           });
-        }
-      })
-      .catch(() => {});
+          if (res.status === "checking" && Date.now() < pollUntil) {
+            pollTimer = setTimeout(syncAuth, 10000);
+          }
+        })
+        .catch(() => {});
+    };
+    syncAuth();
+
+    return () => {
+      cancelled = true;
+      if (pollTimer) clearTimeout(pollTimer);
+    };
   }, []);
 
   const KNOWN_VENDOR_ALIASES = useMemo(() => ({
@@ -2309,6 +2343,18 @@ export default function CruiseSearchPage() {
   const [targetShipsLoading, setTargetShipsLoading] = useState(false);
   const [scraperLoading, setScraperLoading] = useState(false);
   const [scraperStatus, setScraperStatus] = useState(null);
+  // null | { status, estimatedMs, elapsed, remaining } — set only when the
+  // scrapper gave this run a time estimate (targeted single-ship+single-day
+  // searches on vendors with a verified exact-day filter); polled from
+  // GET /api/runs/:runId until the run leaves queued/running.
+  const [scraperJob, setScraperJob] = useState(null);
+  const scraperPollRef = useRef(null);
+  // True for the whole live search — the initial trigger AND the time it
+  // spends being polled afterward — so the button/processing indicator stays
+  // in one visible state the entire time instead of flipping back to normal
+  // right after the trigger request returns, while the real job is still
+  // running in the background.
+  const isLiveSearching = scraperLoading || Boolean(scraperJob);
   const [highlightedRowId, setHighlightedRowId] = useState(null);
   const [lastSearchedShip, setLastSearchedShip] = useState("");
 
@@ -2748,7 +2794,10 @@ export default function CruiseSearchPage() {
   const executeTargetedSearch = () => {
     const trimmedShip = targetShipName.trim();
     const base = targetStartDate ? new Date(targetStartDate) : new Date();
-    const end = new Date(base.getTime() + targetHorizonDays * 86400000);
+    // Inclusive span: horizonDays=1 means "just this one day" (end === start),
+    // not start+1 — the backend treats a date-only startDateTo as that whole
+    // day, so start+1 here used to pull in the following day's sailings too.
+    const end = new Date(base.getTime() + Math.max(0, targetHorizonDays - 1) * 86400000);
     const toInputDate = (d) => d.toISOString().slice(0, 10);
     const endDate = toInputDate(end);
 
@@ -2780,11 +2829,57 @@ export default function CruiseSearchPage() {
     executeTargetedSearch();
   };
 
+  const stopScraperPoll = () => {
+    if (scraperPollRef.current) {
+      clearInterval(scraperPollRef.current);
+      scraperPollRef.current = null;
+    }
+  };
+
+  // Runs for every triggered live search that got a runId, regardless of
+  // whether the trigger response carried an estimatedMs — a vendor without a
+  // verified exact-day filter has no reliable duration to count down, but the
+  // job is still genuinely running, so it still needs to be polled to know
+  // when results are actually ready.
+  const pollScraperRun = (runId) => {
+    stopScraperPoll();
+    scraperPollRef.current = setInterval(async () => {
+      try {
+        const res = await getVendorRunStatus(runId);
+        const result = res?.result;
+        if (!result) return;
+        if (result.status === "queued" || result.status === "running") {
+          setScraperJob({
+            status: result.status,
+            estimatedMs: result.estimatedMs,
+            elapsed: result.elapsed,
+            remaining: result.remaining
+          });
+        } else {
+          stopScraperPoll();
+          setScraperJob(null);
+          setScraperStatus({
+            ok: result.status === "completed",
+            msg: result.status === "completed"
+              ? (result.notes || "Live inventory scan complete")
+              : (result.notes || "Live inventory scan failed")
+          });
+          executeTargetedSearch();
+        }
+      } catch {
+        // transient poll failure — leave scraperJob as-is, try again next tick
+      }
+    }, 3000);
+  };
+
+  useEffect(() => stopScraperPoll, []);
+
   const executeTriggerScraper = async () => {
     const trimmedShip = targetShipName.trim();
     const vendorKey = VENDOR_SCRAPER_MAP[targetVendor] || (targetVendor ? targetVendor.toLowerCase() : "msc");
     setScraperLoading(true);
     setScraperStatus(null);
+    setScraperJob(null);
     try {
       const res = await triggerVendorScrapeFetch(vendorKey, {
         startDate: targetStartDate,
@@ -2793,20 +2888,26 @@ export default function CruiseSearchPage() {
       });
       const ok = res.httpStatus === 202 || res.result?.status === "queued" || res.result?.status === "started" || res.success;
       const rawStatus = res.result?.status || res.status;
-      let displayMsg = "Searched";
-      if (rawStatus === "queued" || rawStatus === "started" || rawStatus === "in_progress" || ok) {
-        displayMsg = `Searched: Live inventory scan initiated for ${targetVendor || vendorKey}${trimmedShip ? ` (Ship: ${trimmedShip})` : ""}`;
-      } else {
-        displayMsg = res.error ?? "Live search triggered";
-      }
+      const runId = res.result?.runId;
+      const estimatedMs = res.result?.estimatedMs;
 
-      setScraperStatus({
-        ok,
-        msg: displayMsg
-      });
-      executeTargetedSearch();
+      if (ok && runId) {
+        // Keep showing "processing" for the whole run, not just the initial
+        // request — vendors without a verified exact-day filter get no
+        // estimatedMs, but the job is still genuinely running in the
+        // background, so poll regardless and show an indeterminate
+        // "processing" state instead of a countdown when there's no ETA.
+        setScraperJob({ status: rawStatus || "queued", estimatedMs: estimatedMs ?? null, elapsed: 0, remaining: estimatedMs ?? null });
+        pollScraperRun(runId);
+      } else {
+        const displayMsg = ok
+          ? `Searched: Live inventory scan initiated for ${targetVendor || vendorKey}${trimmedShip ? ` (Ship: ${trimmedShip})` : ""}`
+          : (res.error ?? "Live search triggered");
+        setScraperStatus({ ok, msg: displayMsg });
+        executeTargetedSearch();
+      }
     } catch (err) {
-      setScraperStatus({ ok: false, msg: err.message || "Failed to trigger scraper" });
+      setScraperStatus({ ok: false, msg: err.message || "Failed to start live search" });
     } finally {
       setScraperLoading(false);
     }
@@ -3222,7 +3323,7 @@ export default function CruiseSearchPage() {
         </div>
       </div>
 
-      {/* ── Targeted Individual Ship Search & Live Scraper (Accordion) ── */}
+      {/* ── Targeted Individual Ship Live Search (Accordion) ── */}
       <div className="rounded-2xl border border-slate-200/90 bg-white shadow-xs hover:shadow-md transition-all duration-300 overflow-hidden w-full max-w-full min-w-0">
         {/* Accordion Trigger Header */}
         <button
@@ -3237,11 +3338,11 @@ export default function CruiseSearchPage() {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-xs sm:text-base font-bold text-slate-900 truncate">
-                  Targeted Ship Search & Live Scraper
+                  Live Search
                 </h3>
                 <span className="inline-flex items-center gap-1 text-[10px] uppercase font-bold text-teal-800 bg-teal-50 border border-teal-200/80 px-2 py-0.5 rounded-full shrink-0">
                   <Sparkles size={11} className="text-teal-600" />
-                  Ship + Scraper
+                  Ship
                 </span>
               </div>
               <p className="text-[11px] sm:text-xs font-medium text-slate-500 mt-0.5 truncate">
@@ -3251,7 +3352,7 @@ export default function CruiseSearchPage() {
                     {targetShipName ? ` · ${targetShipName}` : " · All Ships"} · {targetHorizonDays} Day{targetHorizonDays > 1 ? "s" : ""} Horizon
                   </span>
                 ) : (
-                  "Query specific ship sailings by date & horizon window or trigger live scrapers."
+                  "Query specific ship sailings by date & horizon window, live from the carrier."
                 )}
               </p>
             </div>
@@ -3280,7 +3381,7 @@ export default function CruiseSearchPage() {
             {/* Active Query JSON preview badge */}
             <div className="flex items-center justify-between gap-3 pt-4">
               <p className="text-xs font-medium text-slate-500">
-                Select a cruise line and ship fleet to query specific departure windows or dispatch on-demand scraper workers.
+                Select a cruise line and ship fleet to query specific departure windows live from the carrier.
               </p>
               <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900 text-slate-200 font-mono text-[11px] shadow-sm border border-slate-800 shrink-0">
                 <span className="inline-block w-1.5 h-1.5 rounded-full bg-teal-400 animate-pulse"></span>
@@ -3382,7 +3483,7 @@ export default function CruiseSearchPage() {
               </div>
             </div>
 
-            {/* Action Row & Live Scraper Trigger */}
+            {/* Action Row & Live Search Trigger */}
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-3 border-t border-slate-100 w-full min-w-0">
               {/* Active selection summary badge */}
               <div className="flex items-center gap-2 text-xs font-semibold text-slate-600 py-1 min-w-0">
@@ -3395,19 +3496,20 @@ export default function CruiseSearchPage() {
               <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
                 <button
                   type="button"
-                  onClick={handleTargetedSearch}
-                  disabled={loading || !targetVendor}
+                  onClick={handleTriggerScraper}
+                  disabled={isLiveSearching || !targetVendor}
                   className="inline-flex items-center justify-center gap-2 h-10 px-4 sm:px-5 rounded-xl bg-teal-700 hover:bg-teal-800 disabled:opacity-75 text-white text-xs sm:text-sm font-bold shadow-xs hover:shadow-sm active:scale-95 transition-all cursor-pointer flex-1 sm:flex-initial"
+                  title="Fetch live sailing & cabin data for this ship, straight from the carrier"
                 >
-                  {loading ? (
+                  {isLiveSearching ? (
                     <RefreshCw size={15} className="animate-spin" />
                   ) : (
                     <Search size={15} />
                   )}
-                  <span>{loading ? "Searching…" : "Search Ship Inventory"}</span>
+                  <span>{isLiveSearching ? "Processing…" : "Live Search"}</span>
                 </button>
 
-                {!loading && (
+                {!isLiveSearching && (
                   <button
                     type="button"
                     onClick={() => scrollToRow(rows[0]?.id)}
@@ -3416,31 +3518,40 @@ export default function CruiseSearchPage() {
                   >
                     <ArrowDown size={14} className="text-emerald-700 animate-bounce" />
                     <span className="truncate">
-                      {rows.length > 0 
-                        ? `Go to Sailing` 
+                      {rows.length > 0
+                        ? `Go to Sailing`
                         : "View Results"}
                     </span>
                   </button>
                 )}
-
-                <button
-                  type="button"
-                  onClick={handleTriggerScraper}
-                  disabled={scraperLoading || !targetVendor}
-                  className="inline-flex items-center justify-center gap-2 h-10 px-4 sm:px-5 rounded-xl bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 hover:from-orange-600 hover:via-amber-600 hover:to-orange-700 disabled:opacity-50 text-white text-xs sm:text-sm font-bold shadow-xs hover:shadow-sm hover:shadow-orange-500/20 active:scale-95 transition-all cursor-pointer flex-1 sm:flex-initial"
-                  title="Dispatch scraper worker with { startDate, horizonDays, shipName }"
-                >
-                  {scraperLoading ? (
-                    <RefreshCw size={15} className="animate-spin" />
-                  ) : (
-                    <Zap size={15} className="text-amber-100" />
-                  )}
-                  <span>{scraperLoading ? "Triggering…" : "Run Live Scraper"}</span>
-                </button>
               </div>
             </div>
 
-            {/* Live Scraper feedback alert if triggered */}
+            {/* Processing indicator — shown for the whole live search, not just the initial click */}
+            {isLiveSearching && (
+              <div className="flex flex-col items-start gap-2 p-3 rounded-xl bg-teal-50/60 border border-teal-200/80 shadow-2xs">
+                <div className="text-xs font-bold text-teal-900 flex items-center gap-2">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-teal-600"></span>
+                  </span>
+                  {scraperLoading
+                    ? "Starting live search…"
+                    : scraperJob?.estimatedMs == null
+                      ? "Processing… fetching live data from the carrier (this can take a few minutes)"
+                      : Math.ceil((scraperJob?.remaining ?? 0) / 1000) <= 0
+                        ? "Finalizing data from vendor… Almost ready"
+                        : `Processing… (~${fmtSeconds(Math.ceil((scraperJob?.remaining ?? 0) / 1000))} remaining)`}
+                </div>
+                {scraperJob?.estimatedMs != null && (
+                  <div className="text-[11px] text-slate-500 font-mono">
+                    {scraperJob.elapsed ? `Elapsed: ${fmtSeconds(Math.ceil(scraperJob.elapsed / 1000))} · ` : ""}Est. {fmtSeconds(Math.ceil(scraperJob.estimatedMs / 1000))} total
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Live Search feedback alert if triggered */}
             {scraperStatus && (
               <div className={`p-3 rounded-xl text-xs font-semibold flex items-center justify-between gap-2 shadow-2xs ${scraperStatus.ok
                 ? "bg-emerald-50 text-emerald-900 border border-emerald-200/80"

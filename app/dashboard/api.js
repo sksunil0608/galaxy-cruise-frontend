@@ -285,6 +285,16 @@ export async function triggerVendorScrapeFetch(vendorKey, options = {}) {
   return { ...data, httpStatus: res.status }
 }
 
+// Polls a bulk/targeted scraper run (returned by triggerVendorScrapeFetch as
+// result.runId). While the run is still queued/running and the scrapper gave
+// it a time estimate (currently: single-ship+single-day searches on msc,
+// goccl, seawebagents — see TARGETED_SEARCH_ESTIMATE_MS server-side), the
+// response carries estimatedMs/elapsed/remaining for a live countdown; those
+// fields disappear once the run finishes.
+export async function getVendorRunStatus(runId) {
+  return scraperFetch(`/api/runs/${encodeURIComponent(runId)}`)
+}
+
 export async function refreshCruiseCabins(cruiseCode, vendorKey) {
   try {
     // 1. Pre-flight check: if scraper already reported in_progress or finished, resolve directly without issuing a duplicate POST that triggers 409
