@@ -3474,10 +3474,7 @@ export default function CruiseSearchPage() {
                 <div className="flex items-center p-1 bg-slate-100/90 rounded-xl border border-slate-200/70 gap-1 overflow-x-auto no-scrollbar w-full max-w-full min-w-0">
                   {[
                     { label: "1 Day", days: 1 },
-                    { label: "7 Days", days: 7 },
-                    { label: "30 Days", days: 30 },
-                    { label: "60 Days", days: 60 },
-                    { label: "3 Months", days: 90 },
+                    { label: "3 Days", days: 3 },
                   ].map((opt) => (
                     <button
                       type="button"
