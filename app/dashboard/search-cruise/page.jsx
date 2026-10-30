@@ -197,10 +197,13 @@ function SearchableSelect({ placeholder, value, onChange, options, onEnter }) {
     setQuery(newVal);
     if (!open) setOpen(true);
 
+    // Was debounced 650ms before telling the parent form what was typed.
+    // onChange here is just a cheap state update (no fetch behind it), so the
+    // delay bought nothing — it only meant a fast type-then-click-search could
+    // fire the search before the ship name had actually been committed,
+    // silently sending an unfiltered "any ship" request instead.
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
-    debounceTimerRef.current = setTimeout(() => {
-      onChange(newVal);
-    }, 650);
+    onChange(newVal);
   };
 
   const handleKeyDown = (event) => {
@@ -2914,6 +2917,15 @@ export default function CruiseSearchPage() {
   };
 
   const handleTriggerScraper = async () => {
+    // Ship Name is marked required (*) in this panel on purpose — this is the
+    // targeted single-ship search, and silently falling back to an
+    // unfiltered "every ship this vendor runs" search when the typed name
+    // didn't land is exactly what looked like a broken/empty result to a
+    // client watching a live demo.
+    if (!targetShipName.trim()) {
+      setScraperStatus({ ok: false, msg: "Pick a ship first — Live Search needs one, it won't search every ship in the fleet." });
+      return;
+    }
     const shipVendor = targetShipName ? getVendorForShip(targetShipName) : null;
     const vendorToCheck = targetVendor || shipVendor;
     if (vendorToCheck) {
@@ -3499,7 +3511,7 @@ export default function CruiseSearchPage() {
                   onClick={handleTriggerScraper}
                   disabled={isLiveSearching || !targetVendor}
                   className="inline-flex items-center justify-center gap-2 h-10 px-4 sm:px-5 rounded-xl bg-teal-700 hover:bg-teal-800 disabled:opacity-75 text-white text-xs sm:text-sm font-bold shadow-xs hover:shadow-sm active:scale-95 transition-all cursor-pointer flex-1 sm:flex-initial"
-                  title="Fetch live sailing & cabin data for this ship, straight from the carrier"
+                  title={!targetShipName.trim() ? "Select a ship first" : "Fetch live sailing & cabin data for this ship, straight from the carrier"}
                 >
                   {isLiveSearching ? (
                     <RefreshCw size={15} className="animate-spin" />
