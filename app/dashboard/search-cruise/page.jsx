@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { ChevronDown, ChevronRight, ChevronUp, ChevronLeft, ChevronsLeft, ChevronsRight, Pin, Minus, Tag, TrendingDown, TrendingUp, X, ImageIcon, Search, RotateCcw, RefreshCw, Compass, Sparkles, AlertCircle, Ship, MapPin, CalendarDays, Layers, Zap, CheckCircle2, Play, Check, ArrowDown, ArrowDownNarrowWide, ArrowUpNarrowWide, Building2, ShieldAlert, ShieldCheck, Lock, ExternalLink } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronUp, ChevronLeft, ChevronsLeft, ChevronsRight, Pin, Minus, Tag, TrendingDown, TrendingUp, X, ImageIcon, Search, RotateCcw, RefreshCw, Compass, Sparkles, AlertCircle, Ship, MapPin, CalendarDays, Layers, Zap, CheckCircle2, Play, Check, ArrowDown, ArrowDownNarrowWide, ArrowUpNarrowWide, Building2, ShieldAlert, ShieldCheck, Lock, ExternalLink, History } from "lucide-react";
 
 import {
   createCruiseTag,
@@ -1113,6 +1113,118 @@ function ItineraryModal({ row, onClose }) {
               </table>
             </div>
           </>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+function RunStatusModal({ defaultRunId, onClose }) {
+  const [runIdInput, setRunIdInput] = useState(defaultRunId != null ? String(defaultRunId) : "");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [result, setResult] = useState(null);
+
+  const check = async () => {
+    const id = runIdInput.trim();
+    if (!id) return;
+    setLoading(true);
+    setError("");
+    setResult(null);
+    try {
+      const res = await getVendorRunStatus(id);
+      if (!res?.result) {
+        setError(res?.error || `No run found with ID ${id}`);
+      } else {
+        setResult(res.result);
+      }
+    } catch (err) {
+      setError(err.message || "Failed to look up that run");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Auto-check once on open if we were handed a run ID from the most recent search.
+  useEffect(() => {
+    if (defaultRunId != null) check();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <Modal onClose={onClose} width="min(96vw, 520px)">
+      <div className="p-5 sm:p-6 space-y-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-base font-black text-slate-900">Check Run Status</h2>
+            <p className="text-xs text-slate-500 mt-0.5">Paste any Live Search run ID to see what happened to it.</p>
+          </div>
+          <button onClick={onClose} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 transition cursor-pointer" aria-label="Close">
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            inputMode="numeric"
+            value={runIdInput}
+            onChange={(e) => setRunIdInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") check(); }}
+            placeholder="e.g. 872"
+            className="flex-1 h-10 px-3.5 rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition-all"
+          />
+          <button
+            type="button"
+            onClick={check}
+            disabled={loading || !runIdInput.trim()}
+            className="inline-flex items-center justify-center gap-1.5 h-10 px-4 rounded-xl bg-teal-700 hover:bg-teal-800 disabled:opacity-60 text-white text-sm font-bold shadow-xs cursor-pointer transition-all shrink-0"
+          >
+            {loading ? <RefreshCw size={14} className="animate-spin" /> : <Search size={14} />}
+            <span>Check</span>
+          </button>
+        </div>
+
+        {error && (
+          <div className="p-3 rounded-xl bg-rose-50 border border-rose-200/80 text-rose-800 text-xs font-semibold flex items-center gap-2">
+            <AlertCircle size={14} className="shrink-0 text-rose-600" />
+            <span>{error}</span>
+          </div>
+        )}
+
+        {result && (
+          <div className="rounded-xl border border-slate-200 divide-y divide-slate-100 text-sm">
+            <div className="flex items-center justify-between px-4 py-2.5">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Status</span>
+              <span className={`font-bold ${
+                result.status === "completed" ? "text-emerald-700"
+                  : result.status === "failed" ? "text-rose-700"
+                    : "text-amber-700"
+              }`}>{result.status}</span>
+            </div>
+            <div className="flex items-center justify-between px-4 py-2.5">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Vendor</span>
+              <span className="font-semibold text-slate-900">{result.vendor?.name || "—"}</span>
+            </div>
+            <div className="flex items-center justify-between px-4 py-2.5">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Started</span>
+              <span className="font-mono text-xs text-slate-700">{result.startedAt ? new Date(result.startedAt).toLocaleString() : "—"}</span>
+            </div>
+            <div className="flex items-center justify-between px-4 py-2.5">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Finished</span>
+              <span className="font-mono text-xs text-slate-700">{result.finishedAt ? new Date(result.finishedAt).toLocaleString() : "still running / queued"}</span>
+            </div>
+            <div className="flex items-center justify-between px-4 py-2.5">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Cruises found</span>
+              <span className="font-bold text-slate-900">{result.cruisesSeen ?? 0}</span>
+            </div>
+            {result.notes && (
+              <div className="px-4 py-2.5">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Notes</span>
+                <span className="text-xs text-slate-700 break-words">{result.notes}</span>
+              </div>
+            )}
+          </div>
         )}
       </div>
     </Modal>
@@ -2352,6 +2464,11 @@ export default function CruiseSearchPage() {
   // GET /api/runs/:runId until the run leaves queued/running.
   const [scraperJob, setScraperJob] = useState(null);
   const scraperPollRef = useRef(null);
+  // Kept separately from scraperJob (which clears once the run finishes) so
+  // the run ID stays visible/copyable after completion too, and so the
+  // "check any run" lookup modal can default to the most recent one.
+  const [lastScraperRunId, setLastScraperRunId] = useState(null);
+  const [runStatusModalOpen, setRunStatusModalOpen] = useState(false);
   // True for the whole live search — the initial trigger AND the time it
   // spends being polled afterward — so the button/processing indicator stays
   // in one visible state the entire time instead of flipping back to normal
@@ -2853,6 +2970,7 @@ export default function CruiseSearchPage() {
         if (!result) return;
         if (result.status === "queued" || result.status === "running") {
           setScraperJob({
+            runId,
             status: result.status,
             estimatedMs: result.estimatedMs,
             elapsed: result.elapsed,
@@ -2863,9 +2981,9 @@ export default function CruiseSearchPage() {
           setScraperJob(null);
           setScraperStatus({
             ok: result.status === "completed",
-            msg: result.status === "completed"
+            msg: `${result.status === "completed"
               ? (result.notes || "Live inventory scan complete")
-              : (result.notes || "Live inventory scan failed")
+              : (result.notes || "Live inventory scan failed")} (Run #${runId})`
           });
           executeTargetedSearch();
         }
@@ -2895,12 +3013,13 @@ export default function CruiseSearchPage() {
       const estimatedMs = res.result?.estimatedMs;
 
       if (ok && runId) {
+        setLastScraperRunId(runId);
         // Keep showing "processing" for the whole run, not just the initial
         // request — vendors without a verified exact-day filter get no
         // estimatedMs, but the job is still genuinely running in the
         // background, so poll regardless and show an indeterminate
         // "processing" state instead of a countdown when there's no ETA.
-        setScraperJob({ status: rawStatus || "queued", estimatedMs: estimatedMs ?? null, elapsed: 0, remaining: estimatedMs ?? null });
+        setScraperJob({ runId, status: rawStatus || "queued", estimatedMs: estimatedMs ?? null, elapsed: 0, remaining: estimatedMs ?? null });
         pollScraperRun(runId);
       } else {
         const displayMsg = ok
@@ -3533,6 +3652,16 @@ export default function CruiseSearchPage() {
                     </span>
                   </button>
                 )}
+
+                <button
+                  type="button"
+                  onClick={() => setRunStatusModalOpen(true)}
+                  className="inline-flex items-center justify-center gap-1.5 h-10 px-3 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 hover:text-slate-900 text-xs sm:text-sm font-bold shadow-2xs hover:shadow-xs active:scale-95 transition-all cursor-pointer"
+                  title="Look up any past Live Search by its run ID"
+                >
+                  <History size={14} />
+                  <span className="hidden sm:inline">Check Run Status</span>
+                </button>
               </div>
             </div>
 
@@ -3556,6 +3685,9 @@ export default function CruiseSearchPage() {
                   <div className="text-[11px] text-slate-500 font-mono">
                     {scraperJob.elapsed ? `Elapsed: ${fmtSeconds(Math.ceil(scraperJob.elapsed / 1000))} · ` : ""}Est. {fmtSeconds(Math.ceil(scraperJob.estimatedMs / 1000))} total
                   </div>
+                )}
+                {scraperJob?.runId != null && (
+                  <div className="text-[11px] text-slate-500 font-mono">Run #{scraperJob.runId} — note this if you want to check on it later</div>
                 )}
               </div>
             )}
@@ -3995,6 +4127,12 @@ export default function CruiseSearchPage() {
       {shipRow && <ShipModal row={shipRow} onClose={() => setShipRow(null)} />}
 
       {itineraryRow && <ItineraryModal row={itineraryRow} onClose={() => setItineraryRow(null)} />}
+      {runStatusModalOpen && (
+        <RunStatusModal
+          defaultRunId={lastScraperRunId}
+          onClose={() => setRunStatusModalOpen(false)}
+        />
+      )}
       {pricingRow && <PricingModal row={pricingRow} onClose={() => setPricingRow(null)} onRefreshComplete={handlePricingRefreshComplete} />}
       {tagRow && (
         <TagManagementModal
