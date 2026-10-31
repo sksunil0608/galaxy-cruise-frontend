@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { ChevronDown, ChevronRight, ChevronUp, ChevronLeft, ChevronsLeft, ChevronsRight, Pin, Minus, Tag, TrendingDown, TrendingUp, X, ImageIcon, Search, RotateCcw, RefreshCw, Compass, Sparkles, AlertCircle, Ship, MapPin, CalendarDays, Layers, Zap, CheckCircle2, Play, Check, ArrowDown, ArrowDownNarrowWide, ArrowUpNarrowWide, Building2, ShieldAlert, ShieldCheck, Lock, ExternalLink, History } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronUp, ChevronLeft, ChevronsLeft, ChevronsRight, Pin, Minus, Plus, Tag, TrendingDown, TrendingUp, X, ImageIcon, Search, RotateCcw, RefreshCw, Compass, Sparkles, AlertCircle, Ship, MapPin, CalendarDays, Layers, Zap, CheckCircle2, Play, Check, ArrowDown, ArrowDownNarrowWide, ArrowUpNarrowWide, Building2, ShieldAlert, ShieldCheck, Lock, ExternalLink, History, Maximize2 } from "lucide-react";
 
 import {
   createCruiseTag,
@@ -603,6 +603,119 @@ function VendorAuthRequiredModal({
   );
 }
 
+// Full-view image lightbox with real zoom: scroll-wheel, +/- buttons, reset,
+// and drag-to-pan once zoomed past 100% — used for deck plan images, which
+// are only actually readable zoomed in given how much detail they pack in.
+function ZoomableImageLightbox({ src, alt = "Image", onClose }) {
+  const [scale, setScale] = useState(1);
+  const [pos, setPos] = useState({ x: 0, y: 0 });
+  const [dragging, setDragging] = useState(false);
+  const dragStartRef = useRef({ x: 0, y: 0 });
+
+  const MIN_SCALE = 1;
+  const MAX_SCALE = 4;
+  const clampScale = (v) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, v));
+
+  const applyScale = (next) => {
+    const clamped = clampScale(next);
+    setScale(clamped);
+    if (clamped === MIN_SCALE) setPos({ x: 0, y: 0 });
+  };
+
+  const zoomIn = () => applyScale(scale + 0.5);
+  const zoomOut = () => applyScale(scale - 0.5);
+  const reset = () => { setScale(MIN_SCALE); setPos({ x: 0, y: 0 }); };
+
+  const onWheel = (e) => {
+    e.preventDefault();
+    applyScale(scale + (e.deltaY < 0 ? 0.25 : -0.25));
+  };
+
+  const onMouseDown = (e) => {
+    if (scale <= MIN_SCALE) return;
+    setDragging(true);
+    dragStartRef.current = { x: e.clientX - pos.x, y: e.clientY - pos.y };
+  };
+  const onMouseMove = (e) => {
+    if (!dragging) return;
+    setPos({ x: e.clientX - dragStartRef.current.x, y: e.clientY - dragStartRef.current.y });
+  };
+  const stopDrag = () => setDragging(false);
+
+  return (
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-9999 bg-black/90 backdrop-blur-sm flex items-center justify-center p-4"
+    >
+      <button
+        onClick={onClose}
+        className="absolute top-5 right-5 bg-white/20 hover:bg-white/30 text-white rounded-full p-2 transition cursor-pointer z-10"
+        title="Close"
+      >
+        <X size={20} />
+      </button>
+
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="absolute top-5 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-black/60 border border-white/10 rounded-full p-1.5 z-10"
+      >
+        <button
+          onClick={zoomOut}
+          disabled={scale <= MIN_SCALE}
+          className="w-8 h-8 rounded-full flex items-center justify-center text-white hover:bg-white/15 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition"
+          title="Zoom out"
+        >
+          <Minus size={15} />
+        </button>
+        <span className="text-white text-xs font-bold font-mono w-11 text-center select-none">{Math.round(scale * 100)}%</span>
+        <button
+          onClick={zoomIn}
+          disabled={scale >= MAX_SCALE}
+          className="w-8 h-8 rounded-full flex items-center justify-center text-white hover:bg-white/15 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition"
+          title="Zoom in"
+        >
+          <Plus size={15} />
+        </button>
+        <div className="w-px h-5 bg-white/20 mx-0.5" />
+        <button
+          onClick={reset}
+          disabled={scale === MIN_SCALE && pos.x === 0 && pos.y === 0}
+          className="w-8 h-8 rounded-full flex items-center justify-center text-white hover:bg-white/15 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition"
+          title="Reset zoom"
+        >
+          <RotateCcw size={14} />
+        </button>
+      </div>
+
+      <div
+        className="w-full h-full flex items-center justify-center overflow-hidden"
+        onWheel={onWheel}
+        onMouseDown={onMouseDown}
+        onMouseMove={onMouseMove}
+        onMouseUp={stopDrag}
+        onMouseLeave={stopDrag}
+      >
+        <img
+          src={src}
+          alt={alt}
+          draggable={false}
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            transform: `translate(${pos.x}px, ${pos.y}px) scale(${scale})`,
+            transition: dragging ? "none" : "transform 0.12s ease-out",
+            cursor: scale > MIN_SCALE ? (dragging ? "grabbing" : "grab") : "default",
+          }}
+          className="max-w-[92vw] max-h-[88vh] rounded-xl object-contain shadow-2xl border border-white/10 select-none"
+        />
+      </div>
+
+      <p className="absolute bottom-5 left-1/2 -translate-x-1/2 text-white/60 text-[11px] font-medium select-none">
+        Scroll to zoom · drag to pan · click outside to close
+      </p>
+    </div>
+  );
+}
+
 function ShipModal({ row, onClose }) {
   const shipCode = row.shipCode || row.shipDetails?.code || row.ship;
   const [shipData, setShipData] = useState(null);
@@ -611,6 +724,7 @@ function ShipModal({ row, onClose }) {
   const [imageSrc, setImageSrc] = useState(row.shipDetails?.image || null);
   const [activeTab, setActiveTab] = useState("overview");
   const [selectedDeckId, setSelectedDeckId] = useState(null);
+  const [deckLightboxOpen, setDeckLightboxOpen] = useState(false);
   const ship = shipData || row.shipDetails || {};
   const decks = shipData?.decks || [];
   const selectedDeck =
@@ -797,16 +911,35 @@ function ShipModal({ row, onClose }) {
                   </div>
 
                   {selectedDeck.image ? (
-                    <div style={{ position: "relative", minHeight: 320, borderRadius: 16, overflow: "hidden", background: T.muted }}>
-                      <Image
-                        src={selectedDeck.image}
-                        alt={selectedDeck.name}
-                        fill
-                        sizes="(max-width: 768px) 96vw, 720px"
-                        style={{ objectFit: "contain" }}
-                      />
+                    <div
+                      onClick={() => setDeckLightboxOpen(true)}
+                      className="group cursor-zoom-in"
+                      style={{ position: "relative", minHeight: 320, borderRadius: 16, overflow: "hidden", background: T.muted }}
+                    >
+                      <div className="absolute inset-0 transition-transform duration-300 ease-out group-hover:scale-110">
+                        <Image
+                          src={selectedDeck.image}
+                          alt={selectedDeck.name}
+                          fill
+                          sizes="(max-width: 768px) 96vw, 720px"
+                          style={{ objectFit: "contain" }}
+                        />
+                      </div>
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center pointer-events-none">
+                        <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-white/95 rounded-full p-3 shadow-lg">
+                          <Maximize2 size={20} className="text-slate-900" />
+                        </div>
+                      </div>
                     </div>
                   ) : null}
+
+                  {deckLightboxOpen && selectedDeck?.image && (
+                    <ZoomableImageLightbox
+                      src={selectedDeck.image}
+                      alt={selectedDeck.name}
+                      onClose={() => setDeckLightboxOpen(false)}
+                    />
+                  )}
 
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
                     {(selectedDeck.sections || []).map(section => (
@@ -1119,111 +1252,100 @@ function ItineraryModal({ row, onClose }) {
   );
 }
 
-function RunStatusModal({ defaultRunId, onClose }) {
-  const [runIdInput, setRunIdInput] = useState(defaultRunId != null ? String(defaultRunId) : "");
-  const [loading, setLoading] = useState(false);
+function LastRunStatusModal({ runId, onClose }) {
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
 
-  const check = async () => {
-    const id = runIdInput.trim();
-    if (!id) return;
-    setLoading(true);
-    setError("");
-    setResult(null);
-    try {
-      const res = await getVendorRunStatus(id);
-      if (!res?.result) {
-        setError(res?.error || `No run found with ID ${id}`);
-      } else {
-        setResult(res.result);
-      }
-    } catch (err) {
-      setError(err.message || "Failed to look up that run");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Auto-check once on open if we were handed a run ID from the most recent search.
   useEffect(() => {
-    if (defaultRunId != null) check();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    let cancelled = false;
+    (async () => {
+      if (runId == null) {
+        setLoading(false);
+        setError("No search has been run yet this session.");
+        return;
+      }
+      try {
+        const res = await getVendorRunStatus(runId);
+        if (cancelled) return;
+        if (!res?.result) setError(res?.error || "Couldn't load the last run.");
+        else setResult(res.result);
+      } catch (err) {
+        if (!cancelled) setError(err.message || "Couldn't load the last run.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [runId]);
+
+  const isActive = result?.status === "running" || result?.status === "queued";
 
   return (
-    <Modal onClose={onClose} width="min(96vw, 520px)">
+    <Modal onClose={onClose} width="min(96vw, 480px)">
       <div className="p-5 sm:p-6 space-y-4">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-base font-black text-slate-900">Check Run Status</h2>
-            <p className="text-xs text-slate-500 mt-0.5">Paste any Live Search run ID to see what happened to it.</p>
+            <h2 className="text-base font-black text-slate-900">Last Run Status</h2>
+            <p className="text-xs text-slate-500 mt-0.5">Status of the most recent Live Search for this vendor.</p>
           </div>
           <button onClick={onClose} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 transition cursor-pointer" aria-label="Close">
             <X size={16} />
           </button>
         </div>
 
-        <div className="flex items-center gap-2">
-          <input
-            type="text"
-            inputMode="numeric"
-            value={runIdInput}
-            onChange={(e) => setRunIdInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") check(); }}
-            placeholder="e.g. 872"
-            className="flex-1 h-10 px-3.5 rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition-all"
-          />
-          <button
-            type="button"
-            onClick={check}
-            disabled={loading || !runIdInput.trim()}
-            className="inline-flex items-center justify-center gap-1.5 h-10 px-4 rounded-xl bg-teal-700 hover:bg-teal-800 disabled:opacity-60 text-white text-sm font-bold shadow-xs cursor-pointer transition-all shrink-0"
-          >
-            {loading ? <RefreshCw size={14} className="animate-spin" /> : <Search size={14} />}
-            <span>Check</span>
-          </button>
-        </div>
+        {loading && (
+          <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 py-4 justify-center">
+            <RefreshCw size={14} className="animate-spin" />
+            <span>Loading…</span>
+          </div>
+        )}
 
-        {error && (
+        {!loading && error && (
           <div className="p-3 rounded-xl bg-rose-50 border border-rose-200/80 text-rose-800 text-xs font-semibold flex items-center gap-2">
             <AlertCircle size={14} className="shrink-0 text-rose-600" />
             <span>{error}</span>
           </div>
         )}
 
-        {result && (
-          <div className="rounded-xl border border-slate-200 divide-y divide-slate-100 text-sm">
-            <div className="flex items-center justify-between px-4 py-2.5">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Status</span>
-              <span className={`font-bold ${
-                result.status === "completed" ? "text-emerald-700"
-                  : result.status === "failed" ? "text-rose-700"
-                    : "text-amber-700"
-              }`}>{result.status}</span>
+        {!loading && result && (
+          <div className="space-y-4">
+            <div className={`flex items-center justify-center gap-2 py-3 rounded-xl border font-bold text-sm ${
+              isActive
+                ? "bg-emerald-50 border-emerald-200/80 text-emerald-800"
+                : "bg-slate-50 border-slate-200 text-slate-600"
+            }`}>
+              <span className="relative flex h-2.5 w-2.5">
+                {isActive && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>}
+                <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${isActive ? "bg-emerald-600" : "bg-slate-400"}`}></span>
+              </span>
+              <span>{isActive ? "Active" : "Inactive"}</span>
             </div>
-            <div className="flex items-center justify-between px-4 py-2.5">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Vendor</span>
-              <span className="font-semibold text-slate-900">{result.vendor?.name || "—"}</span>
-            </div>
-            <div className="flex items-center justify-between px-4 py-2.5">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Started</span>
-              <span className="font-mono text-xs text-slate-700">{result.startedAt ? new Date(result.startedAt).toLocaleString() : "—"}</span>
-            </div>
-            <div className="flex items-center justify-between px-4 py-2.5">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Finished</span>
-              <span className="font-mono text-xs text-slate-700">{result.finishedAt ? new Date(result.finishedAt).toLocaleString() : "still running / queued"}</span>
-            </div>
-            <div className="flex items-center justify-between px-4 py-2.5">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Cruises found</span>
-              <span className="font-bold text-slate-900">{result.cruisesSeen ?? 0}</span>
-            </div>
-            {result.notes && (
-              <div className="px-4 py-2.5">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Notes</span>
-                <span className="text-xs text-slate-700 break-words">{result.notes}</span>
+
+            <div className="rounded-xl border border-slate-200 divide-y divide-slate-100 text-sm">
+              <div className="flex items-center justify-between px-4 py-2.5">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Vendor</span>
+                <span className="font-semibold text-slate-900">{result.vendor?.name || "—"}</span>
               </div>
-            )}
+              <div className="flex items-center justify-between px-4 py-2.5">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Started</span>
+                <span className="font-mono text-xs text-slate-700">{result.startedAt ? new Date(result.startedAt).toLocaleString() : "—"}</span>
+              </div>
+              <div className="flex items-center justify-between px-4 py-2.5">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Finished</span>
+                <span className="font-mono text-xs text-slate-700">{result.finishedAt ? new Date(result.finishedAt).toLocaleString() : "still running"}</span>
+              </div>
+              <div className="flex items-center justify-between px-4 py-2.5">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Cruises found</span>
+                <span className="font-bold text-slate-900">{result.cruisesSeen ?? 0}</span>
+              </div>
+              {result.notes && (
+                <div className="px-4 py-2.5">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Notes</span>
+                  <span className="text-xs text-slate-700 break-words">{result.notes}</span>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -1735,24 +1857,23 @@ function PricingModal({ row: initialRow, onClose, onRefreshComplete }) {
 
         {/* Deck plan lightbox */}
         {deckImageUrl !== null && (
-          <div
-            onClick={() => setDeckImageUrl(null)}
-            className="fixed inset-0 z-9999 bg-black/90 backdrop-blur-sm flex items-center justify-center p-4"
-          >
-            <button
+          deckImageUrl ? (
+            <ZoomableImageLightbox
+              src={deckImageUrl}
+              alt="Deck plan"
+              onClose={() => setDeckImageUrl(null)}
+            />
+          ) : (
+            <div
               onClick={() => setDeckImageUrl(null)}
-              className="absolute top-5 right-5 bg-white/20 hover:bg-white/30 text-white rounded-full p-2 transition cursor-pointer"
+              className="fixed inset-0 z-9999 bg-black/90 backdrop-blur-sm flex items-center justify-center p-4"
             >
-              <X size={20} />
-            </button>
-            {deckImageUrl ? (
-              <img
-                src={deckImageUrl}
-                alt="Deck plan"
-                onClick={(e) => e.stopPropagation()}
-                className="max-w-[92vw] max-h-[88vh] rounded-xl object-contain shadow-2xl border border-white/10"
-              />
-            ) : (
+              <button
+                onClick={() => setDeckImageUrl(null)}
+                className="absolute top-5 right-5 bg-white/20 hover:bg-white/30 text-white rounded-full p-2 transition cursor-pointer"
+              >
+                <X size={20} />
+              </button>
               <div
                 onClick={(e) => e.stopPropagation()}
                 className="bg-slate-900 border border-slate-800 rounded-2xl p-10 flex flex-col items-center gap-3 text-center"
@@ -1761,8 +1882,8 @@ function PricingModal({ row: initialRow, onClose, onRefreshComplete }) {
                 <p className="text-white font-bold text-sm">No deck image available</p>
                 <p className="text-slate-400 text-xs">Upload a deck plan via Ship Decks management</p>
               </div>
-            )}
-          </div>
+            </div>
+          )
         )}
 
         {/* Category + cabin list (fixed flex-1 scrollable area) */}
@@ -2981,9 +3102,9 @@ export default function CruiseSearchPage() {
           setScraperJob(null);
           setScraperStatus({
             ok: result.status === "completed",
-            msg: `${result.status === "completed"
+            msg: result.status === "completed"
               ? (result.notes || "Live inventory scan complete")
-              : (result.notes || "Live inventory scan failed")} (Run #${runId})`
+              : (result.notes || "Live inventory scan failed")
           });
           executeTargetedSearch();
         }
@@ -3656,11 +3777,12 @@ export default function CruiseSearchPage() {
                 <button
                   type="button"
                   onClick={() => setRunStatusModalOpen(true)}
-                  className="inline-flex items-center justify-center gap-1.5 h-10 px-3 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 hover:text-slate-900 text-xs sm:text-sm font-bold shadow-2xs hover:shadow-xs active:scale-95 transition-all cursor-pointer"
-                  title="Look up any past Live Search by its run ID"
+                  disabled={lastScraperRunId == null}
+                  className="inline-flex items-center justify-center gap-1.5 h-10 px-3 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 hover:text-slate-900 text-xs sm:text-sm font-bold shadow-2xs hover:shadow-xs active:scale-95 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Status of the most recent Live Search for this vendor"
                 >
                   <History size={14} />
-                  <span className="hidden sm:inline">Check Run Status</span>
+                  <span className="hidden sm:inline">Last Run Status</span>
                 </button>
               </div>
             </div>
@@ -3685,9 +3807,6 @@ export default function CruiseSearchPage() {
                   <div className="text-[11px] text-slate-500 font-mono">
                     {scraperJob.elapsed ? `Elapsed: ${fmtSeconds(Math.ceil(scraperJob.elapsed / 1000))} · ` : ""}Est. {fmtSeconds(Math.ceil(scraperJob.estimatedMs / 1000))} total
                   </div>
-                )}
-                {scraperJob?.runId != null && (
-                  <div className="text-[11px] text-slate-500 font-mono">Run #{scraperJob.runId} — note this if you want to check on it later</div>
                 )}
               </div>
             )}
@@ -4128,8 +4247,8 @@ export default function CruiseSearchPage() {
 
       {itineraryRow && <ItineraryModal row={itineraryRow} onClose={() => setItineraryRow(null)} />}
       {runStatusModalOpen && (
-        <RunStatusModal
-          defaultRunId={lastScraperRunId}
+        <LastRunStatusModal
+          runId={lastScraperRunId}
           onClose={() => setRunStatusModalOpen(false)}
         />
       )}
