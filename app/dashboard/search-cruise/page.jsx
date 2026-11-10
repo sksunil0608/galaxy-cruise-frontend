@@ -2585,6 +2585,7 @@ export default function CruiseSearchPage() {
   // GET /api/runs/:runId until the run leaves queued/running.
   const [scraperJob, setScraperJob] = useState(null);
   const scraperPollRef = useRef(null);
+  const scraperStartedAtRef = useRef(null);
   // Kept separately from scraperJob (which clears once the run finishes) so
   // the run ID stays visible/copyable after completion too, and so the
   // "check any run" lookup modal can default to the most recent one.
@@ -3100,11 +3101,15 @@ export default function CruiseSearchPage() {
         } else {
           stopScraperPoll();
           setScraperJob(null);
+          const tookSec = scraperStartedAtRef.current != null
+            ? Math.round((Date.now() - scraperStartedAtRef.current) / 1000)
+            : null;
+          const baseMsg = result.status === "completed"
+            ? (result.notes || "Live inventory scan complete")
+            : (result.notes || "Live inventory scan failed");
           setScraperStatus({
             ok: result.status === "completed",
-            msg: result.status === "completed"
-              ? (result.notes || "Live inventory scan complete")
-              : (result.notes || "Live inventory scan failed")
+            msg: tookSec != null ? `${baseMsg} (took ${fmtSeconds(tookSec)})` : baseMsg
           });
           executeTargetedSearch();
         }
@@ -3122,6 +3127,7 @@ export default function CruiseSearchPage() {
     setScraperLoading(true);
     setScraperStatus(null);
     setScraperJob(null);
+    scraperStartedAtRef.current = Date.now();
     try {
       const res = await triggerVendorScrapeFetch(vendorKey, {
         startDate: targetStartDate,
@@ -3629,7 +3635,7 @@ export default function CruiseSearchPage() {
 
         {/* Accordion Body Content */}
         {targetedAccordionOpen && (
-          <div className="p-4 sm:p-6 pt-0 border-t border-slate-100 space-y-4 animate-in fade-in slide-in-from-top-2 duration-200 w-full max-w-full min-w-0 overflow-hidden">
+          <div className="p-4 sm:p-6 pt-0 border-t border-slate-100 space-y-4 animate-in fade-in slide-in-from-top-2 duration-200 w-full max-w-full min-w-0">
             {/* Active Query JSON preview badge */}
             <div className="flex items-center justify-between gap-3 pt-4">
               <p className="text-xs font-medium text-slate-500">
