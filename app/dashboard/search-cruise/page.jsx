@@ -3582,12 +3582,15 @@ export default function CruiseSearchPage() {
       </div>
 
       {/* ── Targeted Individual Ship Live Search (Accordion) ── */}
-      <div className="rounded-2xl border border-slate-200/90 bg-white shadow-xs hover:shadow-md transition-all duration-300 overflow-hidden w-full max-w-full min-w-0">
-        {/* Accordion Trigger Header */}
+      <div className="rounded-2xl border border-slate-200/90 bg-white shadow-xs hover:shadow-md transition-all duration-300 w-full max-w-full min-w-0">
+        {/* Accordion Trigger Header — overflow-hidden lives here (not on the
+            card above) so its hover tint still clips to rounded corners
+            without also clipping the ship-name dropdown rendered in the body
+            below, which needs to overflow past the card's bottom edge. */}
         <button
           type="button"
           onClick={() => setTargetedAccordionOpen((prev) => !prev)}
-          className="w-full p-4 sm:p-5 flex items-center justify-between gap-3 sm:gap-4 text-left hover:bg-slate-50/70 transition-colors cursor-pointer min-w-0"
+          className={`w-full p-4 sm:p-5 flex items-center justify-between gap-3 sm:gap-4 text-left hover:bg-slate-50/70 transition-colors cursor-pointer min-w-0 overflow-hidden ${targetedAccordionOpen ? "rounded-t-2xl" : "rounded-2xl"}`}
         >
           <div className="flex items-center gap-3 sm:gap-3.5 min-w-0 flex-1">
             <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-teal-600 to-teal-800 text-white flex items-center justify-center shadow-sm shadow-teal-700/20 ring-4 ring-teal-50 shrink-0">
