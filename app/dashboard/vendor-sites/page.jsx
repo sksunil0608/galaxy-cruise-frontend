@@ -43,9 +43,9 @@ const VENDOR_PRETTY_NAMES = {
   cruisingpower: "Cruising Power (RCL / Celebrity / Silversea)",
   msc: "MSC Cruises Bookings",
   goccl: "GOCCL (Carnival Cruise Line)",
-  completecruisesolutionA: "Complete Cruise Solution A (P&O / Cunard)",
-  completecruisesolutionB: "Complete Cruise Solution B (Princess)",
-  gohal: "Go HAL (Holland America Line)",
+  completecruisesolutionA: "Complete Cruise Solution A (P&O / Cunard / Princess)",
+  completecruisesolutionB: "Complete Cruise Solution B (P&O / Cunard / Princess)",
+  gohal: "Go HAL (Holland America / Cunard / Seabourn)",
   firstmates: "FirstMates (Virgin Voyages)",
   seawebagents: "SeaWeb (Norwegian Cruise Line)"
 }
@@ -122,6 +122,20 @@ export default function VendorSitesPage() {
       })
       .catch(() => setVendorKeys(Object.keys(VENDOR_SITE_URLS)))
       .finally(() => setLoading(false))
+
+    // The backend caches each vendor's last auth result for hours (disk-backed,
+    // survives restarts) specifically so a result doesn't need re-testing on
+    // every visit — but this page never read that cache on load, so it always
+    // opened showing every vendor as "Not Checked" even right after a
+    // successful Test Auth, until someone clicked Verify/Test again. Load
+    // whatever the backend already knows on mount instead of starting blank.
+    checkAllVendorAuth()
+      .then(res => {
+        const map = {}
+        for (const v of res.vendors ?? []) map[v.key] = v
+        setAuthResults(prev => ({ ...map, ...prev }))
+      })
+      .catch(() => {})
   }, [])
 
   async function runAuthCheck() {
