@@ -245,7 +245,7 @@ function SearchableSelect({ placeholder, value, onChange, options, onEnter }) {
         )}
       </div>
       {open && (
-        <div className="absolute top-[calc(100%+6px)] left-0 right-0 z-40 max-h-64 overflow-y-auto bg-white rounded-xl border border-slate-200 shadow-xl py-1.5 backdrop-blur-md">
+        <div className="absolute top-[calc(100%+6px)] left-0 right-0 z-40 max-h-[28rem] overflow-y-auto bg-white rounded-xl border border-slate-200 shadow-xl py-1.5 backdrop-blur-md">
           <div
             onMouseDown={(event) => {
               event.preventDefault();
