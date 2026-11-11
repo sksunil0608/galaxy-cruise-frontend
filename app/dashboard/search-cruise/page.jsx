@@ -119,13 +119,41 @@ const VENDOR_SCRAPER_MAP = {
   "Celestyal": "celestyal",
 };
 
-const CCS_VENDOR_KEYS = new Set(["completecruisesolutionA", "completecruisesolutionB"]);
-const CCS_BRAND_OPTIONS = [
-  { value: "ALL", label: "All Brands (P&O / Cunard / Princess)" },
-  { value: "PO", label: "P&O Cruises" },
-  { value: "CUNARD", label: "Cunard Line" },
-  { value: "PRINCESS", label: "Princess Cruises" },
-];
+// Vendors whose one login covers more than one real cruise line, so a
+// targeted Live Search can optionally be narrowed to just one instead of
+// always sweeping all of them. Each entry says which request param the
+// chosen value is sent as (brands: ["PO"] for CCS, companyCodes: ["HA"] for
+// gohal) and the options to show. Every other vendor is single-brand, so
+// this picker simply doesn't render for them.
+const MULTI_BRAND_VENDOR_CONFIG = {
+  completecruisesolutionA: {
+    paramKey: "brands",
+    options: [
+      { value: "ALL", label: "All Brands (P&O / Cunard / Princess)" },
+      { value: "PO", label: "P&O Cruises" },
+      { value: "CUNARD", label: "Cunard Line" },
+      { value: "PRINCESS", label: "Princess Cruises" },
+    ],
+  },
+  completecruisesolutionB: {
+    paramKey: "brands",
+    options: [
+      { value: "ALL", label: "All Brands (P&O / Cunard / Princess)" },
+      { value: "PO", label: "P&O Cruises" },
+      { value: "CUNARD", label: "Cunard Line" },
+      { value: "PRINCESS", label: "Princess Cruises" },
+    ],
+  },
+  gohal: {
+    paramKey: "companyCodes",
+    options: [
+      { value: "ALL", label: "All Companies (Holland America / Cunard / Seabourn)" },
+      { value: "HA", label: "Holland America" },
+      { value: "CU", label: "Cunard" },
+      { value: "SB", label: "Seabourn" },
+    ],
+  },
+};
 
 const getVendorStyle = (vendorName) => {
   return VENDOR_COLOR_STYLES[vendorName] || {
@@ -2795,11 +2823,11 @@ export default function CruiseSearchPage() {
     }
   }, [lookupOptions.vendors, targetVendor]);
 
-  // Reset the brand picker whenever the vendor isn't CCS-A/CCS-B, so a brand
-  // chosen for one of them doesn't silently carry over if the user switches
-  // away and later back.
+  // Reset the brand/company picker whenever the vendor isn't a multi-brand
+  // one, so a choice made for one doesn't silently carry over if the user
+  // switches away and later back.
   useEffect(() => {
-    if (!CCS_VENDOR_KEYS.has(VENDOR_SCRAPER_MAP[targetVendor])) {
+    if (!MULTI_BRAND_VENDOR_CONFIG[VENDOR_SCRAPER_MAP[targetVendor]]) {
       setTargetBrand("ALL");
     }
   }, [targetVendor]);
@@ -3155,7 +3183,9 @@ export default function CruiseSearchPage() {
         startDate: targetStartDate,
         horizonDays: targetHorizonDays,
         ...(trimmedShip ? { shipName: trimmedShip } : {}),
-        ...(CCS_VENDOR_KEYS.has(vendorKey) && targetBrand !== "ALL" ? { brands: [targetBrand] } : {}),
+        ...(MULTI_BRAND_VENDOR_CONFIG[vendorKey] && targetBrand !== "ALL"
+          ? { [MULTI_BRAND_VENDOR_CONFIG[vendorKey].paramKey]: [targetBrand] }
+          : {}),
       });
       const ok = res.httpStatus === 202 || res.result?.status === "queued" || res.result?.status === "started" || res.success;
       const rawStatus = res.result?.status || res.status;
@@ -3670,7 +3700,7 @@ export default function CruiseSearchPage() {
               <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900 text-slate-200 font-mono text-[11px] shadow-sm border border-slate-800 shrink-0">
                 <span className="inline-block w-1.5 h-1.5 rounded-full bg-teal-400 animate-pulse"></span>
                 <span className="text-teal-400 font-bold">query:</span>
-                <span className="text-slate-300">{`{ startDate: "${targetStartDate}", horizonDays: ${targetHorizonDays}${targetShipName ? `, shipName: "${targetShipName}"` : ""}${CCS_VENDOR_KEYS.has(VENDOR_SCRAPER_MAP[targetVendor]) && targetBrand !== "ALL" ? `, brands: ["${targetBrand}"]` : ""} }`}</span>
+                <span className="text-slate-300">{`{ startDate: "${targetStartDate}", horizonDays: ${targetHorizonDays}${targetShipName ? `, shipName: "${targetShipName}"` : ""}${MULTI_BRAND_VENDOR_CONFIG[VENDOR_SCRAPER_MAP[targetVendor]] && targetBrand !== "ALL" ? `, ${MULTI_BRAND_VENDOR_CONFIG[VENDOR_SCRAPER_MAP[targetVendor]].paramKey}: ["${targetBrand}"]` : ""} }`}</span>
               </div>
             </div>
 
@@ -3764,20 +3794,23 @@ export default function CruiseSearchPage() {
               </div>
             </div>
 
-            {/* CCS-A/CCS-B brand picker — this one POLAR login serves 3 real
-                cruise lines (P&O / Cunard / Princess) under a single vendor
-                entry. Defaulting to "All Brands" still sweeps all three (so
+            {/* Multi-brand vendor picker — CCS-A/CCS-B each serve 3 real
+                cruise lines (P&O / Cunard / Princess) and gohal serves 3
+                (Holland America / Cunard / Seabourn) under one vendor entry.
+                Defaulting to "All" still sweeps every one of them (so
                 nothing breaks for anyone who doesn't touch this), but picking
-                one here searches only that brand instead of paying for the
-                other two's page-walks too. */}
-            {CCS_VENDOR_KEYS.has(VENDOR_SCRAPER_MAP[targetVendor]) && (
+                one here searches only that brand/company instead of paying
+                for the others' page-walks too. Every single-brand vendor
+                (MSC, Azamara, Celestyal, ...) has no config entry, so this
+                simply doesn't render for them. */}
+            {MULTI_BRAND_VENDOR_CONFIG[VENDOR_SCRAPER_MAP[targetVendor]] && (
               <div className="space-y-1.5 min-w-0">
                 <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-700 uppercase tracking-wider">
                   <Building2 size={13} className="text-teal-600" />
-                  <span>Cruise Line Brand</span>
+                  <span>Cruise Line</span>
                 </label>
                 <div className="flex items-center gap-1.5 flex-wrap p-1 bg-slate-100/90 rounded-xl border border-slate-200/70 w-full max-w-full min-w-0">
-                  {CCS_BRAND_OPTIONS.map((opt) => (
+                  {MULTI_BRAND_VENDOR_CONFIG[VENDOR_SCRAPER_MAP[targetVendor]].options.map((opt) => (
                     <button
                       type="button"
                       key={opt.value}
