@@ -2640,6 +2640,12 @@ export default function CruiseSearchPage() {
   const isLiveSearching = scraperLoading || Boolean(scraperJob);
   const [highlightedRowId, setHighlightedRowId] = useState(null);
   const [lastSearchedShip, setLastSearchedShip] = useState("");
+  // Normal search tries the cached DB first; only when a specific ship was
+  // asked for and it comes back empty do we fall back to a live fetch —
+  // keyed per (ship, startDate, endDate) so one genuinely-empty result
+  // doesn't retrigger a live search on every render/poll tick.
+  const autoFallbackTriedRef = useRef(null);
+  const [pendingAutoLiveSearch, setPendingAutoLiveSearch] = useState(false);
 
   const scrollToRow = (cruiseId) => {
     if (cruiseId) {
@@ -2698,7 +2704,7 @@ export default function CruiseSearchPage() {
           page,
           limit: PAGE_SIZE,
           detail: "full",
-          sortBy: sortBy === "refreshed" ? "updatedAt" : sortBy === "departure" ? "startDate" : sortBy === "price_asc" || sortBy === "price_desc" ? "price" : "updatedAt",
+          sortBy: sortBy === "refreshed" ? "cabinsUpdatedAt" : sortBy === "departure" ? "startDate" : sortBy === "price_asc" || sortBy === "price_desc" ? "price" : "cabinsUpdatedAt",
           sortOrder: sortBy === "price_asc" || sortBy === "departure" ? "asc" : "desc",
           search: appliedFilters.code || undefined,
           vendorName: appliedFilters.vendor || undefined,
@@ -2719,9 +2725,39 @@ export default function CruiseSearchPage() {
           return;
         }
 
-        setData((response.data || []).map((item) => ({ ...item, pinned: Boolean(item.pinned) })));
+        const rows = response.data || [];
+        setData(rows.map((item) => ({ ...item, pinned: Boolean(item.pinned) })));
         setPagination(response.pagination || null);
         logActivity("search_cruise", { page, vendor: appliedFilters.vendor || null, ship: appliedFilters.ship || null, nights: appliedFilters.nights || null, resultCount: response.data?.length ?? 0 });
+
+        // Normal search is the first stop; a live fetch only kicks in when a
+        // specific ship was asked for and the cache came back empty — the
+        // user shouldn't have to know "Live Search" exists as a separate
+        // step. Keyed per (ship, startDate, endDate) so a genuinely-empty
+        // result (ship not sailing then) doesn't retrigger every render.
+        const specificShip = appliedFilters.ship;
+        if (rows.length === 0 && specificShip && !isLiveSearching) {
+          const fallbackKey = `${specificShip}|${appliedFilters.startDate || ""}|${appliedFilters.endDate || ""}`;
+          if (autoFallbackTriedRef.current !== fallbackKey) {
+            const vendor = appliedFilters.vendor || getVendorForShip(specificShip);
+            if (vendor) {
+              autoFallbackTriedRef.current = fallbackKey;
+              let horizon = 1;
+              if (appliedFilters.startDate && appliedFilters.endDate) {
+                horizon = Math.max(1, Math.round((new Date(appliedFilters.endDate) - new Date(appliedFilters.startDate)) / 86400000) + 1);
+              } else if (appliedFilters.horizonDays) {
+                horizon = appliedFilters.horizonDays;
+              }
+              setTargetVendor(vendor);
+              setTargetShipName(specificShip);
+              setTargetStartDate(appliedFilters.startDate || new Date().toISOString().slice(0, 10));
+              setTargetHorizonDays(horizon);
+              setLastSearchedShip(specificShip);
+              setScraperStatus({ ok: true, msg: "Nothing cached for this ship yet — searching live from the carrier…" });
+              setPendingAutoLiveSearch(true);
+            }
+          }
+        }
       } catch (err) {
         if (!active) {
           return;
@@ -2976,12 +3012,14 @@ export default function CruiseSearchPage() {
   const setF = (key, value) => {
     setFilters((current) => {
       const next = { ...current, [key]: value };
-      if (key === "startDate" && current.horizonDays) {
-        if (value) {
-          const base = new Date(value);
-          const end = new Date(base.getTime() + current.horizonDays * 86400000);
-          next.endDate = end.toISOString().slice(0, 10);
-        }
+      // A manual edit to either date field means the user is building a real
+      // custom range, not a preset — drop any horizonDays left over from an
+      // earlier preset/live-search pick, so it can't silently recompute and
+      // overwrite the other date field out from under them (confirmed live:
+      // editing "from" after a preset click was stomping the "to" date the
+      // user had already set).
+      if (key === "startDate" || key === "endDate") {
+        next.horizonDays = null;
       }
       if (key === "code" || key === "ship") {
         triggerDebouncedSearch(next);
@@ -3214,6 +3252,16 @@ export default function CruiseSearchPage() {
       setScraperLoading(false);
     }
   };
+
+  // Fires the auto live-search fallback once the target* state the normal
+  // search effect just set (vendor/ship/startDate/horizonDays) has actually
+  // committed — reading them synchronously right after the setState calls
+  // above would still see the previous render's stale values.
+  useEffect(() => {
+    if (!pendingAutoLiveSearch) return;
+    setPendingAutoLiveSearch(false);
+    executeTriggerScraper();
+  }, [pendingAutoLiveSearch]);
 
   const handleTriggerScraper = async () => {
     // Ship Name is marked required (*) in this panel on purpose — this is the
@@ -3968,7 +4016,22 @@ export default function CruiseSearchPage() {
         </div>
       ) : rows.length === 0 ? (
         <div className="rounded-2xl border border-slate-200/90 bg-white p-12 text-center text-sm font-medium text-slate-400 shadow-xs">
-          No cruises found.
+          {isLiveSearching ? (
+            <div className="flex flex-col items-center gap-2">
+              <RefreshCw size={18} className="animate-spin text-teal-600" />
+              <span className="text-slate-600 font-semibold">Nothing cached yet — searching live from the carrier…</span>
+              {scraperJob?.remaining != null && (
+                <span className="text-xs text-slate-400">~{fmtSeconds(Math.max(0, Math.round(scraperJob.remaining / 1000)))} remaining</span>
+              )}
+            </div>
+          ) : scraperStatus ? (
+            <div className="flex flex-col items-center gap-1">
+              <span className={scraperStatus.ok ? "text-slate-600 font-semibold" : "text-rose-600 font-semibold"}>{scraperStatus.msg}</span>
+              <span className="text-xs text-slate-400">No cruises found.</span>
+            </div>
+          ) : (
+            "No cruises found."
+          )}
         </div>
       ) : (
         <>
