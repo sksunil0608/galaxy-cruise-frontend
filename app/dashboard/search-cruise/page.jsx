@@ -201,6 +201,122 @@ const formatDMY = (iso) => {
 const safeCurrency = (amount, currency = "GBP") =>
   `${currency === "GBP" ? "\u00A3" : "$"}${Number(amount ?? 0).toLocaleString()}`;
 
+const toIsoDate = (d) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+};
+
+// Fully custom calendar dropdown \u2014 replaces native <input type="date">,
+// whose display format/picker chrome is entirely controlled by the browser
+// and can't be made to consistently show dd/mm/yyyy or match the rest of
+// the UI (lang="en-GB" on the element doesn't override it in current
+// Chrome, and a text overlay still leaves the native popup itself in its
+// own style). This renders and controls the whole thing itself.
+function CustomDatePicker({ value, onChange, placeholder = "dd/mm/yyyy" }) {
+  const [open, setOpen] = useState(false);
+  const boxRef = useRef(null);
+  const selected = value ? new Date(`${value}T00:00:00`) : null;
+  const [viewDate, setViewDate] = useState(selected || new Date());
+
+  useEffect(() => {
+    if (open) setViewDate(selected || new Date());
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    function onClickOutside(event) {
+      if (boxRef.current && !boxRef.current.contains(event.target)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, []);
+
+  const today = new Date();
+  const isSameDay = (a, b) => a && b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+
+  const year = viewDate.getFullYear();
+  const month = viewDate.getMonth();
+  const firstOfMonth = new Date(year, month, 1);
+  // Monday-first grid: JS getDay() is 0=Sun..6=Sat, shift so Monday=0.
+  const leadingBlanks = (firstOfMonth.getDay() + 6) % 7;
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells = [];
+  for (let i = 0; i < leadingBlanks; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, month, d));
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const pick = (d) => {
+    onChange(toIsoDate(d));
+    setOpen(false);
+  };
+
+  return (
+    <div ref={boxRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className="h-10 w-[148px] shrink-0 flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white px-2.5 sm:px-3 text-xs font-semibold text-slate-800 shadow-2xs focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition-all cursor-pointer"
+      >
+        <CalendarDays size={13} className="text-teal-600 shrink-0" />
+        <span className={value ? "" : "text-slate-400 font-normal"}>{value ? formatDMY(value) : placeholder}</span>
+      </button>
+      {open && (
+        <div className="absolute top-[calc(100%+6px)] left-0 z-50 w-64 rounded-xl border border-slate-200 bg-white shadow-xl p-3 animate-in fade-in slide-in-from-top-1 duration-150">
+          <div className="flex items-center justify-between mb-2">
+            <button type="button" onClick={() => setViewDate(new Date(year, month - 1, 1))} className="p-1 rounded-lg hover:bg-slate-100 text-slate-500 cursor-pointer transition">
+              <ChevronLeft size={15} />
+            </button>
+            <span className="text-xs font-bold text-slate-800">
+              {viewDate.toLocaleDateString("en-GB", { month: "long", year: "numeric" })}
+            </span>
+            <button type="button" onClick={() => setViewDate(new Date(year, month + 1, 1))} className="p-1 rounded-lg hover:bg-slate-100 text-slate-500 cursor-pointer transition">
+              <ChevronRight size={15} />
+            </button>
+          </div>
+          <div className="grid grid-cols-7 gap-0.5 mb-1">
+            {["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"].map((d) => (
+              <div key={d} className="text-center text-[10px] font-bold text-slate-400 py-1">{d}</div>
+            ))}
+          </div>
+          <div className="grid grid-cols-7 gap-0.5">
+            {cells.map((d, idx) => {
+              if (!d) return <div key={idx} />;
+              const isSelected = isSameDay(d, selected);
+              const isToday = isSameDay(d, today);
+              return (
+                <button
+                  type="button"
+                  key={idx}
+                  onClick={() => pick(d)}
+                  className={`h-7 rounded-lg text-xs font-semibold cursor-pointer transition-all ${isSelected
+                    ? "bg-teal-700 text-white font-bold shadow-xs"
+                    : isToday
+                      ? "border border-teal-400 text-teal-800"
+                      : "text-slate-700 hover:bg-teal-50"
+                    }`}
+                >
+                  {d.getDate()}
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100">
+            <button type="button" onClick={() => pick(new Date())} className="text-[11px] font-semibold text-teal-700 hover:text-teal-900 cursor-pointer">
+              Today
+            </button>
+            {value && (
+              <button type="button" onClick={() => { onChange(""); setOpen(false); }} className="text-[11px] font-semibold text-rose-600 hover:text-rose-800 cursor-pointer">
+                Clear
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Type-to-filter combobox \u2014 replaces native <select>/<datalist> (unstyled,
 // browser-controlled popup) with a fully styled dropdown that filters as you type.
 function SearchableSelect({ placeholder, value, onChange, options, onEnter }) {
@@ -304,22 +420,10 @@ function SearchableSelect({ placeholder, value, onChange, options, onEnter }) {
             <span>{placeholder} (All)</span>
             <span className="text-[10px] text-slate-400 font-medium">Reset</span>
           </div>
-          {query.trim() && !uniqueOptions.some((opt) => opt.toLowerCase() === query.trim().toLowerCase()) && (
-            <div
-              onMouseDown={(event) => {
-                event.preventDefault();
-                if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
-                onChange(query.trim());
-                setOpen(false);
-              }}
-              className="px-3.5 py-2 text-xs cursor-pointer bg-teal-50/80 hover:bg-teal-100/80 text-teal-900 font-semibold border-b border-teal-100 flex items-center justify-between transition-colors"
-            >
-              <span>Search ship containing <strong className="font-bold">"{query.trim()}"</strong></span>
-              <span className="text-[10px] bg-teal-200/80 px-2 py-0.5 rounded-md text-teal-800 font-bold">Apply</span>
+          {filtered.length > 0 && (
+            <div className="px-3.5 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              {filtered.length} match{filtered.length !== 1 ? "es" : ""}
             </div>
-          )}
-          {filtered.length === 0 && !query.trim() && (
-            <div className="px-3.5 py-3 text-xs text-slate-400">No options available</div>
           )}
           {filtered.map((opt, idx) => (
             <div
@@ -331,14 +435,40 @@ function SearchableSelect({ placeholder, value, onChange, options, onEnter }) {
                 onChange(opt);
                 setOpen(false);
               }}
-              className={`px-3.5 py-2 text-xs cursor-pointer transition ${opt.toLowerCase() === (value || "").toLowerCase()
-                ? "bg-teal-50 text-teal-800 font-bold"
-                : "text-slate-800 hover:bg-slate-50 font-medium"
+              className={`mx-1.5 my-0.5 px-3 py-2.5 rounded-lg text-sm cursor-pointer transition flex items-center gap-2 ${opt.toLowerCase() === (value || "").toLowerCase()
+                ? "bg-teal-600 text-white font-bold shadow-sm"
+                : "text-slate-800 hover:bg-teal-50 font-semibold"
                 }`}
             >
-              {opt}
+              <Ship size={13} className={opt.toLowerCase() === (value || "").toLowerCase() ? "text-white shrink-0" : "text-sky-500 shrink-0"} />
+              <span className="truncate">{opt}</span>
             </div>
           ))}
+          {query.trim() && filtered.length === 0 && (
+            <div className="px-3.5 py-3 text-xs text-slate-400">
+              No exact matches for "<strong className="text-slate-600">{query.trim()}</strong>"
+            </div>
+          )}
+          {filtered.length === 0 && !query.trim() && (
+            <div className="px-3.5 py-3 text-xs text-slate-400">No options available</div>
+          )}
+          {query.trim() && !uniqueOptions.some((opt) => opt.toLowerCase() === query.trim().toLowerCase()) && (
+            <div
+              onMouseDown={(event) => {
+                event.preventDefault();
+                if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+                onChange(query.trim());
+                setOpen(false);
+              }}
+              className="mx-1.5 my-1 px-3 py-2.5 rounded-lg text-xs cursor-pointer bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200/80 transition-colors"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span>Use <strong className="font-bold">"{query.trim()}"</strong> as free text instead</span>
+                <span className="text-[10px] bg-amber-200/80 px-2 py-0.5 rounded-md text-amber-900 font-bold shrink-0">Apply</span>
+              </div>
+              <div className="mt-0.5 text-[10px] text-amber-700/80">Not an exact ship name — live search needs a real ship picked above to work.</div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -3729,38 +3859,19 @@ export default function CruiseSearchPage() {
               })}
             </div>
 
-            {/* Custom Date Range Picker */}
+            {/* Custom Date Range Picker — fully custom calendar, not the
+                browser's native <input type="date"> (its format/popup
+                styling can't be controlled consistently across browsers). */}
             <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap sm:flex-nowrap min-w-0 shrink-0">
-              {/* The native <input type="date"> always renders in the
-                  browser's own locale format (lang="en-GB" on the element
-                  doesn't override that in current Chrome) — so the real
-                  input is made invisible (text-transparent) and a dd/mm/yyyy
-                  label is overlaid on top of it, pointer-events-none so
-                  clicks still reach the native input underneath and open its
-                  calendar picker normally. */}
-              <div className="relative h-10 w-[148px] shrink-0">
-                <input
-                  type="date"
-                  className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white px-2.5 sm:px-3 text-xs font-semibold text-transparent caret-transparent shadow-2xs focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition-all cursor-pointer"
-                  value={filters.startDate}
-                  onChange={(event) => { setF("startDate", event.target.value); setDatePreset(null); }}
-                />
-                <span className="pointer-events-none absolute inset-y-0 left-2.5 sm:left-3 flex items-center text-xs font-semibold text-slate-800">
-                  {formatDMY(filters.startDate)}
-                </span>
-              </div>
+              <CustomDatePicker
+                value={filters.startDate}
+                onChange={(iso) => { setF("startDate", iso); setDatePreset(null); }}
+              />
               <span className="text-xs font-medium text-slate-400">to</span>
-              <div className="relative h-10 w-[148px] shrink-0">
-                <input
-                  type="date"
-                  className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white px-2.5 sm:px-3 text-xs font-semibold text-transparent caret-transparent shadow-2xs focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition-all cursor-pointer"
-                  value={filters.endDate}
-                  onChange={(event) => { setF("endDate", event.target.value); setDatePreset(null); }}
-                />
-                <span className="pointer-events-none absolute inset-y-0 left-2.5 sm:left-3 flex items-center text-xs font-semibold text-slate-800">
-                  {formatDMY(filters.endDate)}
-                </span>
-              </div>
+              <CustomDatePicker
+                value={filters.endDate}
+                onChange={(iso) => { setF("endDate", iso); setDatePreset(null); }}
+              />
             </div>
           </div>
         </div>
