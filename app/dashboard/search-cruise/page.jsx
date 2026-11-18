@@ -3610,7 +3610,10 @@ export default function CruiseSearchPage() {
       </div>
 
       {/* ── Filter Form Card (Main Search Inventory) ────────────────── */}
-      <div className="rounded-2xl border border-slate-200/90 bg-white p-4 sm:p-6 shadow-xs hover:shadow-md transition-shadow duration-300 space-y-5 w-full max-w-full min-w-0 overflow-hidden">
+      {/* overflow-hidden removed — it clipped the ship dropdown and the
+          custom date calendar, both of which render as absolutely
+          positioned popups that extend past this card's own bottom edge. */}
+      <div className="rounded-2xl border border-slate-200/90 bg-white p-4 sm:p-6 shadow-xs hover:shadow-md transition-shadow duration-300 space-y-5 w-full max-w-full min-w-0">
         {/* Cruise Code or Keyword Search */}
         <div className="space-y-1.5 min-w-0 w-full">
           <div className="flex items-center justify-between flex-wrap gap-1">
