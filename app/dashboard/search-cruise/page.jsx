@@ -761,6 +761,7 @@ function ShipModal({ row, onClose }) {
   const [activeTab, setActiveTab] = useState("overview");
   const [selectedDeckId, setSelectedDeckId] = useState(null);
   const [deckLightboxOpen, setDeckLightboxOpen] = useState(false);
+  const [deckZoomOrigin, setDeckZoomOrigin] = useState("50% 50%");
   const ship = shipData || row.shipDetails || {};
   const decks = shipData?.decks || [];
   const selectedDeck =
@@ -949,10 +950,24 @@ function ShipModal({ row, onClose }) {
                   {selectedDeck.image ? (
                     <div
                       onClick={() => setDeckLightboxOpen(true)}
+                      onMouseMove={(e) => {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const x = ((e.clientX - rect.left) / rect.width) * 100;
+                        const y = ((e.clientY - rect.top) / rect.height) * 100;
+                        setDeckZoomOrigin(`${x}% ${y}%`);
+                      }}
                       className="group cursor-zoom-in"
                       style={{ position: "relative", minHeight: 320, borderRadius: 16, overflow: "hidden", background: T.muted }}
                     >
-                      <div className="absolute inset-0 transition-transform duration-300 ease-out group-hover:scale-110">
+                      {/* Cursor-following magnifier, like a product-image hover
+                          zoom — the zoom follows wherever the mouse is instead
+                          of always scaling from the center, so any part of a
+                          deck plan can be inspected without opening the
+                          lightbox. */}
+                      <div
+                        className="absolute inset-0 transition-transform duration-150 ease-out group-hover:scale-[2.5]"
+                        style={{ transformOrigin: deckZoomOrigin }}
+                      >
                         <Image
                           src={selectedDeck.image}
                           alt={selectedDeck.name}
@@ -961,10 +976,8 @@ function ShipModal({ row, onClose }) {
                           style={{ objectFit: "contain" }}
                         />
                       </div>
-                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center pointer-events-none">
-                        <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-white/95 rounded-full p-3 shadow-lg">
-                          <Maximize2 size={20} className="text-slate-900" />
-                        </div>
+                      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white/95 rounded-full p-2 shadow-lg pointer-events-none">
+                        <Maximize2 size={16} className="text-slate-900" />
                       </div>
                     </div>
                   ) : null}
