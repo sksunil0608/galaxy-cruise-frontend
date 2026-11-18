@@ -3205,6 +3205,12 @@ export default function CruiseSearchPage() {
       if (key === "startDate" || key === "endDate") {
         next.horizonDays = null;
       }
+      // Picking a start date with no end date yet auto-fills the end date
+      // to match, so a single click already yields a valid (one-day) range
+      // instead of leaving "to" blank — still freely changeable afterward.
+      if (key === "startDate" && value && !current.endDate) {
+        next.endDate = value;
+      }
       if (key === "code" || key === "ship") {
         triggerDebouncedSearch(next);
       } else {
@@ -3769,13 +3775,26 @@ export default function CruiseSearchPage() {
                       const shipVendor = getVendorForShip(value);
                       if (shipVendor) {
                         const isOk = checkVendorVerified(shipVendor, () => {
+                          // Applied immediately, not debounced — picking a
+                          // ship from the dropdown is a single discrete
+                          // action (unlike free-text typing, where the
+                          // debounce exists to avoid firing a search per
+                          // keystroke). Debouncing it left a race: picking a
+                          // date right after selecting a ship could clear
+                          // the still-pending ship debounce timer and apply
+                          // with a filters snapshot from before the ship
+                          // commit landed, silently dropping the ship filter
+                          // from that search. Confirmed live, 2026-11-18 —
+                          // "MSC World Europa" showed MSC World Asia results.
                           // Auto-locks the provider pill to this ship's own
                           // vendor at the same time — a ship belongs to
                           // exactly one vendor, so these should never drift
                           // apart (see shipVendorLock disabling the rest).
+                          if (searchDebounceTimerRef.current) clearTimeout(searchDebounceTimerRef.current);
                           setFilters((prev) => {
                             const next = { ...prev, ship: value, vendor: shipVendor };
-                            triggerDebouncedSearch(next);
+                            setAppliedFilters(next);
+                            setPage(1);
                             return next;
                           });
                         }, value);
