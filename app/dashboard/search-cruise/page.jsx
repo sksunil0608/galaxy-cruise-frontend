@@ -3829,12 +3829,14 @@ export default function CruiseSearchPage() {
               </span>
             )}
           </div>
-          <div className="flex flex-col lg:flex-row lg:items-center lg:flex-wrap justify-between gap-2.5 w-full max-w-full min-w-0">
-            {/* Presets — flex-1 + min-w-0 so it shrinks to make room for the
-                date pickers instead of pushing them off the right edge; its
-                own overflow-x-auto still lets the preset buttons scroll if
-                the shrunk width can't fit them all. */}
-            <div className="flex items-center p-1 bg-slate-100/90 rounded-xl border border-slate-200/70 gap-1 overflow-x-auto no-scrollbar w-full lg:flex-1 max-w-full min-w-0">
+          {/* Presets and the date-range pickers always stack on separate
+              rows — letting them share a row conditionally at the lg
+              breakpoint turned out unreliable (the date pickers could end
+              up effectively invisible depending on exact viewport width),
+              so this trades a little vertical space for always being
+              visible. */}
+          <div className="flex flex-col gap-2.5 w-full max-w-full min-w-0">
+            <div className="flex items-center p-1 bg-slate-100/90 rounded-xl border border-slate-200/70 gap-1 overflow-x-auto no-scrollbar w-full max-w-full min-w-0">
               {[
                 { label: "All Dates", days: null },
                 { label: "Today", days: 0 },
