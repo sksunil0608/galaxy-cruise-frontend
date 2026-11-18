@@ -2847,11 +2847,10 @@ export default function CruiseSearchPage() {
   const isLiveSearching = scraperLoading || Boolean(scraperJob);
   const [highlightedRowId, setHighlightedRowId] = useState(null);
   const [lastSearchedShip, setLastSearchedShip] = useState("");
-  // Normal search tries the cached DB first; only when a specific ship was
-  // asked for and it comes back empty do we fall back to a live fetch —
-  // keyed per (ship, startDate, endDate) so one genuinely-empty result
-  // doesn't retrigger a live search on every render/poll tick.
-  const autoFallbackTriedRef = useRef(null);
+  // Set by the manual "Search Live" button; a separate effect picks this up
+  // once the target* state it just wrote has actually committed (reading
+  // them synchronously right after the setState calls would still see the
+  // previous render's stale values).
   const [pendingAutoLiveSearch, setPendingAutoLiveSearch] = useState(false);
 
   const scrollToRow = (cruiseId) => {
@@ -2937,38 +2936,11 @@ export default function CruiseSearchPage() {
         setPagination(response.pagination || null);
         logActivity("search_cruise", { page, vendor: appliedFilters.vendor || null, ship: appliedFilters.ship || null, nights: appliedFilters.nights || null, resultCount: response.data?.length ?? 0 });
 
-        // Normal search is the first stop; a live fetch only kicks in when a
-        // specific ship was asked for and the cache came back empty — the
-        // user shouldn't have to know "Live Search" exists as a separate
-        // step. Keyed per (ship, startDate, endDate) so a genuinely-empty
-        // result (ship not sailing then) doesn't retrigger every render.
-        const specificShip = appliedFilters.ship;
-        if (rows.length === 0 && specificShip && !isLiveSearching) {
-          const fallbackKey = `${specificShip}|${appliedFilters.startDate || ""}|${appliedFilters.endDate || ""}`;
-          if (autoFallbackTriedRef.current !== fallbackKey) {
-            const vendor = appliedFilters.vendor || getVendorForShip(specificShip);
-            if (vendor) {
-              autoFallbackTriedRef.current = fallbackKey;
-              // Always a single day, never however wide the user's own date
-              // filter happens to be. Two reasons: (1) this is just a quick
-              // "does this ship have anything on sale around here" check,
-              // not a replica of their filter range — a "Next 1 Year" filter
-              // with no cache hit used to compute horizon~365 and silently
-              // launch a full year-wide live scrape (minutes, not seconds);
-              // (2) the backend's fast targeted-search path only activates
-              // at horizonDays===1 exactly — anything else falls back to the
-              // slow, unoptimized flow even for a single ship.
-              const horizon = 1;
-              setTargetVendor(vendor);
-              setTargetShipName(specificShip);
-              setTargetStartDate(appliedFilters.startDate || new Date().toISOString().slice(0, 10));
-              setTargetHorizonDays(horizon);
-              setLastSearchedShip(specificShip);
-              setScraperStatus({ ok: true, msg: "Nothing cached for this ship yet — searching live from the carrier…" });
-              setPendingAutoLiveSearch(true);
-            }
-          }
-        }
+        // No automatic silent live-search trigger here anymore — it was
+        // hard to debug and had a real bug where it could get permanently
+        // stuck with no visible error. A manual "Search Live" button next
+        // to Search Cruises (enabled only when a specific-ship search comes
+        // back empty) replaces it with an explicit, always-visible action.
       } catch (err) {
         if (!active) {
           return;
@@ -3274,10 +3246,15 @@ export default function CruiseSearchPage() {
       clearTimeout(searchDebounceTimerRef.current);
     }
     setDatePreset(preset.label);
-    let startDate = filters.startDate || new Date().toISOString().slice(0, 10);
+    const todayIso = new Date().toISOString().slice(0, 10);
+    // "Today" (days===0) always means the real current date, resetting any
+    // date already picked — it used to anchor off whatever startDate was
+    // already set instead, so picking "Today" after manually browsing to a
+    // future month silently searched that future date, not today.
+    let startDate = preset.days === 0 ? todayIso : (filters.startDate || todayIso);
     let endDate = "";
     if (preset.days != null) {
-      const base = filters.startDate ? new Date(filters.startDate) : new Date();
+      const base = new Date(`${startDate}T00:00:00`);
       const end = new Date(base.getTime() + preset.days * 86400000);
       const toInputDate = (d) => d.toISOString().slice(0, 10);
       endDate = toInputDate(end);
@@ -3285,7 +3262,7 @@ export default function CruiseSearchPage() {
     setFilters((current) => {
       const next = {
         ...current,
-        startDate: preset.days == null ? current.startDate : (current.startDate || startDate),
+        startDate: preset.days == null ? current.startDate : (preset.days === 0 ? startDate : (current.startDate || startDate)),
         endDate,
         horizonDays: preset.days
       };
@@ -3951,8 +3928,39 @@ export default function CruiseSearchPage() {
               ) : (
                 <Search size={15} />
               )}
-              <span>{loading ? "Searching…" : "Search Inventory"}</span>
+              <span>{loading ? "Searching…" : "Search Cruises"}</span>
             </button>
+            {/* Manual live-search trigger — replaces the fully-automatic
+                silent fallback, which turned out hard to debug and had a
+                real bug where it could get permanently stuck. Disabled
+                until a specific-ship search has actually come back empty,
+                so it's always obvious when it's available and clicking it
+                is an explicit, visible action instead of invisible magic. */}
+            {appliedFilters.ship && !loading && rows.length === 0 && (
+              <button
+                type="button"
+                disabled={isLiveSearching}
+                onClick={() => {
+                  const vendor = appliedFilters.vendor || getVendorForShip(appliedFilters.ship);
+                  if (!vendor) return;
+                  setTargetVendor(vendor);
+                  setTargetShipName(appliedFilters.ship);
+                  setTargetStartDate(appliedFilters.startDate || new Date().toISOString().slice(0, 10));
+                  setTargetHorizonDays(1);
+                  setLastSearchedShip(appliedFilters.ship);
+                  setScraperStatus({ ok: true, msg: "Searching live from the carrier…" });
+                  setPendingAutoLiveSearch(true);
+                }}
+                className="inline-flex items-center justify-center gap-2 h-10 px-4 sm:px-5 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:opacity-60 disabled:cursor-not-allowed text-white text-xs sm:text-sm font-bold shadow-xs hover:shadow active:scale-95 transition-all cursor-pointer animate-in fade-in"
+              >
+                {isLiveSearching ? (
+                  <RefreshCw size={15} className="animate-spin" />
+                ) : (
+                  <Sparkles size={15} />
+                )}
+                <span>{isLiveSearching ? "Searching Live…" : "Search Live"}</span>
+              </button>
+            )}
             {!loading && (
               <button
                 type="button"
