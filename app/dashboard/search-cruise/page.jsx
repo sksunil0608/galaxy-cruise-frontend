@@ -3613,7 +3613,7 @@ export default function CruiseSearchPage() {
       {/* overflow-hidden removed — it clipped the ship dropdown and the
           custom date calendar, both of which render as absolutely
           positioned popups that extend past this card's own bottom edge. */}
-      <div className="rounded-2xl border border-slate-200/90 bg-white p-4 sm:p-6 shadow-xs hover:shadow-md transition-shadow duration-300 space-y-5 w-full max-w-full min-w-0">
+      <div className="rounded-2xl border border-slate-200/90 bg-white p-3.5 sm:p-5 shadow-xs hover:shadow-md transition-shadow duration-300 space-y-3 w-full max-w-full min-w-0">
         {/* Cruise Code or Keyword Search */}
         <div className="space-y-1.5 min-w-0 w-full">
           <div className="flex items-center justify-between flex-wrap gap-1">
@@ -3829,20 +3829,15 @@ export default function CruiseSearchPage() {
               </span>
             )}
           </div>
-          {/* Presets and the date-range pickers always stack on separate
-              rows — letting them share a row conditionally at the lg
-              breakpoint turned out unreliable (the date pickers could end
-              up effectively invisible depending on exact viewport width),
-              so this trades a little vertical space for always being
-              visible. */}
-          <div className="flex flex-col gap-2.5 w-full max-w-full min-w-0">
-            <div className="flex items-center p-1 bg-slate-100/90 rounded-xl border border-slate-200/70 gap-1 overflow-x-auto no-scrollbar w-full max-w-full min-w-0">
+          {/* One row, wrapping naturally if it ever doesn't fit (rather than
+              hiding anything) — fewer presets now leaves enough room for the
+              date pickers to usually sit on the same line. */}
+          <div className="flex flex-wrap items-center gap-2.5 w-full max-w-full min-w-0">
+            <div className="flex items-center p-1 bg-slate-100/90 rounded-xl border border-slate-200/70 gap-1 overflow-x-auto no-scrollbar max-w-full min-w-0">
               {[
                 { label: "All Dates", days: null },
                 { label: "Today", days: 0 },
-                { label: "Next 7 Days", days: 7 },
                 { label: "Next 30 Days", days: 30 },
-                { label: "Next 3 Months", days: 90 },
                 { label: "Next 6 Months", days: 182 },
                 { label: "Next 1 Year", days: 365 },
                 { label: "Next 2 Years", days: 730 },
