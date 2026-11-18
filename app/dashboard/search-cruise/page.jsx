@@ -2376,6 +2376,12 @@ export default function CruiseSearchPage() {
     allShips: [],   // [{ name, vendorId }]
     users: []
   });
+  // The true fleet-wide ship count (from /ships' own pagination.total, not
+  // capped by allShips' own fetch limit) — the header stat used to derive
+  // "Ships" from only the current page of cruise results instead, which
+  // undercounted massively (e.g. showing 16 when the real fleet is in the
+  // hundreds).
+  const [totalShipsCount, setTotalShipsCount] = useState(null);
   const [savingTag, setSavingTag] = useState(false);
   const [filters, setFilters] = useState({
     code: "",
@@ -2819,6 +2825,7 @@ export default function CruiseSearchPage() {
         setTagDirectory({
           assignees: userResponse.data?.map((user) => user.name).filter(Boolean) || tagResponse.data?.assignees || []
         });
+        setTotalShipsCount(shipResponse.pagination?.total ?? null);
 
         setLookupOptions({
           vendors: rawVendors,
@@ -3389,7 +3396,10 @@ export default function CruiseSearchPage() {
 
   const overview = useMemo(() => {
     const cruises = pagination?.total ?? rows.length;
-    const ships = new Set(rows.map((row) => row.shipCode || row.ship).filter(Boolean)).size;
+    // The fleet-wide total from /ships' own pagination, not derived from
+    // just the current page of cruise rows (which undercounted massively —
+    // e.g. showing 16 ships when the real fleet is in the hundreds).
+    const ships = totalShipsCount ?? new Set(rows.map((row) => row.shipCode || row.ship).filter(Boolean)).size;
     return { cruises, ships };
   }, [pagination, rows]);
 
@@ -3609,9 +3619,12 @@ export default function CruiseSearchPage() {
               </span>
             )}
           </div>
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 w-full max-w-full min-w-0">
-            {/* Presets */}
-            <div className="flex items-center p-1 bg-slate-100/90 rounded-xl border border-slate-200/70 gap-1 overflow-x-auto no-scrollbar w-full max-w-full min-w-0">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:flex-wrap justify-between gap-2.5 w-full max-w-full min-w-0">
+            {/* Presets — flex-1 + min-w-0 so it shrinks to make room for the
+                date pickers instead of pushing them off the right edge; its
+                own overflow-x-auto still lets the preset buttons scroll if
+                the shrunk width can't fit them all. */}
+            <div className="flex items-center p-1 bg-slate-100/90 rounded-xl border border-slate-200/70 gap-1 overflow-x-auto no-scrollbar w-full lg:flex-1 max-w-full min-w-0">
               {[
                 { label: "All Dates", days: null },
                 { label: "Next 7 Days", days: 7 },
@@ -3639,17 +3652,19 @@ export default function CruiseSearchPage() {
             </div>
 
             {/* Custom Date Range Picker */}
-            <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap sm:flex-nowrap min-w-0">
+            <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap sm:flex-nowrap min-w-0 shrink-0">
               <input
                 type="date"
-                className="h-10 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white px-2.5 sm:px-3 text-xs font-semibold text-slate-800 shadow-2xs focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition-all cursor-pointer"
+                lang="en-GB"
+                className="h-10 w-[148px] shrink-0 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white px-2.5 sm:px-3 text-xs font-semibold text-slate-800 shadow-2xs focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition-all cursor-pointer"
                 value={filters.startDate}
                 onChange={(event) => { setF("startDate", event.target.value); setDatePreset(null); }}
               />
               <span className="text-xs font-medium text-slate-400">to</span>
               <input
                 type="date"
-                className="h-10 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white px-2.5 sm:px-3 text-xs font-semibold text-slate-800 shadow-2xs focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition-all cursor-pointer"
+                lang="en-GB"
+                className="h-10 w-[148px] shrink-0 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white px-2.5 sm:px-3 text-xs font-semibold text-slate-800 shadow-2xs focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition-all cursor-pointer"
                 value={filters.endDate}
                 onChange={(event) => { setF("endDate", event.target.value); setDatePreset(null); }}
               />
