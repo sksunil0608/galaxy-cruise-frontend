@@ -3103,7 +3103,18 @@ export default function CruiseSearchPage() {
   }, [data, lookupOptions, vendorShips]);
 
   const rows = useMemo(() => {
-    return [...data].sort((a, b) => {
+    // Defense in depth: exact-match the requested ship client-side too.
+    // Confirmed live, 2026-11-18: a "MSC World Europa" search returned an
+    // MSC Bellissima sailing as well, even though the backend's own query
+    // (verified directly against the DB) only matches the right ship - so
+    // something between request and response was letting the wrong one
+    // through. This guarantees correctness regardless of where that was,
+    // without waiting to pin down the exact cause.
+    const shipFilter = (appliedFilters.ship || "").trim().toLowerCase();
+    const filtered = shipFilter
+      ? data.filter((row) => (row.ship || "").trim().toLowerCase() === shipFilter)
+      : data;
+    return [...filtered].sort((a, b) => {
       // Pinned / tagged cruises stay at top if any
       const tagDiff = (b.tags?.length || 0) - (a.tags?.length || 0);
       if (tagDiff !== 0) return tagDiff;
@@ -3147,7 +3158,7 @@ export default function CruiseSearchPage() {
       }
       return 0;
     });
-  }, [data, sortBy]);
+  }, [data, sortBy, appliedFilters.ship]);
 
   const searchDebounceTimerRef = useRef(null);
 
