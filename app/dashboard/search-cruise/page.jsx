@@ -3785,22 +3785,15 @@ export default function CruiseSearchPage() {
                     if (field.key === "ship" && value) {
                       const shipVendor = getVendorForShip(value);
                       if (shipVendor) {
-                        const isOk = checkVendorVerified(shipVendor, () => {
-                          // Applied immediately, not debounced — picking a
-                          // ship from the dropdown is a single discrete
-                          // action (unlike free-text typing, where the
-                          // debounce exists to avoid firing a search per
-                          // keystroke). Debouncing it left a race: picking a
-                          // date right after selecting a ship could clear
-                          // the still-pending ship debounce timer and apply
-                          // with a filters snapshot from before the ship
-                          // commit landed, silently dropping the ship filter
-                          // from that search. Confirmed live, 2026-11-18 —
-                          // "MSC World Europa" showed MSC World Asia results.
-                          // Auto-locks the provider pill to this ship's own
-                          // vendor at the same time — a ship belongs to
-                          // exactly one vendor, so these should never drift
-                          // apart (see shipVendorLock disabling the rest).
+                        // Applied immediately, not debounced — picking a
+                        // ship from the dropdown is a single discrete
+                        // action (unlike free-text typing, where the
+                        // debounce exists to avoid firing a search per
+                        // keystroke). Also auto-locks the provider pill to
+                        // this ship's own vendor — a ship belongs to exactly
+                        // one vendor, so these should never drift apart (see
+                        // shipVendorLock disabling the rest).
+                        const applyShipSelection = () => {
                           if (searchDebounceTimerRef.current) clearTimeout(searchDebounceTimerRef.current);
                           setFilters((prev) => {
                             const next = { ...prev, ship: value, vendor: shipVendor };
@@ -3808,11 +3801,24 @@ export default function CruiseSearchPage() {
                             setPage(1);
                             return next;
                           });
-                        }, value);
+                        };
+                        // checkVendorVerified only invokes its callback for
+                        // the NOT-yet-verified path (stored for when the
+                        // confirmation modal is accepted) — for an
+                        // already-verified vendor it just returns true and
+                        // does nothing else. Calling applyShipSelection()
+                        // here too (not just passing it as the callback) is
+                        // what actually applies the filter in that case.
+                        // Confirmed live, 2026-11-18: every ship pick after
+                        // the first "confirm vendor" silently did nothing -
+                        // "MSC World Europa" kept whatever ship/vendor was
+                        // already applied (e.g. MSC Bellissima) instead.
+                        const isOk = checkVendorVerified(shipVendor, applyShipSelection, value);
                         if (!isOk) {
                           setFilters((prev) => ({ ...prev, [field.key]: value, vendor: shipVendor }));
                           return;
                         }
+                        applyShipSelection();
                         return;
                       }
                     }
