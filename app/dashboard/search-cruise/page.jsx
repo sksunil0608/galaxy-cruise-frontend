@@ -189,6 +189,15 @@ const fmtDate = (value) =>
     ? new Date(value).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
     : "-";
 
+// ISO ("2026-11-18") -> "18/11/2026", for the custom overlay on native
+// <input type="date"> elements, which otherwise always show the browser's
+// own locale format regardless of a per-element lang attribute.
+const formatDMY = (iso) => {
+  if (!iso) return "dd/mm/yyyy";
+  const [y, m, d] = iso.split("-");
+  return `${d}/${m}/${y}`;
+};
+
 const safeCurrency = (amount, currency = "GBP") =>
   `${currency === "GBP" ? "\u00A3" : "$"}${Number(amount ?? 0).toLocaleString()}`;
 
@@ -2382,6 +2391,9 @@ export default function CruiseSearchPage() {
   // undercounted massively (e.g. showing 16 when the real fleet is in the
   // hundreds).
   const [totalShipsCount, setTotalShipsCount] = useState(null);
+  // Departure/Destination Port aren't needed for most searches — hidden
+  // behind this toggle (off by default) instead of always taking up space.
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [savingTag, setSavingTag] = useState(false);
   const [filters, setFilters] = useState({
     code: "",
@@ -3394,6 +3406,11 @@ export default function CruiseSearchPage() {
     } catch { /* silent — modal still shows */ }
   }
 
+  // A selected ship belongs to exactly one vendor — once picked, every other
+  // provider pill is locked out rather than left clickable (there's nothing
+  // for them to match).
+  const shipVendorLock = filters.ship ? getVendorForShip(filters.ship) : null;
+
   const overview = useMemo(() => {
     const cruises = pagination?.total ?? rows.length;
     // The fleet-wide total from /ships' own pagination, not derived from
@@ -3495,12 +3512,19 @@ export default function CruiseSearchPage() {
           </div>
         </div>
 
-        {/* Cruise Line Provider Tabs */}
+        {/* Cruise Line Provider Tabs — a selected ship belongs to exactly one
+            vendor, so once one's picked the other providers can't possibly
+            match it: lock the pills to that ship's own vendor instead of
+            leaving every provider clickable and implying a cross-vendor
+            search is meaningful here. */}
         <div className="space-y-1.5 w-full max-w-full min-w-0">
           <div className="flex items-center justify-between">
             <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700">
               <Layers size={14} className="text-teal-600" />
               <span>Cruise Line Provider</span>
+              {shipVendorLock && (
+                <span className="text-[10px] font-medium text-slate-400 normal-case">— locked to {shipVendorLock} by the ship you picked</span>
+              )}
             </label>
             {filters.vendor && (
               <button
@@ -3515,8 +3539,9 @@ export default function CruiseSearchPage() {
           <div className="flex items-center gap-2 overflow-x-auto pb-1.5 flex-nowrap scroll-smooth no-scrollbar w-full max-w-full min-w-0">
             <button
               type="button"
+              disabled={Boolean(shipVendorLock)}
               onClick={() => selectVendor("")}
-              className={`h-9 px-4 rounded-xl text-xs font-semibold transition-all cursor-pointer shrink-0 whitespace-nowrap ${filters.vendor === ""
+              className={`h-9 px-4 rounded-xl text-xs font-semibold transition-all shrink-0 whitespace-nowrap ${shipVendorLock ? "opacity-40 cursor-not-allowed" : "cursor-pointer"} ${filters.vendor === ""
                 ? "bg-teal-50/50 text-teal-950 font-bold border-2 border-teal-600 shadow-xs"
                 : "bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 border border-slate-200/80 shadow-2xs"
                 }`}
@@ -3525,13 +3550,15 @@ export default function CruiseSearchPage() {
             </button>
             {opts.vendors.map((value) => {
               const isSelected = filters.vendor === value;
+              const isLockedOut = shipVendorLock && value !== shipVendorLock;
               const vStyle = getVendorStyle(value);
               return (
                 <button
                   type="button"
                   key={value}
+                  disabled={isLockedOut}
                   onClick={() => selectVendor(value)}
-                  className={`h-9 px-3.5 rounded-xl text-xs font-semibold transition-all cursor-pointer shrink-0 whitespace-nowrap ${isSelected
+                  className={`h-9 px-3.5 rounded-xl text-xs font-semibold transition-all shrink-0 whitespace-nowrap ${isLockedOut ? "opacity-40 cursor-not-allowed" : "cursor-pointer"} ${isSelected
                     ? "bg-teal-50/50 text-teal-950 font-bold border-2 border-teal-600 shadow-xs scale-[1.01]"
                     : "bg-white text-slate-700 hover:bg-slate-50 hover:text-slate-900 border border-slate-200/80 shadow-2xs"
                     }`}
@@ -3546,13 +3573,14 @@ export default function CruiseSearchPage() {
           </div>
         </div>
 
-        {/* 4 Multi-Select Options Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3.5 w-full min-w-0">
+        {/* Multi-Select Options Grid — Ship/Cruise Line are the common case
+            and always visible; Departure/Destination Port are tucked behind
+            the Advanced Search toggle below since most searches don't need
+            them. */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 w-full min-w-0">
           {[
             { key: "ship", label: "Ship", ph: "Select Ship", mode: "input", values: opts.ships, icon: Ship, iconColor: "text-sky-600" },
             { key: "cruiseLine", label: "Cruise Line", ph: "Select Cruise Line (All)", mode: "select", values: opts.cruiseLines, icon: Compass, iconColor: "text-teal-600" },
-            { key: "portFrom", label: "Departure Port (Origin)", ph: "Departure Port (From)", mode: "select", values: opts.ports, icon: MapPin, iconColor: "text-emerald-600" },
-            { key: "portTo", label: "Destination Port", ph: "Destination Port (To)", mode: "select", values: opts.ports, icon: MapPin, iconColor: "text-indigo-600" },
           ].map((field) => {
             const Icon = field.icon;
             return field.mode === "input" ? (
@@ -3569,12 +3597,21 @@ export default function CruiseSearchPage() {
                       const shipVendor = getVendorForShip(value);
                       if (shipVendor) {
                         const isOk = checkVendorVerified(shipVendor, () => {
-                          setF(field.key, value);
+                          // Auto-locks the provider pill to this ship's own
+                          // vendor at the same time — a ship belongs to
+                          // exactly one vendor, so these should never drift
+                          // apart (see shipVendorLock disabling the rest).
+                          setFilters((prev) => {
+                            const next = { ...prev, ship: value, vendor: shipVendor };
+                            triggerDebouncedSearch(next);
+                            return next;
+                          });
                         }, value);
                         if (!isOk) {
-                          setFilters((prev) => ({ ...prev, [field.key]: value }));
+                          setFilters((prev) => ({ ...prev, [field.key]: value, vendor: shipVendor }));
                           return;
                         }
+                        return;
                       }
                     }
                     setF(field.key, value);
@@ -3606,6 +3643,46 @@ export default function CruiseSearchPage() {
           })}
         </div>
 
+        {/* Advanced Search toggle — off by default; opens Departure/Destination Port */}
+        <div className="w-full min-w-0">
+          <button
+            type="button"
+            onClick={() => setAdvancedOpen((prev) => !prev)}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-teal-700 hover:text-teal-900 cursor-pointer transition-colors"
+          >
+            <ChevronDown size={14} className={`transition-transform duration-200 ${advancedOpen ? "rotate-180" : ""}`} />
+            <span>Advanced Search{(filters.portFrom || filters.portTo) ? " (2 active)" : ""}</span>
+          </button>
+          {advancedOpen && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 w-full min-w-0 mt-3 animate-in fade-in slide-in-from-top-1 duration-150">
+              {[
+                { key: "portFrom", label: "Departure Port (Origin)", ph: "Departure Port (From)", icon: MapPin, iconColor: "text-emerald-600" },
+                { key: "portTo", label: "Destination Port", ph: "Destination Port (To)", icon: MapPin, iconColor: "text-indigo-600" },
+              ].map((field) => {
+                const Icon = field.icon;
+                return (
+                  <div key={field.key} className="space-y-1.5">
+                    <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                      <Icon size={14} className={field.iconColor} />
+                      <span>{field.label}</span>
+                    </label>
+                    <select
+                      className="w-full h-10 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white px-3.5 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition-all shadow-2xs cursor-pointer"
+                      value={filters[field.key]}
+                      onChange={(event) => setF(field.key, event.target.value)}
+                    >
+                      <option value="">{field.ph}</option>
+                      {opts.ports.map((value) => (
+                        <option key={value} value={value}>{value}</option>
+                      ))}
+                    </select>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
         {/* Departure Window */}
         <div className="space-y-1.5 w-full max-w-full min-w-0">
           <div className="flex items-center justify-between flex-wrap gap-1">
@@ -3627,6 +3704,7 @@ export default function CruiseSearchPage() {
             <div className="flex items-center p-1 bg-slate-100/90 rounded-xl border border-slate-200/70 gap-1 overflow-x-auto no-scrollbar w-full lg:flex-1 max-w-full min-w-0">
               {[
                 { label: "All Dates", days: null },
+                { label: "Today", days: 0 },
                 { label: "Next 7 Days", days: 7 },
                 { label: "Next 30 Days", days: 30 },
                 { label: "Next 3 Months", days: 90 },
@@ -3653,21 +3731,36 @@ export default function CruiseSearchPage() {
 
             {/* Custom Date Range Picker */}
             <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap sm:flex-nowrap min-w-0 shrink-0">
-              <input
-                type="date"
-                lang="en-GB"
-                className="h-10 w-[148px] shrink-0 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white px-2.5 sm:px-3 text-xs font-semibold text-slate-800 shadow-2xs focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition-all cursor-pointer"
-                value={filters.startDate}
-                onChange={(event) => { setF("startDate", event.target.value); setDatePreset(null); }}
-              />
+              {/* The native <input type="date"> always renders in the
+                  browser's own locale format (lang="en-GB" on the element
+                  doesn't override that in current Chrome) — so the real
+                  input is made invisible (text-transparent) and a dd/mm/yyyy
+                  label is overlaid on top of it, pointer-events-none so
+                  clicks still reach the native input underneath and open its
+                  calendar picker normally. */}
+              <div className="relative h-10 w-[148px] shrink-0">
+                <input
+                  type="date"
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white px-2.5 sm:px-3 text-xs font-semibold text-transparent caret-transparent shadow-2xs focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition-all cursor-pointer"
+                  value={filters.startDate}
+                  onChange={(event) => { setF("startDate", event.target.value); setDatePreset(null); }}
+                />
+                <span className="pointer-events-none absolute inset-y-0 left-2.5 sm:left-3 flex items-center text-xs font-semibold text-slate-800">
+                  {formatDMY(filters.startDate)}
+                </span>
+              </div>
               <span className="text-xs font-medium text-slate-400">to</span>
-              <input
-                type="date"
-                lang="en-GB"
-                className="h-10 w-[148px] shrink-0 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white px-2.5 sm:px-3 text-xs font-semibold text-slate-800 shadow-2xs focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition-all cursor-pointer"
-                value={filters.endDate}
-                onChange={(event) => { setF("endDate", event.target.value); setDatePreset(null); }}
-              />
+              <div className="relative h-10 w-[148px] shrink-0">
+                <input
+                  type="date"
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white px-2.5 sm:px-3 text-xs font-semibold text-transparent caret-transparent shadow-2xs focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition-all cursor-pointer"
+                  value={filters.endDate}
+                  onChange={(event) => { setF("endDate", event.target.value); setDatePreset(null); }}
+                />
+                <span className="pointer-events-none absolute inset-y-0 left-2.5 sm:left-3 flex items-center text-xs font-semibold text-slate-800">
+                  {formatDMY(filters.endDate)}
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -3915,7 +4008,7 @@ export default function CruiseSearchPage() {
               <table className="w-full text-left border-collapse min-w-[1100px]">
                 <thead className="bg-slate-50 border-b border-slate-200">
                   <tr>
-                    {["", "Vendor", "Ship", "Cruise", "Nights", "Route", "Departure", "Arrival", "Avail.", "Refreshed", "Price"].map((header) => (
+                    {["", "Vendor", "Ship", "Nights", "Route", "Departure", "Arrival", "Avail.", "Refreshed", "Price"].map((header) => (
                       <th key={header} className="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-600 whitespace-nowrap">
                         {header}
                       </th>
@@ -3986,9 +4079,6 @@ export default function CruiseSearchPage() {
                           <div className="mt-0.5 text-[11px] font-mono text-slate-400 whitespace-nowrap">
                             {getCruiseDisplayId(row)}
                           </div>
-                        </td>
-                        <td className="px-4 py-3 font-semibold text-slate-900 max-w-[260px] truncate whitespace-nowrap" title={row.package}>
-                          {row.package}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
                           <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold bg-indigo-50 border border-indigo-200 text-indigo-700 whitespace-nowrap">
