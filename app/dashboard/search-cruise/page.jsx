@@ -3383,10 +3383,24 @@ export default function CruiseSearchPage() {
   // verified exact-day filter has no reliable duration to count down, but the
   // job is still genuinely running, so it still needs to be polled to know
   // when results are actually ready.
+  // A persistently failing poll (stale run ID, network issue, backend
+  // hiccup) used to leave scraperJob set forever — the catch below did
+  // nothing, so isLiveSearching stayed true for the rest of the browser
+  // session and silently blocked every future auto-live-search with no
+  // error shown. Confirmed live, 2026-11-18. A hard ceiling on how long any
+  // single poll loop can run guarantees it always eventually clears itself.
+  const MAX_POLL_MS = 15 * 60 * 1000;
   const pollScraperRun = (runId) => {
     stopScraperPoll();
+    const pollStartedAt = Date.now();
     scraperPollRef.current = setInterval(async () => {
       try {
+        if (Date.now() - pollStartedAt > MAX_POLL_MS) {
+          stopScraperPoll();
+          setScraperJob(null);
+          setScraperStatus({ ok: false, msg: "Live search timed out waiting for a result — try again." });
+          return;
+        }
         const res = await getVendorRunStatus(runId);
         const result = res?.result;
         if (!result) return;
@@ -3414,7 +3428,9 @@ export default function CruiseSearchPage() {
           executeTargetedSearch();
         }
       } catch {
-        // transient poll failure — leave scraperJob as-is, try again next tick
+        // transient poll failure — leave scraperJob as-is, try again next
+        // tick; the MAX_POLL_MS ceiling above still guarantees this can't
+        // loop forever even if every single poll keeps failing.
       }
     }, 3000);
   };
