@@ -3955,18 +3955,19 @@ export default function CruiseSearchPage() {
                 until a specific-ship search has actually come back empty,
                 so it's always obvious when it's available and clicking it
                 is an explicit, visible action instead of invisible magic. */}
-            {appliedFilters.ship && !loading && rows.length === 0 && (
+            {(appliedFilters.ship || filters.ship) && !loading && rows.length === 0 && (
               <button
                 type="button"
                 disabled={isLiveSearching}
                 onClick={() => {
-                  const vendor = appliedFilters.vendor || getVendorForShip(appliedFilters.ship);
-                  if (!vendor) return;
+                  const shipToSearch = appliedFilters.ship || filters.ship;
+                  const vendor = appliedFilters.vendor || filters.vendor || getVendorForShip(shipToSearch);
+                  if (!vendor || !shipToSearch) return;
                   setTargetVendor(vendor);
-                  setTargetShipName(appliedFilters.ship);
-                  setTargetStartDate(appliedFilters.startDate || new Date().toISOString().slice(0, 10));
+                  setTargetShipName(shipToSearch);
+                  setTargetStartDate(appliedFilters.startDate || filters.startDate || new Date().toISOString().slice(0, 10));
                   setTargetHorizonDays(1);
-                  setLastSearchedShip(appliedFilters.ship);
+                  setLastSearchedShip(shipToSearch);
                   setScraperStatus({ ok: true, msg: "Searching live from the carrier…" });
                   setPendingAutoLiveSearch(true);
                 }}
