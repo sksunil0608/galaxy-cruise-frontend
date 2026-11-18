@@ -216,12 +216,16 @@ const toIsoDate = (d) => {
 // own style). This renders and controls the whole thing itself.
 function CustomDatePicker({ value, onChange, placeholder = "dd/mm/yyyy" }) {
   const [open, setOpen] = useState(false);
+  // "days" = normal month grid, "years" = a year-jump grid — clicking the
+  // month/year header switches here instead of clicking next-month dozens
+  // of times to reach a far-future date (e.g. a 2028 sailing from today).
+  const [view, setView] = useState("days");
   const boxRef = useRef(null);
   const selected = value ? new Date(`${value}T00:00:00`) : null;
   const [viewDate, setViewDate] = useState(selected || new Date());
 
   useEffect(() => {
-    if (open) setViewDate(selected || new Date());
+    if (open) { setViewDate(selected || new Date()); setView("days"); }
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -261,15 +265,57 @@ function CustomDatePicker({ value, onChange, placeholder = "dd/mm/yyyy" }) {
         <CalendarDays size={13} className="text-teal-600 shrink-0" />
         <span className={value ? "" : "text-slate-400 font-normal"}>{value ? formatDMY(value) : placeholder}</span>
       </button>
-      {open && (
+      {open && view === "years" && (() => {
+        // 18-year window centered just above the current viewDate year, so a
+        // far-future pick (e.g. a 2028 sailing) is a couple of clicks away
+        // instead of dozens of month-by-month next clicks.
+        const pageStart = year - 6;
+        const years = Array.from({ length: 18 }, (_, i) => pageStart + i);
+        return (
+          <div className="absolute top-[calc(100%+6px)] left-0 z-50 w-64 rounded-xl border border-slate-200 bg-white shadow-xl p-3 animate-in fade-in slide-in-from-top-1 duration-150">
+            <div className="flex items-center justify-between mb-2">
+              <button type="button" onClick={() => setViewDate(new Date(year - 18, month, 1))} className="p-1 rounded-lg hover:bg-slate-100 text-slate-500 cursor-pointer transition">
+                <ChevronLeft size={15} />
+              </button>
+              <span className="text-xs font-bold text-slate-800">{pageStart} – {pageStart + 17}</span>
+              <button type="button" onClick={() => setViewDate(new Date(year + 18, month, 1))} className="p-1 rounded-lg hover:bg-slate-100 text-slate-500 cursor-pointer transition">
+                <ChevronRight size={15} />
+              </button>
+            </div>
+            <div className="grid grid-cols-3 gap-1">
+              {years.map((y) => (
+                <button
+                  type="button"
+                  key={y}
+                  onClick={() => { setViewDate(new Date(y, month, 1)); setView("days"); }}
+                  className={`h-9 rounded-lg text-xs font-semibold cursor-pointer transition-all ${y === year
+                    ? "bg-teal-700 text-white font-bold shadow-xs"
+                    : y === today.getFullYear()
+                      ? "border border-teal-400 text-teal-800"
+                      : "text-slate-700 hover:bg-teal-50"
+                    }`}
+                >
+                  {y}
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+      {open && view === "days" && (
         <div className="absolute top-[calc(100%+6px)] left-0 z-50 w-64 rounded-xl border border-slate-200 bg-white shadow-xl p-3 animate-in fade-in slide-in-from-top-1 duration-150">
           <div className="flex items-center justify-between mb-2">
             <button type="button" onClick={() => setViewDate(new Date(year, month - 1, 1))} className="p-1 rounded-lg hover:bg-slate-100 text-slate-500 cursor-pointer transition">
               <ChevronLeft size={15} />
             </button>
-            <span className="text-xs font-bold text-slate-800">
+            <button
+              type="button"
+              onClick={() => setView("years")}
+              className="text-xs font-bold text-slate-800 hover:text-teal-700 cursor-pointer px-2 py-0.5 rounded-md hover:bg-teal-50 transition"
+              title="Jump to a year"
+            >
               {viewDate.toLocaleDateString("en-GB", { month: "long", year: "numeric" })}
-            </span>
+            </button>
             <button type="button" onClick={() => setViewDate(new Date(year, month + 1, 1))} className="p-1 rounded-lg hover:bg-slate-100 text-slate-500 cursor-pointer transition">
               <ChevronRight size={15} />
             </button>
