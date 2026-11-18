@@ -2755,12 +2755,16 @@ export default function CruiseSearchPage() {
             const vendor = appliedFilters.vendor || getVendorForShip(specificShip);
             if (vendor) {
               autoFallbackTriedRef.current = fallbackKey;
-              let horizon = 1;
-              if (appliedFilters.startDate && appliedFilters.endDate) {
-                horizon = Math.max(1, Math.round((new Date(appliedFilters.endDate) - new Date(appliedFilters.startDate)) / 86400000) + 1);
-              } else if (appliedFilters.horizonDays) {
-                horizon = appliedFilters.horizonDays;
-              }
+              // Always a single day, never however wide the user's own date
+              // filter happens to be. Two reasons: (1) this is just a quick
+              // "does this ship have anything on sale around here" check,
+              // not a replica of their filter range — a "Next 1 Year" filter
+              // with no cache hit used to compute horizon~365 and silently
+              // launch a full year-wide live scrape (minutes, not seconds);
+              // (2) the backend's fast targeted-search path only activates
+              // at horizonDays===1 exactly — anything else falls back to the
+              // slow, unoptimized flow even for a single ship.
+              const horizon = 1;
               setTargetVendor(vendor);
               setTargetShipName(specificShip);
               setTargetStartDate(appliedFilters.startDate || new Date().toISOString().slice(0, 10));
