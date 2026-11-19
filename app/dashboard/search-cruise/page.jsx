@@ -3859,7 +3859,10 @@ export default function CruiseSearchPage() {
             className="inline-flex items-center gap-1.5 text-xs font-semibold text-teal-700 hover:text-teal-900 cursor-pointer transition-colors"
           >
             <ChevronDown size={14} className={`transition-transform duration-200 ${advancedOpen ? "rotate-180" : ""}`} />
-            <span>Advanced Search{(filters.portFrom || filters.portTo) ? " (2 active)" : ""}</span>
+            <span>Advanced Search{(() => {
+              const n = (filters.portFrom ? 1 : 0) + (filters.portTo ? 1 : 0);
+              return n > 0 ? ` (${n} active)` : "";
+            })()}</span>
           </button>
           {advancedOpen && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 w-full min-w-0 mt-3 animate-in fade-in slide-in-from-top-1 duration-150">
